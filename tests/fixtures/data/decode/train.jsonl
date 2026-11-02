@@ -1,0 +1,2 @@
+{"id":"d1","dialogue":[{"speaker":"A","text":"I have a dog."},{"speaker":"B","text":"What breed?"},{"speaker":"A","text":"I have never had a pet."}],"is_contradiction":true}
+{"id":"d2","dialogue":[{"speaker":"A","text":"I like fish."},{"speaker":"B","text":"Me too."},{"speaker":"A","text":"Especially dolphins."}],"is_contradiction":false}

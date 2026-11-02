@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<nite:root nite:id="ES0001a.B.segs" xmlns:nite="http://nite.sourceforge.net/">
+   <segment nite:id="ES0001a.sync.6" channel="0" transcriber_start="2.9" transcriber_end="3.9">
+      <nite:child href="ES0001a.B.words.xml#id(ES0001a.B.words0)..id(ES0001a.B.words1)"/>
+   </segment>
+</nite:root>
