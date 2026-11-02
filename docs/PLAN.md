@@ -65,7 +65,7 @@ class Scenario: id: str; conversation: Conversation; request: ButtonRequest; cat
 **Accept:** `{py} -m pytest tests/test_schemas.py -q`.
 
 ### T0.3: Check the datasets
-**Agent:** use the `researcher` for lookups. **Files:** `docs/datasets.md`.
+**Agent:** use the `researcher` for lookups. **Files:** `docs/datasets.md`, `tools/check_datasets_doc.py`.
 **Do:** For DECODE, QMSum, LongMemEval, and the AMI Meeting Corpus, record from primary sources: URL, license and whether it allows this use, size, format, labels, and access steps. Confirm or correct the assumption that DECODE only labels contradiction vs not. Also list candidates for: diarization (pyannote and one alternative, with terms), the consistency base model, and the small LLM (runs in 4-bit under 7 GB). Leave an "Approved by person:" line blank for each.
 **Tests:** none beyond the check.
 **Accept:** `{py} tools/check_datasets_doc.py` (write this small script: fails unless each of the 4 datasets has a URL, License, Labels, and Approved line).
@@ -286,7 +286,7 @@ See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
-**Files:** `clients/unity/` (Unity 6000.3.3f1 project), `docs/unity-setup.md`.
+**Files:** `clients/unity/` (Unity 6000.3.3f1 project), `docs/unity-setup.md`, `tools/check_unity_schema.py`.
 **Do:** A small scene with a floating card, connected to `/ws/{conversation_id}`, shows the same card schema, with a button press from the XR device simulator or a controller, and webcam input through `WebCamTexture`. C# message types match `schemas.py`.
 **Tests:** a Python script checks the C# fields against the schema. Manual steps go in `docs/unity-setup.md`.
 **Accept:** `{py} tools/check_unity_schema.py`.
@@ -314,7 +314,7 @@ See `docs/HUMAN-GATES.md`.
 See `docs/HUMAN-GATES.md`.
 
 ### T9.3: Report, README, and bullets
-**Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`.
+**Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus a check that every number in `docs/REPORT.md` and the bullets appears in a run record.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.

@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -120,6 +121,7 @@ def cmd_verify(args):
             lines.append(f"SKIPPED: {command}")
             continue
         argv = [python() if part == "{py}" else part for part in shlex.split(command)]
+        argv[0] = shutil.which(argv[0]) or argv[0]  # npm is npm.cmd on Windows
         lines.append(f"$ {command}")
         try:
             run = subprocess.run(argv, cwd=ROOT, env=env, capture_output=True, text=True, timeout=TIMEOUT_S)
