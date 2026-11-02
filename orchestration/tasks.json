@@ -1,0 +1,525 @@
+{
+  "tasks": [
+    {
+      "id": "T0.1",
+      "phase": 0,
+      "title": "Project setup",
+      "owner": "agent",
+      "deps": [],
+      "acceptance": [
+        "{py} -m pytest tests/test_smoke.py tests/test_orchestration.py -q",
+        "{py} -m ruff check .",
+        "docker compose config -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T0.2",
+      "phase": 0,
+      "title": "Shared schemas",
+      "owner": "agent",
+      "deps": [
+        "T0.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_schemas.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T0.3",
+      "phase": 0,
+      "title": "Check the datasets",
+      "owner": "agent",
+      "deps": [
+        "T0.1"
+      ],
+      "acceptance": [
+        "{py} tools/check_datasets_doc.py"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "H1",
+      "phase": 0,
+      "title": "Approve datasets and set up keys",
+      "owner": "human",
+      "deps": [
+        "T0.3"
+      ],
+      "acceptance": [],
+      "status": "pending"
+    },
+    {
+      "id": "T1.1",
+      "phase": 1,
+      "title": "Dataset loaders and splits",
+      "owner": "agent",
+      "deps": [
+        "T0.2",
+        "H1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_data.py -q",
+        "{py} -m contextlens.data.check_splits"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T1.2",
+      "phase": 1,
+      "title": "Reviewed scenario set",
+      "owner": "agent",
+      "deps": [
+        "T1.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_scenarios.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "H2",
+      "phase": 1,
+      "title": "Review test labels",
+      "owner": "human",
+      "deps": [
+        "T1.2"
+      ],
+      "acceptance": [],
+      "status": "pending"
+    },
+    {
+      "id": "T1.3",
+      "phase": 1,
+      "title": "Replay runner",
+      "owner": "agent",
+      "deps": [
+        "T0.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_replay.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T1.4",
+      "phase": 1,
+      "title": "Metrics and statistics",
+      "owner": "agent",
+      "deps": [
+        "T0.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_metrics.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T1.5",
+      "phase": 1,
+      "title": "Run records and claims",
+      "owner": "agent",
+      "deps": [
+        "T1.4"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_records.py -q",
+        "{py} -m contextlens.eval.claims check"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T2.1",
+      "phase": 2,
+      "title": "Model clients",
+      "owner": "agent",
+      "deps": [
+        "T0.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_llm.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T2.2",
+      "phase": 2,
+      "title": "Transcript store and hybrid retrieval",
+      "owner": "agent",
+      "deps": [
+        "T2.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_retrieval.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T2.3",
+      "phase": 2,
+      "title": "Reranker",
+      "owner": "agent",
+      "deps": [
+        "T2.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_rerank.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T2.4",
+      "phase": 2,
+      "title": "Structured memory and context budget",
+      "owner": "agent",
+      "deps": [
+        "T2.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_memory.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T2.5",
+      "phase": 2,
+      "title": "Experiment E1, retrieval",
+      "owner": "agent",
+      "deps": [
+        "T1.5",
+        "T1.3",
+        "H2",
+        "T2.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e1.py -q",
+        "{py} -m contextlens.eval.check_run E1 --min-n 100 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T3.1",
+      "phase": 3,
+      "title": "Prompts, tools, and guards",
+      "owner": "agent",
+      "deps": [
+        "T2.3",
+        "T2.4"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_guard.py tests/test_tools.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T3.2",
+      "phase": 3,
+      "title": "Single agent",
+      "owner": "agent",
+      "deps": [
+        "T3.1",
+        "T1.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_single_agent.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T3.3",
+      "phase": 3,
+      "title": "Experiment E2, context strategies",
+      "owner": "agent",
+      "deps": [
+        "T3.2",
+        "T2.5"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e2.py -q",
+        "{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T4.1",
+      "phase": 4,
+      "title": "Agent team",
+      "owner": "agent",
+      "deps": [
+        "T3.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_team.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T4.2",
+      "phase": 4,
+      "title": "Experiment E3, team vs single agent",
+      "owner": "agent",
+      "deps": [
+        "T4.1",
+        "T3.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e3.py -q",
+        "{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T5.1",
+      "phase": 5,
+      "title": "Baselines",
+      "owner": "agent",
+      "deps": [
+        "T3.1",
+        "H2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_consistency_baselines.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T5.2",
+      "phase": 5,
+      "title": "Experiment E4, trained consistency model",
+      "owner": "agent",
+      "deps": [
+        "T5.1",
+        "T1.5"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e4.py -q",
+        "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T6.1",
+      "phase": 6,
+      "title": "Card training data and QLoRA pipeline",
+      "owner": "agent",
+      "deps": [
+        "T3.1",
+        "H2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_cards_data.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T6.2",
+      "phase": 6,
+      "title": "Experiment E5, fine-tuned vs prompted",
+      "owner": "agent",
+      "deps": [
+        "T6.1",
+        "T3.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e5.py -q",
+        "{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T7.1",
+      "phase": 7,
+      "title": "Experiment E6, prompt comparison",
+      "owner": "agent",
+      "deps": [
+        "T3.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e6.py -q",
+        "{py} -m contextlens.eval.check_run E6 --min-n 100 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T7.2",
+      "phase": 7,
+      "title": "Prompt regression tests in CI",
+      "owner": "agent",
+      "deps": [
+        "T7.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/regression -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.1",
+      "phase": 8,
+      "title": "C++ speech service",
+      "owner": "agent",
+      "deps": [
+        "T0.1"
+      ],
+      "acceptance": [
+        "docker compose build speech",
+        "{py} -m pytest tests/test_speech_contract.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.2",
+      "phase": 8,
+      "title": "Streaming backend and diarization",
+      "owner": "agent",
+      "deps": [
+        "T8.1",
+        "T4.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_api.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.3",
+      "phase": 8,
+      "title": "Web client",
+      "owner": "agent",
+      "deps": [
+        "T8.2"
+      ],
+      "acceptance": [
+        "npm --prefix clients/web ci",
+        "npm --prefix clients/web test -- --run",
+        "npm --prefix clients/web run build"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.4",
+      "phase": 8,
+      "title": "Observability and optional vision",
+      "owner": "agent",
+      "deps": [
+        "T8.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_obs.py tests/test_vision.py -q",
+        "docker compose config -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.5",
+      "phase": 8,
+      "title": "Experiment E7, real-time cost",
+      "owner": "agent",
+      "deps": [
+        "T8.2",
+        "T8.4",
+        "T1.5"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e7.py -q",
+        "{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.6",
+      "phase": 8,
+      "title": "Unity XR client",
+      "owner": "agent",
+      "deps": [
+        "T8.2"
+      ],
+      "acceptance": [
+        "{py} tools/check_unity_schema.py"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "H3",
+      "phase": 8,
+      "title": "Try the Unity client",
+      "owner": "human",
+      "deps": [
+        "T8.6"
+      ],
+      "acceptance": [],
+      "status": "pending"
+    },
+    {
+      "id": "T9.1",
+      "phase": 9,
+      "title": "Experiment E8, final test",
+      "owner": "agent",
+      "deps": [
+        "T4.2",
+        "T5.2",
+        "T6.2",
+        "T7.2",
+        "T8.5"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e8.py -q",
+        "{py} -m contextlens.eval.check_run E8 --min-n 100 --split test"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T9.2",
+      "phase": 9,
+      "title": "User study kit",
+      "owner": "agent",
+      "deps": [
+        "T8.3"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e9.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "H4",
+      "phase": 9,
+      "title": "Run the user study",
+      "owner": "human",
+      "deps": [
+        "T9.2"
+      ],
+      "acceptance": [],
+      "status": "pending"
+    },
+    {
+      "id": "T9.3",
+      "phase": 9,
+      "title": "Report, README, and bullets",
+      "owner": "agent",
+      "deps": [
+        "T9.1",
+        "H3",
+        "H4"
+      ],
+      "acceptance": [
+        "{py} -m contextlens.eval.claims check",
+        "{py} tools/check_report_numbers.py",
+        "{py} -m pytest -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "H5",
+      "phase": 9,
+      "title": "Final sign-off",
+      "owner": "human",
+      "deps": [
+        "T9.3"
+      ],
+      "acceptance": [],
+      "status": "pending"
+    }
+  ]
+}

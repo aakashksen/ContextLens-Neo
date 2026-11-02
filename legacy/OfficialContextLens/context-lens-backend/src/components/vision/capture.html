@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Context Lens Capture</title>
+    <style>
+      body { font-family: sans-serif; margin: 16px; }
+      button { padding: 8px 12px; }
+      #status { margin-top: 8px; color: #444; }
+      video { display: none; }
+    </style>
+  </head>
+  <body>
+    <h3>Context Lens Screen Capture</h3>
+    <button id="start">Select window/screen</button>
+    <div id="status">Idle</div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" style="display:none"></canvas>
+    <script>
+      const startBtn = document.getElementById('start');
+      const statusEl = document.getElementById('status');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+
+      window.__captureReady = false;
+      window.__captureError = null;
+
+      async function startCapture() {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: 10, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+          video.srcObject = stream;
+          await video.play();
+          window.__captureReady = true;
+          statusEl.textContent = 'Capturing';
+          stream.getVideoTracks()[0].addEventListener('ended', () => {
+            window.__captureReady = false;
+            statusEl.textContent = 'Capture ended';
+          });
+        } catch (err) {
+          window.__captureError = String(err && err.message ? err.message : err);
+          statusEl.textContent = 'Capture failed';
+        }
+      }
+
+      startBtn.addEventListener('click', startCapture);
+
+      // User must click the button to open the screen/window picker.
+
+      window.captureAndSend = async function () {
+        if (!window.__captureReady) return false;
+        const width = video.videoWidth || 1280;
+        const height = video.videoHeight || 720;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const base64 = dataUrl.split(',')[1];
+        await fetch('/frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: base64, ts_ms: Date.now() })
+        });
+        return true;
+      };
+    </script>
+  </body>
+</html>

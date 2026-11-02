@@ -1,0 +1,202 @@
+{
+  "type": "transcript_stream",
+  "sessionId": "test_session_002",
+  "language": "en",
+  "startTimeIso": "2026-01-10T14:40:00.000Z",
+  "items": [
+    {
+      "id": "t_0001",
+      "tStartMs": 600,
+      "tEndMs": 2600,
+      "tsIso": "2026-01-10T14:40:00.600000Z",
+      "speaker": "A",
+      "text": "Hey. Sorry I'm a minute late.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0002",
+      "tStartMs": 4000,
+      "tEndMs": 6200,
+      "tsIso": "2026-01-10T14:40:04Z",
+      "speaker": "B",
+      "text": "No worries. I just got here too.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0003",
+      "tStartMs": 7600,
+      "tEndMs": 10200,
+      "tsIso": "2026-01-10T14:40:07.600000Z",
+      "speaker": "A",
+      "text": "Cool. This place is nice. I'm Aakash.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0004",
+      "tStartMs": 11600,
+      "tEndMs": 13800,
+      "tsIso": "2026-01-10T14:40:11.600000Z",
+      "speaker": "B",
+      "text": "Nice to meet you, Aakash. I'm Kishan.",
+      "isFinal": true
+    },
+    {
+      "id": "tip_0001",
+      "tStartMs": 15200,
+      "tEndMs": 20600,
+      "speaker": "System",
+      "text": "Kishan's tone sounds warm. Take a steady breath and keep your reply simple.",
+      "isTip": true,
+      "category": "Nerves",
+      "isFinal": true
+    },
+    {
+      "id": "t_0005",
+      "tStartMs": 22000,
+      "tEndMs": 25400,
+      "tsIso": "2026-01-10T14:40:22Z",
+      "speaker": "A",
+      "text": "So... first time here, or are you a regular?",
+      "isFinal": true
+    },
+    {
+      "id": "t_0006",
+      "tStartMs": 26800,
+      "tEndMs": 29800,
+      "tsIso": "2026-01-10T14:40:26.800000Z",
+      "speaker": "B",
+      "text": "First time. I picked it because the reviews were friendly.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0007",
+      "tStartMs": 31200,
+      "tEndMs": 34600,
+      "tsIso": "2026-01-10T14:40:31.200000Z",
+      "speaker": "A",
+      "text": "Okay, same. I read three reviews and started overthinking it.",
+      "isFinal": true
+    },
+    {
+      "id": "tip_0002",
+      "tStartMs": 36000,
+      "tEndMs": 43000,
+      "speaker": "System",
+      "text": "A is showing nerves. Keep your shoulders relaxed and slow down slightly.",
+      "isTip": true,
+      "category": "Body Language",
+      "isFinal": true
+    },
+    {
+      "id": "t_0008",
+      "tStartMs": 44400,
+      "tEndMs": 47800,
+      "tsIso": "2026-01-10T14:40:44.400000Z",
+      "speaker": "B",
+      "text": "You're not alone. I checked the menu twice.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0009",
+      "tStartMs": 49200,
+      "tEndMs": 53000,
+      "tsIso": "2026-01-10T14:40:49.200000Z",
+      "speaker": "A",
+      "text": "Good. I was worried you were effortlessly chill.",
+      "isFinal": true
+    },
+    {
+      "id": "tip_0003",
+      "tStartMs": 54400,
+      "tEndMs": 61200,
+      "speaker": "System",
+      "text": "Aakash's smile sounds genuine. You're safe to share a little more.",
+      "isTip": true,
+      "category": "Social Cues",
+      "isFinal": true
+    },
+    {
+      "id": "t_0010",
+      "tStartMs": 62600,
+      "tEndMs": 66600,
+      "tsIso": "2026-01-10T14:41:02.600000Z",
+      "speaker": "B",
+      "text": "I'm pretty easygoing, but I was a little nervous too.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0011",
+      "tStartMs": 68000,
+      "tEndMs": 72800,
+      "tsIso": "2026-01-10T14:41:08Z",
+      "speaker": "A",
+      "text": "Relatable. So what have you been up to lately?",
+      "isFinal": true
+    },
+    {
+      "id": "t_0012",
+      "tStartMs": 74200,
+      "tEndMs": 78400,
+      "tsIso": "2026-01-10T14:41:14.200000Z",
+      "speaker": "B",
+      "text": "Work's been busy. I still try to get outside and read when I can.",
+      "isFinal": true
+    },
+    {
+      "id": "tip_0004",
+      "tStartMs": 79800,
+      "tEndMs": 87600,
+      "speaker": "System",
+      "text": "Ask one follow-up question. Keep it short and specific.",
+      "isTip": true,
+      "category": "Conversation",
+      "isFinal": true
+    },
+    {
+      "id": "t_0013",
+      "tStartMs": 89000,
+      "tEndMs": 93400,
+      "tsIso": "2026-01-10T14:41:29Z",
+      "speaker": "A",
+      "text": "Nice. Any good book recommendations?",
+      "isFinal": true
+    },
+    {
+      "id": "t_0014",
+      "tStartMs": 94800,
+      "tEndMs": 99200,
+      "tsIso": "2026-01-10T14:41:34.800000Z",
+      "speaker": "B",
+      "text": "I just finished one I loved. I can text you the title.",
+      "isFinal": true
+    },
+    {
+      "id": "t_0015",
+      "tStartMs": 100600,
+      "tEndMs": 105400,
+      "tsIso": "2026-01-10T14:41:40.600000Z",
+      "speaker": "A",
+      "text": "That sounds great. Thanks. This is going better than my brain predicted.",
+      "isFinal": true
+    },
+    {
+      "id": "tip_0005",
+      "tStartMs": 106800,
+      "tEndMs": 115200,
+      "speaker": "System",
+      "text": "Good moment to smile and pause. Let the other person respond.",
+      "isTip": true,
+      "category": "Timing",
+      "isFinal": true
+    },
+    {
+      "id": "t_0016",
+      "tStartMs": 116600,
+      "tEndMs": 120800,
+      "tsIso": "2026-01-10T14:41:56.600000Z",
+      "speaker": "B",
+      "text": "Same here. I'm glad we did this.",
+      "isFinal": true
+    }
+  ]
+}
