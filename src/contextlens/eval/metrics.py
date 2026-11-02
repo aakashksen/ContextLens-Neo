@@ -10,6 +10,11 @@ def _same_length(a: Sequence[object], b: Sequence[object]) -> None:
         raise ValueError(f"paired lists differ in length: {len(a)} vs {len(b)}")
 
 
+def mean(values: Sequence[float]) -> float | None:
+    """Plain mean; None when there is nothing to average."""
+    return sum(values) / len(values) if values else None
+
+
 def recall_at_k(ranked_ids: Sequence[str], gold_ids: Sequence[str], k: int) -> float | None:
     """None when the case has no gold evidence, because there is nothing to find."""
     if not gold_ids:
@@ -71,19 +76,33 @@ def _finding_grounded(
     return supports(f) if supports else True
 
 
+def grounded_flags(
+    cards: Sequence[Card],
+    turn_seq: dict[str, int],
+    as_of_seq: int,
+    supports: Callable[[Finding], bool] | None = None,
+) -> list[bool]:
+    """One flag per finding, in order: cited turns all exist at or before as_of_seq (and are
+    judged supporting, when a `supports` judge is given)."""
+    return [_finding_grounded(f, turn_seq, as_of_seq, supports) for c in cards for f in c.findings]
+
+
 def grounded_rate(
     cards: Sequence[Card],
     turn_seq: dict[str, int],
     as_of_seq: int,
     supports: Callable[[Finding], bool] | None = None,
 ) -> float | None:
-    """Share of findings whose cited turns all exist at or before as_of_seq (and are
-    judged supporting, when a `supports` judge is given). None when there are no findings."""
-    findings = [f for c in cards for f in c.findings]
-    if not findings:
-        return None
-    ok = sum(_finding_grounded(f, turn_seq, as_of_seq, supports) for f in findings)
-    return ok / len(findings)
+    """Share of grounded findings. None when there are no findings."""
+    flags = grounded_flags(cards, turn_seq, as_of_seq, supports)
+    return sum(flags) / len(flags) if flags else None
+
+
+def unsupported_claim_rate(flags_per_card: Sequence[Sequence[bool]]) -> float | None:
+    """Per card, the share of its claims that are not grounded; averaged over cards that
+    have claims. None when no card has a claim."""
+    shares = [sum(not x for x in fl) / len(fl) for fl in flags_per_card if fl]
+    return mean(shares)
 
 
 def abstention_accuracy(

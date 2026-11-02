@@ -1,9 +1,9 @@
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from contextlens.memory.store import InMemoryTranscriptStore, TranscriptStore
 from contextlens.schemas import ButtonRequest, Card, Scenario
@@ -22,9 +22,18 @@ class Assistant(Protocol):
 
 class Prediction(BaseModel):
     scenario_id: str
-    card: Card
+    card: Card | None = None  # a retrieval-only row holds ranked turns instead of a card
+    ranked_turn_ids: list[str] | None = None
+    claim_supported: list[bool] | None = None  # rubric judgement per finding, in card order
+    raw_output: str | None = None  # model text, kept so schema validity can be recomputed
     stage_latency_ms: dict[str, int] = Field(default_factory=dict)
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
+
+    @model_validator(mode="after")
+    def _has_output(self) -> Self:
+        if self.card is None and self.ranked_turn_ids is None:
+            raise ValueError("a prediction row needs a card or ranked_turn_ids")
+        return self
 
 
 def replay(
