@@ -26,6 +26,8 @@ py -3.12 tools\run_loop.py --max-sessions 10 --tasks-per-session 3
 It stops on its own when the plan is complete, when it needs you, or after 2 sessions that finish nothing.
 Usage limits end it too.
 
+Say yes when Claude Code first asks whether to trust the folder, or its permissions won't load. Use `/run-plan` for tasks that train models, because long runs in the hands-off loop haven't been tested.
+
 ## How a task gets finished
 
 ```

@@ -193,6 +193,17 @@ def cmd_unblock(args):
     print(f"unblocked {args.id}")
 
 
+def cmd_reopen(args):
+    plan = load()
+    task = find(plan, args.id)
+    task["status"] = "pending"
+    task["attempts"] = 0
+    task["reason"] = args.reason
+    task.pop("verified", None)
+    save(plan)
+    print(f"reopened {args.id}")
+
+
 def cmd_human_done(args):
     plan = load()
     task = find(plan, args.id)
@@ -234,7 +245,8 @@ def main():
         item.add_argument("id")
         item.set_defaults(run=run)
     for name, run, field in (("fail", cmd_fail, "--reason"), ("block", cmd_block, "--reason"),
-                             ("unblock", cmd_unblock, "--note"), ("human-done", cmd_human_done, "--note")):
+                             ("unblock", cmd_unblock, "--note"), ("human-done", cmd_human_done, "--note"),
+                             ("reopen", cmd_reopen, "--reason")):
         item = sub.add_parser(name)
         item.add_argument("id")
         item.add_argument(field, required=True)

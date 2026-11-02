@@ -2,7 +2,6 @@
 import json
 import os
 import re
-import stat
 import subprocess
 import sys
 import tempfile
@@ -110,6 +109,16 @@ class Gate(Sandbox):
         self.assertEqual(self.state("T1")["status"], "pending")
         self.assertEqual(self.state("T1")["attempts"], 0)
 
+    def test_reopen_sends_a_finished_task_back(self):
+        self.ctl("start", "T1")
+        self.ctl("verify", "T1")
+        self.verdict("T1")
+        self.ctl("done", "T1")
+        self.assertEqual(self.ctl("reopen", "T1", "--reason", "labels wrong").returncode, 0)
+        self.assertEqual(self.state("T1")["status"], "pending")
+        self.assertNotIn("verified", self.state("T1"))
+        self.assertNotEqual(self.ctl("start", "T2").returncode, 0)
+
     def test_waiting_reports_the_persons_tasks(self):
         self.write([task("H1", owner="human"), task("T1", deps=["H1"])])
         state = json.loads(self.ctl("next").stdout)
@@ -167,7 +176,7 @@ class PlanMatchesState(unittest.TestCase):
 
     def test_every_agent_declares_a_model(self):
         for path in (REPO / ".claude" / "agents").glob("*.md"):
-            self.assertRegex(path.read_text(encoding="utf-8"), r"(?m)^model: (haiku|sonnet)$", path.name)
+            self.assertRegex(path.read_text(encoding="utf-8"), r"(?m)^model: (haiku|sonnet)\s*$", path.name)
 
 
 if __name__ == "__main__":

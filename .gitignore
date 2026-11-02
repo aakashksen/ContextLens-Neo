@@ -13,4 +13,5 @@ mlruns/
 *.gguf
 *.ckpt
 orchestration/evidence/
+results/spend.json
 orchestration/run_loop.log

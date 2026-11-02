@@ -121,6 +121,7 @@
       "title": "Run records and claims",
       "owner": "agent",
       "deps": [
+        "T1.3",
         "T1.4"
       ],
       "acceptance": [
@@ -148,7 +149,8 @@
       "title": "Transcript store and hybrid retrieval",
       "owner": "agent",
       "deps": [
-        "T2.1"
+        "T2.1",
+        "T1.3"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_retrieval.py -q"
@@ -164,7 +166,8 @@
         "T2.2"
       ],
       "acceptance": [
-        "{py} -m pytest tests/test_rerank.py -q"
+        "{py} -m pytest tests/test_rerank.py -q",
+        "{py} -c \"import torch; assert torch.cuda.is_available()\""
       ],
       "status": "pending"
     },
@@ -299,35 +302,6 @@
       "status": "pending"
     },
     {
-      "id": "T6.1",
-      "phase": 6,
-      "title": "Card training data and QLoRA pipeline",
-      "owner": "agent",
-      "deps": [
-        "T3.1",
-        "H2"
-      ],
-      "acceptance": [
-        "{py} -m pytest tests/test_cards_data.py -q"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "T6.2",
-      "phase": 6,
-      "title": "Experiment E5, fine-tuned vs prompted",
-      "owner": "agent",
-      "deps": [
-        "T6.1",
-        "T3.3"
-      ],
-      "acceptance": [
-        "{py} -m pytest tests/test_e5.py -q",
-        "{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev"
-      ],
-      "status": "pending"
-    },
-    {
       "id": "T7.1",
       "phase": 7,
       "title": "Experiment E6, prompt comparison",
@@ -355,6 +329,36 @@
       "status": "pending"
     },
     {
+      "id": "T6.1",
+      "phase": 6,
+      "title": "Card training data and QLoRA pipeline",
+      "owner": "agent",
+      "deps": [
+        "T3.1",
+        "H2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_cards_data.py -q"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T6.2",
+      "phase": 6,
+      "title": "Experiment E5, fine-tuned vs prompted",
+      "owner": "agent",
+      "deps": [
+        "T6.1",
+        "T3.3",
+        "T7.1"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e5.py -q",
+        "{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev"
+      ],
+      "status": "pending"
+    },
+    {
       "id": "T8.1",
       "phase": 8,
       "title": "C++ speech service",
@@ -364,7 +368,8 @@
       ],
       "acceptance": [
         "docker compose build speech",
-        "{py} -m pytest tests/test_speech_contract.py -q"
+        "docker compose up -d speech",
+        "{py} -m pytest tests/test_speech_contract.py -q -m real"
       ],
       "status": "pending"
     },

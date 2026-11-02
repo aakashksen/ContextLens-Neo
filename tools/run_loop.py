@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ def main():
     parser.add_argument("--stall-limit", type=int, default=2)
     args = parser.parse_args()
     base = shlex.split(os.environ.get("CL_CLAUDE_CMD", "claude"))
+    base[0] = shutil.which(base[0]) or base[0]  # may be claude.cmd on Windows
     stalled = 0
     for session in range(1, args.max_sessions + 1):
         state = plan_state()

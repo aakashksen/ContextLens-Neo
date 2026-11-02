@@ -36,7 +36,7 @@ The steps are the same throughout and aren't repeated below. For each listed tes
 
 ### T0.1: Project setup
 **Files:** `pyproject.toml`, `src/contextlens/__init__.py`, `docker-compose.yml` (PostgreSQL 16 + pgvector), `.env.example`, `.github/workflows/ci.yml`, `tests/test_smoke.py`.
-**Do:** Create `.venv` with `py -3.12 -m venv .venv`, install with dev extras (pytest, ruff, pydantic). Register the `real` marker and exclude it by default (`addopts = "-m 'not real'"`). CI runs ruff and pytest.
+**Do:** Create `.venv` with `py -3.12 -m venv .venv`, and install with `.venv/Scripts/python -m pip install -e ".[dev]"` (pytest, ruff, pydantic). Set `pythonpath = ["src"]` for pytest, and exclude `legacy` from ruff. Register the `real` marker and exclude it by default (`addopts = "-m 'not real'"`). CI runs ruff and pytest.
 **Tests:** `test_package_imports`, `test_real_marker_excluded_by_default` (reads the config).
 **Accept:** `{py} -m pytest tests/test_smoke.py tests/test_orchestration.py -q`; `{py} -m ruff check .`; `docker compose config -q`.
 
@@ -78,24 +78,24 @@ See `docs/HUMAN-GATES.md`.
 ## Phase 1: Replay and evaluation first
 
 ### T1.1: Dataset loaders and splits
-**Files:** `src/contextlens/data/loaders.py`, `src/contextlens/data/splits.py`, `datasets/splits/`, `tests/test_data.py`, small fixtures.
-**Produces:** `load_dataset(name: str, root: Path) -> list[Conversation]`; `make_splits(convs, seed=13, ratios=(.7,.15,.15)) -> dict[str,list[str]]`; `dataset_hash(convs) -> str`.
+**Files:** `src/contextlens/data/loaders.py`, `src/contextlens/data/splits.py`, `src/contextlens/data/check_splits.py`, `datasets/splits/`, `tests/test_data.py`, small fixtures.
+**Produces:** `load_dataset(name: str, root: Path) -> list[Conversation]`; `load_gold(name: str, root: Path) -> list[Scenario]`, turning QMSum queries and spans and LongMemEval questions into `Scenario`s with `origin="dataset"`; `load_pairs(root: Path) -> list[Pair]` for DECODE (`Pair: conversation_id, statement, earlier, label, source`); `make_splits(convs, seed=13, ratios=(.5,.25,.25)) -> dict[str,list[str]]`; `dataset_hash(convs) -> str`.
 **Do:** Download only datasets approved in `docs/datasets.md`, into `datasets/raw/`. Load each into `Conversation`. Save split manifests.
 **Tests:** `test_no_conversation_in_two_splits`; `test_split_is_deterministic`; `test_hash_changes_when_text_changes`; a loader test per dataset on a small fixture.
 **Accept:** `{py} -m pytest tests/test_data.py -q`; `{py} -m contextlens.data.check_splits`.
 
 ### T1.2: Reviewed scenario set
 **Files:** `datasets/scenarios/*.jsonl`, `datasets/scenarios/review-sample.md`, `src/contextlens/data/scenarios.py`, `tests/test_scenarios.py`.
-**Do:** Build at least 240 scenarios covering, at least 30 each: recall; contradiction; legitimate update; insufficient evidence; wrong-speaker trap; hypothetical or joking statement; prompt injection in a turn; respond-with-suggestion. Every scenario marks `origin`. Include "The deadline is Monday" / "We moved the deadline to Wednesday" → `update`, and the same pair plus "It has always been Wednesday" → `contradiction`. Write a random sample of 50 to the review file with labels visible.
-**Tests:** `test_counts_per_category`; `test_gold_evidence_turns_exist_before_as_of_seq`; `test_split_by_conversation`; `test_deadline_cases_have_expected_labels`.
+**Do:** Build enough scenarios, combining `load_gold` with written ones, for at least 120 cases in each of dev and test, with at least 15 per category in each. Categories: recall; contradiction; legitimate update; insufficient evidence; wrong-speaker trap; hypothetical or joking statement; prompt injection in a turn; respond-with-suggestion. Every scenario marks `origin`. Include "The deadline is Monday" / "We moved the deadline to Wednesday" → `update`, and the same pair plus "It has always been Wednesday" → `contradiction`. Write a random sample of 50 to the review file with labels visible.
+**Tests:** `test_counts_per_category_in_dev_and_test`; `test_gold_evidence_turns_exist_before_as_of_seq`; `test_split_by_conversation`; `test_deadline_cases_have_expected_labels`.
 **Accept:** `{py} -m pytest tests/test_scenarios.py -q`.
 
 ### H2: Review test labels
 See `docs/HUMAN-GATES.md`.
 
 ### T1.3: Replay runner
-**Files:** `src/contextlens/replay/runner.py`, `tests/test_replay.py`.
-**Produces:** `class Assistant(Protocol): def answer(self, req: ButtonRequest, ctx: "Context") -> Card`; `replay(scenarios: Iterable[Scenario], make_assistant: Callable[[], Assistant]) -> list[Prediction]`. `Prediction`: `scenario_id, card, stage_latency_ms: dict[str,int]`.
+**Files:** `src/contextlens/replay/runner.py`, `src/contextlens/memory/store.py`, `tests/test_replay.py`.
+**Produces:** `TranscriptStore` protocol with `.add(turn)`, `.turns(conv_id, as_of_seq, start_seq=0)`, `.delete(conv_id)`, and `InMemoryTranscriptStore`; `@dataclass Context: store: TranscriptStore; as_of_seq: int`; `class Assistant(Protocol): def answer(self, req: ButtonRequest, ctx: Context) -> Card`; `replay(scenarios: Iterable[Scenario], make_assistant: Callable[[], Assistant]) -> list[Prediction]`. `Prediction`: `scenario_id, card, stage_latency_ms: dict[str,int]`.
 **Do:** Feed turns in order to a fresh store for each scenario, stop at `as_of_seq`, press the button, and catch any exception as an `abstained` card with the error recorded.
 **Tests:** `test_assistant_cannot_see_future_turns` (a spy assistant finds nothing past `as_of_seq`); `test_exception_becomes_abstained_card`; `test_results_are_order_stable`.
 **Accept:** `{py} -m pytest tests/test_replay.py -q`.
@@ -108,8 +108,9 @@ See `docs/HUMAN-GATES.md`.
 
 ### T1.5: Run records and claims
 **Files:** `src/contextlens/eval/records.py`, `src/contextlens/eval/check_run.py`, `src/contextlens/eval/claims.py`, `results/claims.json`, `tests/test_records.py`.
-**Produces:** `write_run(experiment, split, config, models, prompt_versions, metrics, intervals, attempts, predictions, dataset_hash) -> Path` with the fields in `docs/TESTING.md`; `python -m contextlens.eval.check_run <E#> [--min-n N] [--split S]`; `python -m contextlens.eval.claims check`.
-**Tests:** `test_write_run_refuses_dirty_tree`; `test_check_run_fails_when_predictions_missing`; `test_claim_without_matching_run_fails`; `test_claim_value_must_equal_metric_in_run`; `test_recompute_matches_saved_metrics`.
+**Produces:** `write_run(experiment, split, config, models, prompt_versions, metrics, intervals, attempts, predictions, dataset_hash, *, root=ROOT, allow_dirty=False) -> Path` with the fields in `docs/TESTING.md` plus `dirty`; `allow_dirty` exists for tests only; `python -m contextlens.eval.check_run <E#> [--min-n N] [--split S]`; `python -m contextlens.eval.claims check`.
+**`check_run` must also fail when:** a model name matches fake or stub; `dirty` is true; `dataset_hash` doesn't match the split manifest; `git_commit` isn't an ancestor of HEAD; `n` differs from the split's case count, or is below `--min-n`; `attempts` is empty; a saved metric doesn't recompute from predictions; or, for `--split test`, more than one record exists without an override note.
+**Tests:** one failing case for each rule above, plus `test_write_run_refuses_dirty_tree`; `test_check_run_fails_when_predictions_missing`; `test_claim_without_matching_run_fails`; `test_claim_value_must_equal_metric_in_run`; `test_recompute_matches_saved_metrics`.
 **Accept:** `{py} -m pytest tests/test_records.py -q`; `{py} -m contextlens.eval.claims check`.
 
 ---
@@ -125,13 +126,14 @@ See `docs/HUMAN-GATES.md`.
 
 ### T2.2: Transcript store and hybrid retrieval
 **Files:** `src/contextlens/memory/store.py`, `src/contextlens/retrieval/hybrid.py`, `tests/test_retrieval.py`.
-**Produces:** `TranscriptStore.add(turn)`, `.turns(conv_id, as_of_seq, start_seq=0)`, `.delete(conv_id)`; in-memory and PostgreSQL versions with the same interface. `ScoredTurn: turn, score, parts`. `Retriever.search(conv_id, query, as_of_seq, k=8, speaker=None, since_ms=None, mode="hybrid") -> list[ScoredTurn]`, modes `dense`, `bm25`, `hybrid` (reciprocal rank fusion, k=60).
+**Consumes:** `TranscriptStore` from T1.3. **Produces:** `PostgresTranscriptStore`, with the same interface. `ScoredTurn: turn, score, parts`. `Retriever.search(conv_id, query, as_of_seq, k=8, speaker=None, since_ms=None, mode="hybrid") -> list[ScoredTurn]`, modes `dense`, `bm25`, `hybrid` (reciprocal rank fusion, k=60).
 **Tests:** `test_search_never_returns_future_turns` in every mode; `test_exact_name_found_by_bm25_when_dense_misses` (stub embedder); `test_speaker_filter`; `test_low_confidence_speaker_is_reported_as_unknown` (below 0.5 → `speaker="unknown"`); `test_delete_removes_text_and_vectors`. Real, marked: PostgreSQL through Docker.
 **Accept:** `{py} -m pytest tests/test_retrieval.py -q`.
 
 ### T2.3: Reranker
 **Files:** `src/contextlens/retrieval/rerank.py`, `tests/test_rerank.py`.
 **Produces:** `Reranker.rerank(query, candidates: list[ScoredTurn], k) -> list[ScoredTurn]` wrapping a local cross-encoder, loaded lazily; `NoReranker`.
+**Do:** Install CUDA PyTorch from `https://download.pytorch.org/whl/` with the index matching this driver, since the default Windows wheel is CPU-only. Put the install command in the README.
 **Tests:** `test_order_follows_scores` with a stub; `test_k_limits_output`; `test_empty_candidates`; `test_load_failure_falls_back_and_says_so`.
 **Accept:** `{py} -m pytest tests/test_rerank.py -q`.
 
@@ -209,7 +211,7 @@ See `docs/HUMAN-GATES.md`.
 
 ### T5.1: Baselines
 **Files:** `src/contextlens/consistency/data.py`, `src/contextlens/consistency/baselines.py`, `tests/test_consistency_baselines.py`.
-**Produces:** `build_pairs(split) -> list[Pair]`, merging DECODE (mapped per `docs/datasets.md`) with our scenarios and recording each source; `TfidfChecker`, `ZeroShotChecker`, implementing `ConsistencyChecker`.
+**Consumes:** `Pair`, `load_pairs` from T1.1. **Produces:** `build_pairs(split) -> list[Pair]`, merging DECODE (mapped per `docs/datasets.md`) with our scenarios and recording each source; `TfidfChecker`, `ZeroShotChecker`, implementing `ConsistencyChecker`.
 **Tests:** `test_conversation_split_preserved`; `test_label_map_matches_datasets_doc`; `test_tfidf_fits_and_predicts_all_four_labels` on a fixture; `test_sources_are_tracked`.
 **Accept:** `{py} -m pytest tests/test_consistency_baselines.py -q`.
 
@@ -230,8 +232,8 @@ See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
 ### T6.2: Experiment E5, fine-tuned vs prompted
-**Files:** `src/contextlens/experiments/e5_cards.py`, `tests/test_e5.py`.
-**Do:** Train. On dev, compare the base model with the best prompt against the adapter: grounded rate, unsupported claims, schema-valid rate, abstention, latency. Save the adapter under `models/`, with its hash in the record. If it doesn't beat the prompted version, record that, and keep the prompted version in the product.
+**Files:** `src/contextlens/llm/hf.py`, `src/contextlens/experiments/e5_cards.py`, `tests/test_e5.py`.
+Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_path, adapter_path=None)` implementing `LLMClient`, since Ollama can't load a PEFT adapter. Train. On dev, using `HFClient` for both sides so the runtime is the same, compare the base model with the best prompt from E6 against the adapter: grounded rate, unsupported claims, schema-valid rate, abstention, latency. Save the adapter under `models/`, with its hash in the record. If it doesn't beat the prompted version, record that, and keep the prompted version in the product.
 **Tests:** tiny fixture writes a valid record; `test_adapter_hash_recorded`.
 **Accept:** `{py} -m pytest tests/test_e5.py -q`; `{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev`.
 
@@ -256,10 +258,10 @@ See `docs/HUMAN-GATES.md`.
 ## Phase 8: Real time and clients
 
 ### T8.1: C++ speech service
-**Files:** `speech/CMakeLists.txt`, `speech/src/*.cpp`, `speech/proto/speech.proto`, `speech/Dockerfile`, `tests/test_speech_contract.py`, `speech/tests/`.
-**Produces:** gRPC `Transcribe(stream AudioChunk) returns (stream TranscriptSegment)`; segment fields `text, start_ms, end_ms, is_final`. C++17, whisper.cpp, built in Docker. It uses the GPU if Docker can reach it, or else CPU, reporting which. Add a C++ unit test for the audio ring buffer and voice activity gate.
+**Files:** `speech/CMakeLists.txt`, `speech/src/*.cpp`, `speech/proto/speech.proto`, `speech/Dockerfile`, `docker-compose.yml` (add a `speech` service), `tests/test_speech_contract.py`, `speech/tests/`.
+**Produces:** gRPC `Transcribe(stream AudioChunk) returns (stream TranscriptSegment)`; segment fields `text, start_ms, end_ms, is_final`. C++17, whisper.cpp, built in Docker. It uses the GPU if Docker can reach it, or else CPU, reporting which. Add C++ unit tests for the audio ring buffer and voice activity gate. The Docker build runs `ctest` and fails if they fail.
 **Tests:** C++: `ring buffer keeps order at wraparound`, `silence yields no segments`. Python, real-marked: a fixture WAV returns text containing an expected phrase.
-**Accept:** `docker compose build speech`; `{py} -m pytest tests/test_speech_contract.py -q`.
+**Accept:** `docker compose build speech`; `docker compose up -d speech`; `{py} -m pytest tests/test_speech_contract.py -q -m real`.
 
 ### T8.2: Streaming backend and diarization
 **Files:** `src/contextlens/api/app.py`, `src/contextlens/api/stream.py`, `src/contextlens/speech/diarize.py`, `src/contextlens/speech/client.py`, `tests/test_api.py`.
@@ -316,7 +318,7 @@ See `docs/HUMAN-GATES.md`.
 ### T9.3: Report, README, and bullets
 **Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
-**Tests:** the claims checker, plus a check that every number in `docs/REPORT.md` and the bullets appears in a run record.
+**Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off
