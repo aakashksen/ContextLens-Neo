@@ -115,13 +115,23 @@ Check that each gold label and answer is defensible. Mark any that are not.
 - d596882b:t5 [assistant]: Absolutely! New York City is very vegan and vegetarian friendly, and there are countless options to choose from. Here are some recommendations:
 
 1. Check out By Chloe, a popular plant-based eatery with multiple locations throughout the city. They offer vegan burgers, salads, pastas, and baked goods.
+
+2. Visit Candle 79 in the Upper East Side. This restaurant offers upscale vegan cuisine made from organic, locally-sourced ingredients.
+
+3. Try Superiority Burger, a small spot in the East Village that is very popular for its plant-based burger and unique vegetarian sides.
+
+4. Look for juice bars like Juice Generation and Pure Green, which offer a variety of healthy, plant-based bowls, smoothies, and juices. 
+
+5. Pop into Peacefood Cafe, a cozy spot offering a wide variety of vegan soups, sandwiches, salads, and desserts. 
+
+These are just a few of the many vegan and vegetarian options available in New York City. Be sure to do some research in advance and ask locals for recommendations, as there are a ton of hidden gems throughout the city!
 - d596882b:t6 [user]: Wow, these recommendations all have me drooling! I can't wait to indulge in some delicious eats. Do you have any suggestions for the best coffee shops in the city? I can't explore on an empty stomach!
 - d596882b:t7 [assistant]: Of course! New York City has no shortage of excellent coffee shops. Here are a few recommendations:
 
 1. Blue Bottle Coffee - with multiple locations throughout the city, Blue Bottle is known for its high-quality, carefully crafted coffee.
 
 2. Toby's Estate Coffee - located in Brooklyn, with other lo
-- (showing last 6 of 8 turns)
+- (showing 6 of 8 turns: last 6 and all gold evidence)
 - question: I'm planning another trip to New York City and I was wondering if you could remind me of that vegan eatery you recommended last time, the one with multiple locations throughout the city?
 - gold_label: None
 - gold_answer: By Chloe
@@ -171,8 +181,20 @@ Nemr
 Adam
 - 7161e7e2:t13 [assistant]: Thank you for providing the agent names. Here's an updated version of the shift rotation sheet for GM social media agents with 7 agents, 4 shifts, and 2 days off for every agent for a week starting on Sunday and ending on Saturday:
 
-Shift Rotation Sheet for GM Social Media Agents (1 Week, Sunday - S
-- (showing last 6 of 14 turns)
+Shift Rotation Sheet for GM Social Media Agents (1 Week, Sunday - Saturday)
+
+|  | 8 am - 4 pm (Day Shift) | 12 pm - 8 pm (Afternoon Shift) | 4 pm - 12 am (Evening Shift) | 12 am - 8 am (Night Shift) |
+| --- | --- | --- | --- | --- |
+| Sunday | Admon | Magdy | Ehab | Sara |
+| Monday | Mostafa | Nemr | Adam | Admon |
+| Tuesday | Magdy | Ehab | Sara | Mostafa |
+| Wednesday | Nemr | Adam | Admon | Magdy |
+| Thursday | Ehab | Sara | Mostafa | Nemr |
+| Friday | Admon | Magdy | Ehab | Sara |
+| Saturday | Adam | Mostafa | Nemr | Admon |
+
+Note: This rotation is for a 1-week period, starting on Sunday and ending on Saturday, with each agent working one shift per day and having two days off during the week. The names of the agents have been added to the corresponding shift. You can adjust the duration of the rotation and the number of days off per week based on your team's specific needs.
+- (showing 6 of 14 turns: last 6 and all gold evidence)
 - question: I'm checking our previous chat about the shift rotation sheet for GM social media agents. Can you remind me what was the rotation for Admon on a Sunday?
 - gold_label: None
 - gold_answer: Admon was assigned to the 8 am - 4 pm (Day Shift) on Sundays.

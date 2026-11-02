@@ -110,9 +110,11 @@ def write_review_sample(root: Path = SCENARIOS_DIR, n: int = 50, seed: int = 13)
              "Check that each gold label and answer is defensible. Mark any that are not.", ""]
     for k, s in enumerate(sample, 1):
         lines += [f"## {k}. {s.id}", f"- category: {s.category}; origin: {s.origin}; split: {s.conversation.split}"]
-        lines += [f"- {t.id} [{t.speaker}]: {t.text[:300]}" for t in s.conversation.turns[-6:]]
-        if len(s.conversation.turns) > 6:
-            lines.append(f"- (showing last 6 of {len(s.conversation.turns)} turns)")
+        turns, gold = s.conversation.turns, set(s.gold_evidence_turn_ids)
+        shown = [t for i, t in enumerate(turns) if i >= len(turns) - 6 or t.id in gold]
+        lines += [f"- {t.id} [{t.speaker}]: {t.text if t.id in gold else t.text[:300]}" for t in shown]
+        if len(shown) < len(turns):
+            lines.append(f"- (showing {len(shown)} of {len(turns)} turns: last 6 and all gold evidence)")
         lines += [f"- question: {s.request.question}", f"- gold_label: {s.gold_label}",
                   f"- gold_answer: {s.gold_answer}", f"- gold_evidence: {s.gold_evidence_turn_ids}", ""]
     path = root / "review-sample.md"

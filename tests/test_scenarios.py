@@ -70,3 +70,25 @@ def test_deadline_cases_have_expected_labels():
     assert upd[0].conversation.id != con[0].conversation.id
     assert upd[0].gold_evidence_turn_ids == [t.id for t in upd[0].conversation.turns]
     assert con[0].gold_evidence_turn_ids[-1] == con[0].conversation.turns[-1].id
+
+
+def test_review_file_has_50_samples_with_labels_and_full_evidence(tmp_path):
+    import shutil
+
+    from contextlens.data.scenarios import write_review_sample
+
+    root = Path("datasets/scenarios")
+    for split in ("dev", "test"):
+        shutil.copy(root / f"{split}.jsonl", tmp_path / f"{split}.jsonl")
+    text = write_review_sample(tmp_path).read_text(encoding="utf-8")
+    assert text.count("\n## ") == 50
+    by_id = {s.id: s for split in ("dev", "test") for s in load_scenarios(split, tmp_path)}
+    ids = [line.split(". ", 1)[1] for line in text.splitlines() if line.startswith("## ")]
+    assert len(set(ids)) == 50
+    for sid in ids:
+        sc = by_id[sid]
+        assert f"- gold_label: {sc.gold_label}" in text
+        assert f"- gold_evidence: {sc.gold_evidence_turn_ids}" in text
+        turns = {t.id: t for t in sc.conversation.turns}
+        for eid in sc.gold_evidence_turn_ids:
+            assert f"- {eid} [{turns[eid].speaker}]: {turns[eid].text}\n" in text + "\n"
