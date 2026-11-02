@@ -95,7 +95,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ### T1.3: Replay runner
 **Files:** `src/contextlens/replay/runner.py`, `src/contextlens/memory/store.py`, `tests/test_replay.py`.
-**Produces:** `TranscriptStore` protocol with `.add(turn)`, `.turns(conv_id, as_of_seq, start_seq=0)`, `.delete(conv_id)`, and `InMemoryTranscriptStore`; `@dataclass Context: store: TranscriptStore; as_of_seq: int`; `class Assistant(Protocol): def answer(self, req: ButtonRequest, ctx: Context) -> Card`; `replay(scenarios: Iterable[Scenario], make_assistant: Callable[[], Assistant]) -> list[Prediction]`. `Prediction`: `scenario_id, card, stage_latency_ms: dict[str,int]`.
+**Produces:** `TranscriptStore` protocol with `.add(turn)`, `.turns(conv_id, as_of_seq, start_seq=0)`, `.delete(conv_id)`, and `InMemoryTranscriptStore`; `@dataclass Context: store: TranscriptStore; as_of_seq: int`; `class Assistant(Protocol): def answer(self, req: ButtonRequest, ctx: Context) -> Card`; `replay(scenarios: Iterable[Scenario], make_assistant: Callable[[], Assistant]) -> list[Prediction]`. `Prediction`: `scenario_id, card, stage_latency_ms: dict[str,int]`, and optional `ranked_turn_ids` (a retrieval-only row, which has no card; `card` is then `None`), `claim_supported` (one judgement per finding), `raw_output`, and `errored` (a runner-made error card). A row needs a card or `ranked_turn_ids`.
 **Do:** Feed turns in order to a fresh store for each scenario, stop at `as_of_seq`, press the button, and catch any exception as an `abstained` card with the error recorded.
 **Tests:** `test_assistant_cannot_see_future_turns` (a spy assistant finds nothing past `as_of_seq`); `test_exception_becomes_abstained_card`; `test_results_are_order_stable`.
 **Accept:** `{py} -m pytest tests/test_replay.py -q`.
@@ -107,10 +107,10 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_metrics.py -q`.
 
 ### T1.5: Run records and claims
-**Files:** `src/contextlens/eval/records.py`, `src/contextlens/eval/check_run.py`, `src/contextlens/eval/claims.py`, `results/claims.json`, `tests/test_records.py`.
-**Produces:** `write_run(experiment, split, config, models, prompt_versions, metrics, intervals, attempts, predictions, dataset_hash, *, root=ROOT, allow_dirty=False) -> Path` with the fields in `docs/TESTING.md` plus `dirty`; `allow_dirty` exists for tests only; `python -m contextlens.eval.check_run <E#> [--min-n N] [--split S]`; `python -m contextlens.eval.claims check`.
-**`check_run` must also fail when:** a model name matches fake or stub; `dirty` is true; `dataset_hash` doesn't match the split manifest; `git_commit` isn't an ancestor of HEAD; `n` differs from the split's case count, or is below `--min-n`; `attempts` is empty; a saved metric doesn't recompute from predictions; or, for `--split test`, more than one record exists without an override note.
-**Tests:** one failing case for each rule above, plus `test_write_run_refuses_dirty_tree`; `test_check_run_fails_when_predictions_missing`; `test_claim_without_matching_run_fails`; `test_claim_value_must_equal_metric_in_run`; `test_recompute_matches_saved_metrics`.
+**Files:** `src/contextlens/eval/records.py`, `src/contextlens/eval/check_run.py`, `src/contextlens/eval/series.py`, `src/contextlens/eval/claims.py`, `results/claims.json`, `tests/test_records.py`.
+**Produces:** `write_run(experiment, split, config, models, prompt_versions, metrics, intervals, attempts, predictions, dataset_hash, *, comparisons=None, supersedes=None, root=ROOT, allow_dirty=False) -> Path` with the fields in `docs/TESTING.md` plus `dirty`; one record holds every system of the experiment, so `predictions` maps a system name to its rows, `metrics` and `intervals` map a system name to its values, and `comparisons` lists system pairs (an experiment with one system has one entry); `allow_dirty` exists for tests only; `python -m contextlens.eval.check_run <E#> [--min-n N] [--split S]`; `python -m contextlens.eval.claims check`.
+**`check_run` must also fail when:** a model name matches fake or stub; `dirty` is true; `dataset_hash` doesn't match the split manifest; `git_commit` isn't an ancestor of HEAD; `n` differs from the split's case count, or is below `--min-n`; `attempts` is empty; for any system, a saved metric, interval, or comparison doesn't recompute from that system's predictions (intervals and comparisons: seed 13, 10,000 resamples by conversation, using `bootstrap_ci`, `paired_bootstrap_diff` and `mcnemar_exact`); a system's rows don't hold each of the split's scenario ids exactly once; or, for the test split, more than one test record exists, in any experiment, without an override note. It checks every record of the experiment and split, except one that a later record lists in `supersedes` with a non-empty reason.
+**Tests:** one failing case for each rule above, plus `test_write_run_refuses_dirty_tree`; `test_check_run_fails_when_predictions_missing`; `test_claim_without_matching_run_fails`; `test_claim_value_must_equal_metric_in_run`; `test_recompute_matches_saved_metrics`. Also a test for each of: two systems in one record, an interval or comparison that doesn't recompute, an earlier bad record, `supersedes`, a renamed experiment on test, rows that cite turns past `as_of_seq`, mixed card and card-less rows, a metric whose source field is missing on a row, and a judged metric without a named judge. A claim names its system when the record has several, and may cite a metric, an interval, or a comparison, which must equal the record's value; a claim on `grounded_rate` or `unsupported_claim_rate` also needs a recorded person-review agreement rate.
 **Accept:** `{py} -m pytest tests/test_records.py -q`; `{py} -m contextlens.eval.claims check`.
 
 ---
@@ -202,7 +202,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 ### T4.2: Experiment E3, team vs single agent
 **Files:** `src/contextlens/experiments/e3_team.py`, `tests/test_e3.py`.
 **Do:** Same cases, same tools, same model, on dev. Compare quality, latency, tokens, with paired bootstrap and McNemar. Also break it down by category. Write the finding in plain language in the record's `notes`, including if the team loses.
-**Tests:** tiny fixture writes a valid paired record.
+**Tests:** tiny fixture writes a valid record holding both systems, with their comparison.
 **Accept:** `{py} -m pytest tests/test_e3.py -q`; `{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev`.
 
 ---
@@ -302,7 +302,7 @@ See `docs/HUMAN-GATES.md`.
 
 ### T9.1: Experiment E8, final test
 **Files:** `src/contextlens/experiments/e8_final.py`, `tests/test_e8.py`.
-**Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
+**Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split, in one run record that holds every system: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
 **Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test`.
 

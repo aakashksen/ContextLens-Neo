@@ -13,7 +13,7 @@
 
 ## Data splits
 - Split by **conversation**, never by turn, so related turns can't leak across. A saved manifest (`datasets/splits/*.json`) with a content hash fixes each split.
-- Choose settings on **dev**. Use **test** once, on the chosen configuration. If test results influence a decision, record that and draw a new split.
+- Choose settings on **dev**. Use **test** once, on the chosen configuration. One run record that holds every system is one use of test. If test results influence a decision, record that and draw a new split.
 - Keep public benchmarks and our own scenarios separate in every report. Label synthetic data as synthetic.
 
 ## Provisional results
@@ -38,15 +38,17 @@ later turn can't appear in evidence.
 | **Cost** | Tokens per card, and Claude Code calls used |
 | **Calibration** | Expected calibration error, for models that output a probability |
 
-**Judging "supports the claim":** entailment judged by a rubric prompt on the strongest local model, plus person review of a random sample (H2 format). Report the agreement rate. Don't use the same model and prompt to both write and grade without saying so.
+**Judging "supports the claim":** entailment judged by a rubric prompt on the strongest local model, plus person review of a random sample (H2 format). Report the agreement rate. Don't use the same model and prompt to both write and grade without saying so. A record that saves `grounded_rate` or `unsupported_claim_rate` names the judge in `config.judge` (`model`, `rubric_version`, `same_model_and_prompt_as_writer`), and a claim on either also needs `config.judge_review` (`agreement_rate`, `sample_size`, `sample: "random"`). Code can check that these are recorded, not that the judgements are true.
 
 ## Comparing systems
-Run every system on the same cases with the same seed. Report a 95% bootstrap confidence interval (10,000 resamples at the conversation level) and an exact McNemar test for paired correct/incorrect outcomes. Don't call anything an improvement if the interval for the difference includes zero. Say "no measurable difference".
+Run every system on the same cases with the same seed, and save them in one run record. Report a 95% bootstrap confidence interval (10,000 resamples at the conversation level, seed 13) and an exact McNemar test for paired correct/incorrect outcomes. `check_run` recomputes the saved intervals and comparisons from the predictions. Don't call anything an improvement if the interval for the difference includes zero. Say "no measurable difference".
 
 ## Run records
 Every experiment writes `results/runs/<experiment>-<timestamp>.json`:
-`run_id, experiment, git_commit, dataset_hash, split, config, models, prompt_versions, n, metrics, intervals, attempts, claude_calls, labels_reviewed, predictions_path, started_at, finished_at`.
-Predictions are saved, so metrics can be recomputed. `attempts` lists every setting tried, including the failures.
+`run_id, experiment, git_commit, dataset_hash, split, config, models, prompt_versions, n, metrics, intervals, comparisons, attempts, claude_calls, labels_reviewed, predictions, started_at, finished_at`, and optionally `supersedes`.
+One record holds every system of the experiment: `predictions` maps each system name to its predictions file, `metrics` and `intervals` map each system name to its values, and `comparisons` lists system pairs (`a`, `b`, `metric`, `diff`, `ci`, `mcnemar_p`, with `a` minus `b`). An experiment with one system has one entry. Every system covers the same split and scenario ids.
+Predictions are saved, so metrics can be recomputed. Rows are all cards or all retrieval rows, and cite only turns at or before `as_of_seq`. A metric whose source field is missing on any row can't be saved.
+`check_run` checks every record of the experiment and split. A record is excluded only if a later one lists it in `supersedes` with a reason; the file stays. The test split has one record unless a later one has an `override_note`, whatever the experiment's name. `attempts` lists every setting tried, including the failures.
 
 ## Experiments
 
