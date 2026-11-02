@@ -1,0 +1,29 @@
+{
+  "task": "T1.5",
+  "commit": "6a437ffd87296ea44d38db35a18d43e5d9183556",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD = 6a437ff...; git status: only M orchestration/tasks.json and ?? orchestration/verdicts/T1.5.json"},
+    {"item": "Evidence log shows acceptance run at this commit", "result": "pass", "evidence": "orchestration/evidence/T1.5.log: commit 6a437ff, 27 passed, claims ok, RESULT PASS; reran pytest tests/test_records.py (27 passed) and claims check (claims ok)"},
+    {"item": "Prior finding 1: dataset_hash vs saved manifest", "result": "pass", "evidence": "datasets/splits/scenarios.json holds hash and n for dev/test; check_record compares. Mutating that comparison to 'if False' makes test_check_run_fails_on_dataset_hash_mismatch fail. Restored."},
+    {"item": "Prior finding 2/6: predictions must cover the split exactly once each", "result": "pass", "evidence": "CLI on temp repo with real datasets/scenarios/dev.jsonl: rows with duplicated ids and correct n gave 'prediction ids do not match the split's scenario ids exactly once each', exit 1"},
+    {"item": "Prior finding 3: misnamed claims key", "result": "pass", "evidence": "check_claims on {'claim': []} returns \"claims.json must have a 'claims' key holding a list\""},
+    {"item": "Prior finding 4: empty metrics", "result": "pass", "evidence": "CLI: 'metrics is empty', exit 1"},
+    {"item": "Prior finding 5: dirty check no longer ignores results/runs", "result": "pass", "evidence": "is_dirty only exempts untracked files matching the run-record filename pattern; a junk results/runs/notes.txt made write_run raise; edited tracked scenario file also refused"},
+    {"item": "Real run on real datasets/scenarios passes the manifest check", "result": "pass", "evidence": "Temp git repo copied from real datasets (148 dev scenarios), record written via write_run, CLI check_run E1 -> 'E1 ok'; --min-n 1000 fails; --split test gives 'FAIL no run record for E1'"},
+    {"item": "Manifest and scenario file changed together", "result": "pass", "evidence": "After a record was made, editing dev.jsonl and the manifest together (committed or not) made check_run fail on dataset_hash, n and prediction ids. A change made before the run is not caught by any check but shows in git diff of datasets/splits/scenarios.json; noted"},
+    {"item": "check_splits.py not weakened; still passes", "result": "pass", "evidence": "Diff is +7 lines that only add a 'kind: scenarios' branch ahead of the existing code; ami.json and longmemeval.json take the old path. python -m contextlens.data.check_splits prints 'splits ok'"},
+    {"item": "Other check_run rules: fake/stub (nested too), dirty, ancestor, n, min-n, empty attempts, missing predictions, metric recompute, second test record", "result": "pass", "evidence": "Each has a named test in tests/test_records.py (27 tests). Mutating the dirty check broke test_check_run_fails_when_dirty. My own CLI runs failed correctly for nested 'Fake-llm', wrong metric 0.99, and a second test record without override_note."},
+    {"item": "Plan-named tests present", "result": "pass", "evidence": "test_write_run_refuses_dirty_tree, test_check_run_fails_when_predictions_missing, test_claim_without_matching_run_fails, test_claim_value_must_equal_metric_in_run, test_recompute_matches_saved_metrics all exist and pass"},
+    {"item": "Diff hygiene", "result": "pass", "evidence": "git diff 12b94e3..HEAD touches 7 files, none in legacy/; no secrets; ruff clean; no earlier tests weakened; results/claims.json is {\"claims\": []}"}
+  ],
+  "own_tests": [
+    {"input": "Real dev scenarios, real-shaped predictions, temp git repo, CLI check_run E1", "result": "ok; --split test says no run record; --min-n 1000 fails"},
+    {"input": "Edit scenarios and manifest together after a record was made", "result": "fails on hash, n and ids"},
+    {"input": "Duplicate prediction ids with correct n; empty metrics; wrong metric value; nested Fake model name", "result": "all rejected with clear messages"},
+    {"input": "Two test-split records without override_note", "result": "rejected; one record passes"},
+    {"input": "claims.json as {'claim': []}, {'claims': []}, an unknown run_id, and a bare list", "result": "misnamed key rejected; empty passes; missing run rejected; bare list raises AttributeError (non-zero exit, fails closed)"}
+  ],
+  "failures": [],
+  "notes": "claims.json whose top level is a list crashes with AttributeError rather than a clean message; it still exits non-zero. The manifest is trusted as committed: a scenario file and manifest altered together before a run would pass check_run, and only git history shows it. This is inherent to the plan wording. The 'Fake' regex also matches any model whose name merely contains 'stub' or 'fake'."
+}
