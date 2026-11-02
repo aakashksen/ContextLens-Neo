@@ -1,0 +1,20 @@
+{
+  "task": "T0.1",
+  "commit": "066f2c96b206f6e4bfe0bb2f1abe5aeb4ff3b1c7",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals the commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD matched; git status showed only M orchestration/tasks.json"},
+    {"item": "Evidence log shows acceptance commands ran at this commit", "result": "pass", "evidence": "orchestration/evidence/T0.1.log: 18 passed, ruff clean, docker compose config -q exit 0, RESULT PASS"},
+    {"item": "Re-ran acceptance commands", "result": "pass", "evidence": "pytest smoke+orchestration 18 passed; ruff check . passed; docker compose config -q exit 0; full pytest -q 18 passed"},
+    {"item": "Plan items present", "result": "pass", "evidence": "pyproject has pythonpath=[src], ruff extend-exclude legacy, addopts -m 'not real', real marker, dev deps pytest/ruff, pydantic dependency; compose uses pgvector/pgvector:pg16; ci.yml runs ruff and pytest; .env.example placeholders only"},
+    {"item": "Both tests exist and can fail", "result": "pass", "evidence": "Mutated addopts to empty: test_real_marker_excluded_by_default failed (1 failed, 1 passed); restored with git checkout -- pyproject.toml, then 2 passed"},
+    {"item": "git diff for secrets, legacy, weakened tests", "result": "pass", "evidence": "HEAD~1..HEAD only untracks egg-info and adds *.egg-info/ to .gitignore"}
+  ],
+  "own_tests": [
+    {"input": "Parsed pyproject.toml for legacy exclusion, pythonpath, pgvector/pg16 in compose", "result": "ok"},
+    {"input": "A @pytest.mark.real test with assert False run under repo config", "result": "1 deselected"},
+    {"input": "Removed addopts then ran smoke test", "result": "test_real_marker_excluded_by_default failed as expected; file restored"}
+  ],
+  "failures": [],
+  "notes": "ruff selects only E4, E7, E9, F: light but not forbidden by the plan."
+}

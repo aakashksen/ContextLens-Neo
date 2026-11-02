@@ -11,7 +11,14 @@
         "{py} -m ruff check .",
         "docker compose config -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-02T21:58:56+00:00",
+      "verified": {
+        "commit": "066f2c96b206f6e4bfe0bb2f1abe5aeb4ff3b1c7",
+        "passed": true,
+        "at": "2026-11-02T22:01:18+00:00"
+      },
+      "done_at": "2026-11-02T22:03:08+00:00"
     },
     {
       "id": "T0.2",
