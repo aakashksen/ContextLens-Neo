@@ -42,7 +42,7 @@
     {
       "id": "H1",
       "phase": 0,
-      "title": "Approve datasets and set up keys",
+      "title": "Check the dataset choices",
       "owner": "human",
       "deps": [
         "T0.3"
@@ -57,7 +57,7 @@
       "owner": "agent",
       "deps": [
         "T0.2",
-        "H1"
+        "T0.3"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_data.py -q",
@@ -192,7 +192,7 @@
       "deps": [
         "T1.5",
         "T1.3",
-        "H2",
+        "T1.2",
         "T2.3"
       ],
       "acceptance": [
@@ -279,7 +279,7 @@
       "owner": "agent",
       "deps": [
         "T3.1",
-        "H2"
+        "T1.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_consistency_baselines.py -q"
@@ -335,7 +335,7 @@
       "owner": "agent",
       "deps": [
         "T3.1",
-        "H2"
+        "T1.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
@@ -466,7 +466,9 @@
         "T5.2",
         "T6.2",
         "T7.2",
-        "T8.5"
+        "T8.5",
+        "H1",
+        "H2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_e8.py -q",

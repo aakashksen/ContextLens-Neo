@@ -16,6 +16,9 @@
 - Choose settings on **dev**. Use **test** once, on the chosen configuration. If test results influence a decision, record that and draw a new split.
 - Keep public benchmarks and our own scenarios separate in every report. Label synthetic data as synthetic.
 
+## Provisional results
+Dev experiments may run before the person reviews the labels (H2), with `labels_reviewed: false` in the record. They guide choices but aren't claims. The final test run (E8) needs H1 and H2. If H2 finds wrong labels, fix them and rerun what they affect.
+
 ## No peeking
 Replay feeds turns in order and freezes `as_of_seq` at the button press. Every retrieval and tool call filters on it, and a test confirms that a
 later turn can't appear in evidence.
@@ -32,7 +35,7 @@ later turn can't appear in evidence.
 | **Abstention accuracy** | Abstains when gold says insufficient, and doesn't when gold has an answer; report both sides |
 | **Speaker accuracy** | Claims attributed to the correct speaker |
 | **Latency** | Button to card p50 and p95, per stage |
-| **Cost** | Tokens per card, and dollars for cloud models |
+| **Cost** | Tokens per card, and Claude Code calls used |
 | **Calibration** | Expected calibration error, for models that output a probability |
 
 **Judging "supports the claim":** entailment judged by a rubric prompt on the strongest local model, plus person review of a random sample (H2 format). Report the agreement rate. Don't use the same model and prompt to both write and grade without saying so.
@@ -42,7 +45,7 @@ Run every system on the same cases with the same seed. Report a 95% bootstrap co
 
 ## Run records
 Every experiment writes `results/runs/<experiment>-<timestamp>.json`:
-`run_id, experiment, git_commit, dataset_hash, split, config, models, prompt_versions, n, metrics, intervals, attempts, spend_usd, predictions_path, started_at, finished_at`.
+`run_id, experiment, git_commit, dataset_hash, split, config, models, prompt_versions, n, metrics, intervals, attempts, claude_calls, labels_reviewed, predictions_path, started_at, finished_at`.
 Predictions are saved, so metrics can be recomputed. `attempts` lists every setting tried, including the failures.
 
 ## Experiments

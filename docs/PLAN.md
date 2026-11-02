@@ -14,7 +14,7 @@
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM, one GPU job at a time. Cloud model spending capped at $5, tracked in `results/spend.json`.
+- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 300 Claude Code calls, on Haiku, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -66,12 +66,12 @@ class Scenario: id: str; conversation: Conversation; request: ButtonRequest; cat
 
 ### T0.3: Check the datasets
 **Agent:** use the `researcher` for lookups. **Files:** `docs/datasets.md`, `tools/check_datasets_doc.py`.
-**Do:** For DECODE, QMSum, LongMemEval, and the AMI Meeting Corpus, record from primary sources: URL, license and whether it allows this use, size, format, labels, and access steps. Confirm or correct the assumption that DECODE only labels contradiction vs not. Also list candidates for: diarization (pyannote and one alternative, with terms), the consistency base model, and the small LLM (runs in 4-bit under 7 GB). Leave an "Approved by person:" line blank for each.
+**Do:** For DECODE, QMSum, LongMemEval, and the AMI Meeting Corpus, record from primary sources: URL, license and whether it allows this use, size, format, labels, and access steps. Confirm or correct the assumption that DECODE only labels contradiction vs not. Also list candidates for: diarization (pyannote and one alternative, with terms), the consistency base model, and the small LLM (runs in 4-bit under 7 GB). Apply the standing rule in `CLAUDE.md` and write an `Approved:` line for each, yes or `no, needs the person`, with the reason.
 **Tests:** none beyond the check.
 **Accept:** `{py} tools/check_datasets_doc.py` (write this small script: fails unless each of the 4 datasets has a URL, License, Labels, and Approved line).
 
-### H1: Approve datasets and set up keys
-See `docs/HUMAN-GATES.md`.
+### H1: Check the dataset choices
+Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ---
 
@@ -80,7 +80,7 @@ See `docs/HUMAN-GATES.md`.
 ### T1.1: Dataset loaders and splits
 **Files:** `src/contextlens/data/loaders.py`, `src/contextlens/data/splits.py`, `src/contextlens/data/check_splits.py`, `datasets/splits/`, `tests/test_data.py`, small fixtures.
 **Produces:** `load_dataset(name: str, root: Path) -> list[Conversation]`; `load_gold(name: str, root: Path) -> list[Scenario]`, turning QMSum queries and spans and LongMemEval questions into `Scenario`s with `origin="dataset"`; `load_pairs(root: Path) -> list[Pair]` for DECODE (`Pair: conversation_id, statement, earlier, label, source`); `make_splits(convs, seed=13, ratios=(.5,.25,.25)) -> dict[str,list[str]]`; `dataset_hash(convs) -> str`.
-**Do:** Download only datasets approved in `docs/datasets.md`, into `datasets/raw/`. Load each into `Conversation`. Save split manifests.
+**Do:** Download only datasets marked `Approved: yes` in `docs/datasets.md`, into `datasets/raw/`. Load each into `Conversation`. Save split manifests.
 **Tests:** `test_no_conversation_in_two_splits`; `test_split_is_deterministic`; `test_hash_changes_when_text_changes`; a loader test per dataset on a small fixture.
 **Accept:** `{py} -m pytest tests/test_data.py -q`; `{py} -m contextlens.data.check_splits`.
 
@@ -91,7 +91,7 @@ See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_scenarios.py -q`.
 
 ### H2: Review test labels
-See `docs/HUMAN-GATES.md`.
+Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ### T1.3: Replay runner
 **Files:** `src/contextlens/replay/runner.py`, `src/contextlens/memory/store.py`, `tests/test_replay.py`.
@@ -119,9 +119,9 @@ See `docs/HUMAN-GATES.md`.
 
 ### T2.1: Model clients
 **Files:** `src/contextlens/llm/client.py`, `tests/test_llm.py`.
-**Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model, price)` for vLLM and DeepSeek; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
-**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `OpenAICompatClient` adds to `results/spend.json` and refuses past $5 when it calls a paid service.
-**Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_spend_cap_refuses_and_makes_no_call`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama.
+**Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model)` for vLLM; `ClaudeCodeClient(model="haiku")`; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
+**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 300 Claude Code calls.
+**Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_call_cap_refuses_and_makes_no_call`; `test_claude_client_builds_expected_command_with_no_tools` (stubbed process); `test_usage_limit_raises_llm_error`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama, and one to Claude on Haiku.
 **Accept:** `{py} -m pytest tests/test_llm.py -q`.
 
 ### T2.2: Transcript store and hybrid retrieval
@@ -176,7 +176,7 @@ See `docs/HUMAN-GATES.md`.
 
 ### T3.3: Experiment E2, context strategies
 **Files:** `src/contextlens/experiments/e2_context.py`, `tests/test_e2.py`.
-**Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
+**Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Also run the best strategy on `ClaudeCodeClient` over at most 100 synthetic or benchmark cases, as the cloud comparison. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
 

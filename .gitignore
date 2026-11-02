@@ -13,5 +13,5 @@ mlruns/
 *.gguf
 *.ckpt
 orchestration/evidence/
-results/spend.json
+results/claude_calls.json
 orchestration/run_loop.log

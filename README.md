@@ -11,9 +11,9 @@ This folder holds the whole rebuild: the old code, the design, the plan, and the
 1. Open Claude Code in this folder:
    ```
    cd <local path>
-   claude
+   claude --model sonnet --remote-control
    ```
-2. Type `/run-plan`.
+2. Type `/run-plan 40` to keep it going while you're away. Remote Control lets you answer anything it asks from your phone.
 
 It works through up to 5 tasks per run, stopping whenever it needs you. Type `/run-plan` again to continue,
 `/run-plan 10` for a bigger batch, or `/plan-status` to see where things stand. For a hands-off run with a
