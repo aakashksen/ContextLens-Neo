@@ -1,0 +1,23 @@
+{
+  "task": "T1.3",
+  "commit": "f336ccb0d609e1b001dabe266233fdee8b647a4c",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/tasks.json modified", "result": "pass", "evidence": "git rev-parse HEAD; git status --short"},
+    {"item": "Evidence log shows acceptance command passing at this commit", "result": "pass", "evidence": "orchestration/evidence/T1.3.log: 3 passed, RESULT PASS"},
+    {"item": "Reran acceptance command", "result": "pass", "evidence": "pytest tests/test_replay.py -q -> 3 passed"},
+    {"item": "Produces: TranscriptStore protocol (add/turns/delete), InMemoryTranscriptStore, Context, Assistant, replay, Prediction fields", "result": "pass", "evidence": "read store.py and runner.py; all present with specified signatures"},
+    {"item": "Do: fresh store per scenario, stop at as_of_seq, exceptions become abstained card with error recorded", "result": "pass", "evidence": "runner.py replay(); own tests confirm, including exception raised by the factory"},
+    {"item": "Three named tests exist and are meaningful", "result": "pass", "evidence": "Mutation: replaced the as_of cutoff in runner with 'if False:' -> test_assistant_cannot_see_future_turns failed; restored via git checkout"},
+    {"item": "Diff: no secrets, no legacy/ changes, no earlier tests weakened", "result": "pass", "evidence": "git show --stat: only memory/, replay/, tests/test_replay.py added"}
+  ],
+  "own_tests": [
+    {"input": "empty scenario list", "result": "returns []"},
+    {"input": "make_assistant factory raises ValueError", "result": "abstained card with error text in missing"},
+    {"input": "unsorted turns, as_of=3, then a second scenario with as_of=1", "result": "assistant sees [0,1,2,3] then [0,1]; no state leaks across scenarios"},
+    {"input": "store.turns with start_seq, delete, delete of unknown id", "result": "returns [2,3,4]; delete empties; unknown delete is a no-op"},
+    {"input": "stage_latency_ms populated", "result": "contains 'total'"}
+  ],
+  "failures": [],
+  "notes": "Minor: the spy test queries with as_of 10000, so it relies on the runner not loading future turns rather than the store enforcing ctx.as_of_seq. This is acceptable because the runner mutation was caught. Latency only records a 'total' stage. Abstained card mode is hardcoded to 'recall'."
+}
