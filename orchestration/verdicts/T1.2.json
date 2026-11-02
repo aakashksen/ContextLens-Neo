@@ -1,0 +1,28 @@
+{
+  "task": "T1.2",
+  "commit": "87e11c52e0f8938ab2453a81b343f3f951de09bb",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD = 87e11c52...; git status shows only M orchestration/tasks.json and ?? orchestration/verdicts/T1.2.json"},
+    {"item": "Evidence log shows acceptance command ran at this commit and passed; rerun", "result": "pass", "evidence": "orchestration/evidence/T1.2.log: commit matches, 5 passed, RESULT PASS. My rerun of pytest tests/test_scenarios.py: 5 passed. Full suite: 36 passed. ruff clean on data/ and the test file."},
+    {"item": "Counts: >=120 per split, >=15 per category, 8 categories", "result": "pass", "evidence": "dev=148 (min category 16: recall 18, contradiction 17, update 17, wrong_speaker 32, others 16); test=146 (min 16). All 8 categories in both splits."},
+    {"item": "origin marked; written ones synthetic; dataset ones match splits/longmemeval.json", "result": "pass", "evidence": "dev 138 synthetic + 10 dataset, test 136 synthetic + 10 dataset. All synthetic scenarios have synthetic turns. test_split_by_conversation checks dataset conversation ids against the manifest dev/test lists; I confirmed it passes."},
+    {"item": "Deadline pair and triple present with update / contradiction labels", "result": "pass", "evidence": "syn-deadline-update-00 (dev, update, evidence t0,t1) and syn-deadline-contradiction-00 (dev, contradiction, evidence t0,t1,t2) with the exact texts from the plan."},
+    {"item": "No DECODE/QMSum derived data", "result": "pass", "evidence": "grep for decode/qmsum in datasets/scenarios and scenario*.py: no hits. Dataset origin scenarios are all LongMemEval (conversation.source=longmemeval)."},
+    {"item": "Review file: 50 distinct scenarios, labels visible, full text of gold evidence turns", "result": "pass", "evidence": "I parsed the COMMITTED datasets/scenarios/review-sample.md: 50 ids, 50 unique, 0 gold evidence turns truncated; each shows gold_label, gold_answer, gold_evidence, question. Sample covers all 8 categories, 48 synthetic / 2 dataset."},
+    {"item": "Committed review file matches what the code generates", "result": "pass", "evidence": "Regenerated with write_review_sample on copies of the committed jsonl files: byte-identical to committed review-sample.md."},
+    {"item": "Review test would fail on truncated evidence (mutation)", "result": "pass", "evidence": "Temporarily changed scenarios.py to always emit t.text[:300]: test_review_file_has_50_samples_with_labels_and_full_evidence FAILED (4 passed, 1 failed). Restored with git checkout of that file only."},
+    {"item": "Duplicates / near-duplicates across dev and test", "result": "pass", "evidence": "Exact transcript duplicates across splits: none; within split: none. difflib near-duplicate scan of all synthetic dev x test pairs (ratio>0.85): 0. Only shared items: the deadline pair/triple (both dev, intentional), and the identical question 'Where is parking?' in syn-inj-19 (test) vs syn-rec-05 (test), with different transcripts."},
+    {"item": "Manual read of synthetic labels (all ~280 transcripts dumped and read)", "result": "pass", "evidence": "All contradiction, update, hypothetical, wrong-speaker, injection, insufficient and respond cases are defensible. Dataset recall items spot checked (eaca4986, 4388e9dd and others): gold answer is in the evidence turn. No indefensible label found; see notes for two borderline ones."},
+    {"item": "Diff hygiene: secrets, legacy/, weakened earlier tests", "result": "pass", "evidence": "git diff HEAD~2 HEAD shows only new files under datasets/scenarios, src/contextlens/data/scenario*.py and tests/test_scenarios.py; no deletions in tests, no legacy/ paths, no secret patterns."}
+  ],
+  "own_tests": [
+    {"input": "Regenerate review sample from committed jsonl and byte-compare to committed review-sample.md", "result": "identical"},
+    {"input": "Parse committed review file; confirm every gold evidence turn text appears in full for all 50 samples", "result": "0 truncated"},
+    {"input": "Scan for exact and difflib near-duplicate transcripts across dev and test, and shared first turns/questions", "result": "no exact or near duplicates; only intentional deadline pair and one repeated question text with different transcripts"},
+    {"input": "Mutation: truncate evidence turns in write_review_sample", "result": "test_review_file_has_50_samples... fails as it should; restored"},
+    {"input": "Read all synthetic scenarios for label correctness (con/upd/hyp/wsc/wsq/inj/ins/rsp/rec)", "result": "no indefensible labels"}
+  ],
+  "failures": [],
+  "notes": "Borderline, not failures: (1) syn-rec-00 (dev) gold_answer 'Hotel Aurora in Porto' but gold evidence is only t2 ('The Hotel Aurora'); 'Porto' comes from t0, so evidence is incomplete for the full answer. (2) syn-ins-21 'Did the auditor find any issues?' with 'Fine overall.' is labelled insufficient; arguably a reader could take 'fine overall' as no issues. A human reviewer (H2) should look at these. Also: the test for the review file runs on tmp copies, so a stale committed review-sample.md would not be caught by tests (it is currently identical). Synthetic scenarios are heavily templated and reuse the same first names across dev and test; this is not content leakage but gives low diversity. Dataset recall is only 10 per split, so most recall cases are single-fact synthetic ones."
+}

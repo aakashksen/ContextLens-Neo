@@ -104,7 +104,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_scenarios.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-02T22:22:04+00:00",
+      "verified": {
+        "commit": "87e11c52e0f8938ab2453a81b343f3f951de09bb",
+        "passed": true,
+        "at": "2026-11-02T22:31:09+00:00"
+      },
+      "attempts": 1,
+      "reason": "review-sample.md hides or truncates gold evidence turns (last 6 turns, 300 chars), e.g. 7161e7e2 t13; no test covers the review file",
+      "done_at": "2026-11-02T22:33:30+00:00"
     },
     {
       "id": "H2",
