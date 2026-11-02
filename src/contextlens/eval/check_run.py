@@ -7,7 +7,7 @@ from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import metrics as M
-from contextlens.eval.records import ROOT, RUNS_REL, git, split_hash
+from contextlens.eval.records import MANIFEST_REL, ROOT, RUNS_REL, git, split_hash
 from contextlens.eval.stats import percentile
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
@@ -76,15 +76,28 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
 
+    if not rec["metrics"]:
+        problems.append("metrics is empty")
+
     scenarios: list[Scenario] = []
-    if not (root / "datasets/scenarios" / f"{rec['split']}.jsonl").is_file():
-        problems.append(f"no scenario file for split {rec['split']}")
+    split = rec["split"]
+    manifest_path = root / MANIFEST_REL
+    entry = None
+    if manifest_path.is_file():
+        entry = json.loads(manifest_path.read_text(encoding="utf-8")).get("splits", {}).get(split)
+    if entry is None:
+        problems.append(f"no manifest entry for split {split}")
+    elif not (root / "datasets/scenarios" / f"{split}.jsonl").is_file():
+        problems.append(f"no scenario file for split {split}")
     else:
-        if split_hash(rec["split"], root) != rec["dataset_hash"]:
-            problems.append("dataset_hash does not match the split")
-        scenarios = load_scenarios(rec["split"], root / "datasets/scenarios")
-        if rec["n"] != len(scenarios):
-            problems.append(f"n={rec['n']} differs from the split's {len(scenarios)} cases")
+        if rec["dataset_hash"] != entry["hash"]:
+            problems.append("dataset_hash does not match the split manifest")
+        if split_hash(split, root) != entry["hash"]:
+            problems.append("scenario file no longer matches the split manifest")
+        else:
+            scenarios = load_scenarios(split, root / "datasets/scenarios")
+        if rec["n"] != entry["n"]:
+            problems.append(f"n={rec['n']} differs from the split's {entry['n']} cases")
 
     pred_path = root / rec["predictions_path"]
     if not pred_path.is_file():
@@ -94,7 +107,13 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     preds = [Prediction.model_validate_json(x) for x in lines if x.strip()]
     if len(preds) != rec["n"]:
         problems.append(f"predictions hold {len(preds)} rows but n={rec['n']}")
+    ids_ok = True
     if scenarios:
+        pred_ids = [p.scenario_id for p in preds]
+        if len(set(pred_ids)) != len(pred_ids) or set(pred_ids) != {s.id for s in scenarios}:
+            ids_ok = False
+            problems.append("prediction ids do not match the split's scenario ids exactly once each")
+    if scenarios and ids_ok:
         fresh = recompute_metrics(scenarios, preds)
         for name, saved in rec["metrics"].items():
             if name not in fresh:

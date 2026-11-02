@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,12 +16,15 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
 
 
+RECORD_FILE = re.compile(r"^\?\? results/runs/[^/ ]+-\d{8}T\d{12}Z(\.predictions\.jsonl|\.json)$")
+
+
 def is_dirty(root: Path) -> bool:
-    """Uncommitted changes outside results/runs, where records themselves are written."""
-    out = git(root, "status", "--porcelain", "--", ".", f":!{RUNS_REL.as_posix()}")
+    """Uncommitted changes, except new untracked run-record and predictions files."""
+    out = git(root, "status", "--porcelain", "-uall")
     if out.returncode != 0:
         raise RuntimeError(f"git status failed: {out.stderr.strip()}")
-    return bool(out.stdout.strip())
+    return any(ln and not RECORD_FILE.match(ln) for ln in out.stdout.splitlines())
 
 
 def head_commit(root: Path) -> str:
@@ -33,6 +37,25 @@ def head_commit(root: Path) -> str:
 def split_hash(split: str, root: Path = ROOT) -> str:
     """Hash of the scenario file for a split: the cases a run is scored on."""
     return hashlib.sha256((root / "datasets/scenarios" / f"{split}.jsonl").read_bytes()).hexdigest()
+
+
+MANIFEST_REL = Path("datasets/splits/scenarios.json")
+
+
+def write_scenarios_manifest(root: Path = ROOT) -> Path:
+    """Fix each scenario split by content hash and case count."""
+    from contextlens.data.scenarios import load_scenarios
+
+    splits = {}
+    for f in sorted((root / "datasets/scenarios").glob("*.jsonl")):
+        splits[f.stem] = {
+            "hash": split_hash(f.stem, root),
+            "n": len(load_scenarios(f.stem, root / "datasets/scenarios")),
+        }
+    path = root / MANIFEST_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"kind": "scenarios", "splits": splits}, indent=1) + "\n", encoding="utf-8")
+    return path
 
 
 def write_run(

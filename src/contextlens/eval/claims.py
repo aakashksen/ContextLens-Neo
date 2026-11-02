@@ -9,7 +9,9 @@ CLAIMS_REL = Path("results/claims.json")
 
 
 def check_claims(root: Path = ROOT) -> list[str]:
-    claims = json.loads((root / CLAIMS_REL).read_text(encoding="utf-8")).get("claims", [])
+    claims = json.loads((root / CLAIMS_REL).read_text(encoding="utf-8")).get("claims")
+    if not isinstance(claims, list):
+        return ["claims.json must have a 'claims' key holding a list"]
     problems: list[str] = []
     for c in claims:
         cid = c.get("id", "?")

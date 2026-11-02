@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -13,6 +14,12 @@ def check(splits_dir: Path = SPLITS_DIR, raw_dir: Path = RAW_DIR) -> list[str]:
         problems.append(f"no split manifests in {splits_dir}")
     for path in manifests:
         m = json.loads(path.read_text(encoding="utf-8"))
+        if m.get("kind") == "scenarios":
+            for name, entry in m["splits"].items():
+                f = splits_dir.parent / "scenarios" / f"{name}.jsonl"
+                if not f.is_file() or hashlib.sha256(f.read_bytes()).hexdigest() != entry["hash"]:
+                    problems.append(f"{path.name}: scenario file {name} differs from the manifest")
+            continue
         s = m["splits"]
         everything = [i for part in s.values() for i in part]
         if len(everything) != len(set(everything)):
