@@ -28,13 +28,24 @@ def test_mcnemar_exact():
 
 
 def test_macro_f1_matches_sklearn_value():
-    # sklearn is not installed; this is the value f1_score(average="macro") gives,
-    # computed by hand: (0.5 + 0.8 + 2/3 + 1) / 4
+    from sklearn.metrics import f1_score
+
     gold = ["consistent", "consistent", "update", "update",
             "contradiction", "contradiction", "insufficient", "insufficient"]
     pred = ["consistent", "update", "update", "update",
             "contradiction", "consistent", "insufficient", "insufficient"]
+    assert macro_f1(gold, pred) == pytest.approx(f1_score(gold, pred, average="macro"), abs=1e-9)
+    # by hand: (0.5 + 0.8 + 2/3 + 1) / 4
     assert macro_f1(gold, pred) == pytest.approx(0.741667, abs=1e-5)
+
+
+def test_macro_f1_matches_sklearn_with_prediction_only_class():
+    from sklearn.metrics import f1_score
+
+    gold = ["consistent", "consistent", "update", "update"]
+    pred = ["consistent", "insufficient", "update", "insufficient"]
+    expected = f1_score(gold, pred, average="macro")
+    assert macro_f1(gold, pred) == pytest.approx(expected, abs=1e-9)
 
 
 def test_false_alert_rate():
