@@ -1,7 +1,7 @@
 import pytest
 
 from contextlens.eval.metrics import (
-    abstention_accuracy, false_alert_rate, first_gold_rank, grounded_rate,
+    LABELS, abstention_accuracy, false_alert_rate, first_gold_rank, grounded_rate,
     macro_f1, mrr, recall_at_k, speaker_accuracy,
 )
 from contextlens.eval.stats import bootstrap_ci, mcnemar_exact, paired_bootstrap_diff, percentile
@@ -34,7 +34,8 @@ def test_macro_f1_matches_sklearn_value():
             "contradiction", "contradiction", "insufficient", "insufficient"]
     pred = ["consistent", "update", "update", "update",
             "contradiction", "consistent", "insufficient", "insufficient"]
-    assert macro_f1(gold, pred) == pytest.approx(f1_score(gold, pred, average="macro"), abs=1e-9)
+    expected = f1_score(gold, pred, labels=list(LABELS), average="macro", zero_division=0)
+    assert macro_f1(gold, pred) == pytest.approx(expected, abs=1e-9)
     # by hand: (0.5 + 0.8 + 2/3 + 1) / 4
     assert macro_f1(gold, pred) == pytest.approx(0.741667, abs=1e-5)
 
@@ -44,8 +45,11 @@ def test_macro_f1_matches_sklearn_with_prediction_only_class():
 
     gold = ["consistent", "consistent", "update", "update"]
     pred = ["consistent", "insufficient", "update", "insufficient"]
-    expected = f1_score(gold, pred, average="macro")
+    expected = f1_score(gold, pred, labels=list(LABELS), average="macro", zero_division=0)
     assert macro_f1(gold, pred) == pytest.approx(expected, abs=1e-9)
+    # a label absent from both lists (contradiction) counts as 0 by the definition in docs/TESTING.md
+    # by hand: (2/3 + 2/3 + 0 + 0) / 4 = 1/3
+    assert macro_f1(gold, pred) == pytest.approx(1 / 3, abs=1e-9)
 
 
 def test_false_alert_rate():

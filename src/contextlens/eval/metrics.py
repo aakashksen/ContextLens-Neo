@@ -25,8 +25,7 @@ def mrr(ranks: Sequence[int | None]) -> float:
 
 def macro_f1(gold: Sequence[str], pred: Sequence[str]) -> float:
     f1s = []
-    present = set(gold) | set(pred)
-    for label in sorted(present):
+    for label in LABELS:
         tp = sum(1 for g, p in zip(gold, pred) if g == label and p == label)
         fp = sum(1 for g, p in zip(gold, pred) if g != label and p == label)
         fn = sum(1 for g, p in zip(gold, pred) if g == label and p != label)
