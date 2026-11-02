@@ -1,47 +1,58 @@
 VERDICT: DEFECTS
 
-Second pass. I checked the four fix commits (86f8859, 1b693ad, 72d23e7, 76f2616) against the first review's defects. I also reran the full path on the real 148 dev and test scenarios in a temp git repo. The probe script is at `<local path>`. It wrote nothing to the real `results/runs/`. The suite passes (105 tests), ruff is clean, and the tree is clean.
+Third pass over 949e5d1 (code) and 21fc934 (docs). The design (one run record holds many systems) is taken as given. Method: a temp git repo with the real dev (148) and test scenarios and a copy of `src/`, driven through `python -m contextlens.eval.check_run` and `python -m contextlens.eval.claims check`. Probes are in `<local path>` and `probe2.py`. Nothing was written to the real `results/runs/`. The suite passes (165 tests), ruff is clean, and the tree is clean.
 
-## First-review defects: retested, fixed
-- D2 (length mismatch): `speaker_accuracy(["a","b","c"],["a"])` and `macro_f1(["update","update"],["update"])` now raise ValueError.
-- D3 (empty input): `mrr([])`, `speaker_accuracy([],[])`, `grounded_rate` with no findings, `abstention_accuracy([],[])` and `macro_f1([],[])` return None. `bootstrap_ci([],[])` raises ValueError. `claims.py` rejects a claim on a None metric. Saved None only matches a fresh None, and a saved 0.0 for an undefined metric is rejected.
-- D4 (stages/mode): `Context.stage_ms` flows into `stage_latency_ms`. Error cards carry `errored=True`. The card's mode is still the placeholder "recall"; this is now flagged rather than corrected. I count that as acceptable.
-- D1 (unrecomputable metrics): grounded_rate, unsupported_claim_rate, speaker_accuracy, tokens/cost per card, schema_valid_rate, recall@k, mrr, per-stage latency, and `[category=]` / `[origin=]` breakdowns now recompute. End-to-end on the real dev scenarios with a fake assistant, `check_run` returns `[]`. A made-up suffix (`macro_f1[category=bogus]`) and a wrong-k value (`recall@3` set to 0.5) are both rejected. Old prediction rows without the new fields still load.
+## Second-review defects: retested, fixed
+- A1 two systems in one record: `check_run E3 --split dev` returns ok, with a different label on each system.
+- A2 and A4 test records: a second test record under another name is flagged. The count is across experiments, and `E8x` failed `E8 --split test`.
+- A3 earlier bad record: a record with `macro_f1=0.99` followed by a good one still fails. `check_run` checks every record.
+- A5 comparison and interval numbers: a comparison with the direction flipped (team minus single saved with single minus team values) fails with "does not recompute". An interval on a system not in the record, a comparison naming a system not in the record, and a comparison of a system with itself all fail.
+- B future-turn ranking (`mrr=0.9`), mixed card and card-less rows, and `schema_valid_rate` with raw_output on one row only all fail now. A grounded_rate record without `config.judge` fails. A claim on grounded_rate without `config.judge_review` fails.
+- New-hole probes that held: a fake model name nested under a system is caught; a claim with no system name fails when the record has several; a ghost system fails; the wrong system's value fails; a claim on a comparison that is not in the record fails; a supersede that names a record of another experiment is rejected; a superseded bad record cannot be cited in a claim; a later bad record that supersedes the good one is still checked.
+- No test was removed or skipped. The test_records.py and test_recompute.py edits are the mechanical move to per-system dicts. The one semantic edit gives all four rows a raw_output, because the new rule drops a metric that is missing on some rows. Every rule in T1.5's list still has a failing case.
+- The amended lines in PLAN.md and TESTING.md match the code: seed 13, 10,000 resamples, the supersedes reason, judge and review fields. No thresholds changed. The tasks.json changes are re-verification stamps only.
 
-## Defect A (blocking for E3 and E8, needs a design choice): check_run cannot verify a system comparison
-Files: `src/contextlens/eval/check_run.py` (`check`, lines ~168-180; the ids-exactly-once check in `check_record`), `src/contextlens/eval/records.py` (`write_run`).
+## Defect 1 (blocking E4, and every comparison on a non-per-scenario metric): intervals and comparisons are not recomputable for the metrics the experiments report
+File: `src/contextlens/eval/series.py` lines 15-18 (`PER_SCENARIO`, `BINARY`) and `comparison()` line ~131; `check_run.py` `_comparison_problems` and the interval branch of `check_record`.
+Reproduce (in the temp repo):
+```
+write_run("E4","dev",...,{"single":pa},intervals={"single":{"macro_f1":(0.0,0.1)}})
+-> FAIL ... system single: interval macro_f1 cannot be recomputed from predictions
+```
+`series.is_per_scenario(m)` is False for macro_f1, false_alert_rate, grounded_rate, unsupported_claim_rate, abstain_when_insufficient, answer_when_answerable, speaker_accuracy, latency_p50_ms and latency_p95_ms. Only `label_accuracy`, `mrr`, `recall@k`, `tokens_per_card`, `cost_usd_per_card` and `schema_valid_rate` support a paired comparison. Only those, plus the judged metrics and speaker_accuracy, support an interval.
+Impact:
+- `docs/TESTING.md` "Comparing systems" requires a 95% interval and a McNemar test. E4's stated headline is macro-F1 (early stopping on dev macro-F1, compared to TF-IDF, zero-shot and prompted). A record cannot hold an interval or comparison on macro-F1. The only workaround is `label_accuracy`, a metric the docs do not name and `recompute_metrics` does not emit (it exists only as a series). So a "trained model beats baseline" claim on macro-F1 has no verifiable interval.
+- E5 and E6 compare grounded rate, unsupported claims and abstention against a baseline. Intervals work for grounded_rate and unsupported_claim_rate, but a comparison of them fails, as does one on abstention accuracy. "No measurable difference" cannot be shown in a checked form.
+- No plan task owns the fix. T5.2, T6.2 and T7.1 list files that exclude `series.py` and `check_run.py`.
+- Fix: say in the plan which task adds macro-F1 (and the other non-per-scenario metrics) to `series.py`. A conversation-level bootstrap of macro-F1 would need a resampling of rows rather than a per-unit mean.
 
-The record format holds one predictions file, and `check_record` requires each scenario id to appear exactly once. `check` verifies only the latest record. `intervals` is never read.
+## Defect 2 (blocking E2's cloud comparison, and likely E5 and E7): a record cannot cover a subset of the split
+File: `src/contextlens/eval/check_run.py` lines ~178 and ~211 (`n` must equal the split's count; ids must match the split exactly once).
+Reproduce: write a record with `dev[:100]` rows, as the T3.3 cloud run asks.
+```
+FAIL E2-...json: n=100 differs from the split's 148 cases
+FAIL E2-...json: system c: prediction ids do not match the split's scenario ids exactly once each
+```
+Impact:
+- T3.3 says "run the best strategy on ClaudeCodeClient over at most 100 ... cases". That record can never pass `check_run E2 --min-n 100 --split dev`. Running all 148 breaks the 100-call cap in the plan and the Claude call cap in `docs/DESIGN.md`.
+- T6.2 uses `--min-n 50` and T8.5 uses `--min-n 30`. Both suggest subsets, and both will hit the same failure. The fix would be a record field naming the subset ids (with a manifest or deterministic rule), or a plan statement that these runs are full-split.
+- Every system in one record must also cover the same full split. A system that is cheaper on a subset (cloud versus local) cannot sit beside the others.
 
-Reproduced in the temp repo:
-1. Two systems in one record. Passing `preds + preds` to `write_run` fails with `n=296 differs from the split's 148 cases` and `prediction ids do not match ... exactly once each`. A paired record, which T4.2 asks for ("fixture writes a valid paired record"), cannot hold both systems' predictions.
-2. One record per system on the test split (E8, T9.1, seven systems). Writing two E8 test records gives `more than one test record and no override_note in config`. Seven systems would need six override notes. That defeats the once-only test rule, and it would hide a real second test run.
-3. One record per system on dev. I wrote an E3 record with `macro_f1=0.99` (wrong), then a correct E3 record. `check E3 --split dev` returns `[]`. Only `recs[-1]` is checked, so earlier records are never verified.
-4. Distinct experiment names do not escape the glob. `records_for` matches `E8-*Z.json`, so a record named `E8-recent-<ts>Z.json` joins the same group.
-5. Unverified comparison numbers. I wrote `intervals={"macro_f1": (0.99, 1.0), "diff_vs_baseline": (0.5, 0.6)}` with real metrics, and `check E4` returned `[]`. Paired bootstrap differences, McNemar p-values and CIs are plain assertions. TESTING.md requires them to compare systems ("Comparing systems"), and PLAN T1.2 says a saved metric must recompute. `claims.py` compares a claim against `metrics` only. An improvement claim from E3, E4, E5 or E8 therefore has no verified basis.
+## Defect 3 (medium): `claims check` does not apply the test-once rule
+File: `src/contextlens/eval/claims.py` `check_claims` (calls `check_record` only; `_test_once_problems` is only called from `check_run.check`).
+Reproduce: write two test-split records (E8, no `override_note`) and a claim on the second.
+```
+python -m contextlens.eval.claims check      -> claims ok
+python -m contextlens.eval.check_run E8 --split test -> FAIL E8-...: more than one test record and no override_note
+```
+Impact: a number from a repeated test run reaches `results/claims.json` (and so the README and resume bullets) with `claims check` green. The per-record check also does not look at sibling records, so a claim on a still-valid record passes while a bad sibling stands. Only the test-once case matters here, because it is the protected rule in CLAUDE.md.
 
-Impact: the acceptance commands `check_run E3 ... --split dev` and `check_run E8 ... --split test` either fail or pass without checking the comparison. This surfaces at T4.2 at the latest.
+## Defect 4 (low, plan gap): calibration and WER/DER have nowhere to be recomputed
+`recompute_metrics` emits no ece, wer or der. E4 lists calibration in `docs/TESTING.md` ("for models that output a probability"). T8.5 (E7) asks for word error rate and diarization error. `check_run` rejects any saved metric it cannot recompute ("cannot be recomputed from predictions"), so a record with `ece`, `wer` or `der` fails. `docs/PLAN.md` has no task that adds them: grep for ECE, calibration, WER and DER in PLAN.md and tasks.json finds only the T8.5 prose. T5.2's and T8.5's Files lists exclude `metrics.py`, `check_run.py` and `series.py`. They also need rows to carry the model probability and the ASR/diarization output, and `Prediction` has no field for either. It is not clear which task must add them. Assign them in the plan before T5.2 and T8.5 start.
 
-Options (a design choice for the person or orchestrator, not made here):
-- (1) One record holds a map of system name to predictions file. `check_run` verifies every system (ids exactly once, metrics recompute per system) and recomputes `intervals`. Intervals can be recomputed deterministically: seed 13, 10,000 resamples, with `paired_bootstrap_diff` and `mcnemar_exact` taking correctness arrays derived from the rows. The once-only test rule then applies per record.
-- (2) One record per system with a `system` or `group` field. `check_run` verifies all non-superseded records for the group. The test-once rule counts per system, plus one comparison record whose `intervals` are recomputed from the referenced records' predictions.
-- (3) Keep records per system and require that comparison figures come only from a separate verified analysis. This needs a stated rule that `intervals` must not be cited in claims until verified, and check_run still needs to stop reading only `recs[-1]`.
-Whichever is chosen, PLAN T1.2 / T4.2 / T9.1 and `docs/TESTING.md` need amending, because the "one predictions file" assumption is baked into them.
-
-## Defect B (medium): rows can carry data from the future or be selectively omitted, and still pass the recompute
-Files: `src/contextlens/eval/check_run.py` (`_base_metrics`).
-
-New recompute paths trust fields in the predictions file with no cross-check. Reproduced on real dev:
-- Retrieval rows past `as_of_seq`. Rows with `ranked_turn_ids` listing the entire conversation, including turns after `as_of_seq`, give mrr=0.90 and recall@1=0.83 on dev. `check_run` accepts the record (`[]`). Ids not in the conversation (`"bogus"`) are also accepted. E1 retrieval does not go through `replay`, so nothing else enforces the cutoff. `grounded_flags` rejects future turns for cards, but `recall_at_k` and `mrr` do not. `speaker_accuracy` also counts card evidence on future turns, since it only skips ids missing from the conversation.
-- Mixed card and card-less rows. Half the rows were card-less (`ranked_turn_ids=[]`). `check_run` passed `macro_f1` and `answer_when_answerable` computed on only the carded half (macro_f1 0.09 vs 0.086 on all). Dropped or card-less rows silently leave the denominator. `n` still counts them.
-- `schema_valid_rate` over rows that have `raw_output`. With raw_output on only 1 of 148 rows, `schema_valid_rate=1.0` is accepted. Rows without raw_output are ignored, so failures can be omitted.
-- `claim_supported` all True is accepted with `grounded_rate=1.0`. The judgement is a saved input (the rubric judge plus person review described in TESTING.md), so `check_run` cannot verify it. Nothing ties it to a judge model or a review sample. This is unavoidable, but a headline grounded_rate is only as good as that field. The claim path should require a recorded judge and review before such a claim.
-
-Impact: honest-looking numbers can pass the gate that was meant to catch them. Suggested fix: reject `ranked_turn_ids` entries that are not turns at or before `as_of_seq`, and card evidence turns after `as_of_seq`. Either require all rows (or all rows of a stated kind) to carry cards, `raw_output`, and judgements, or put the row count behind each metric in `metrics`.
-
-## T1.3 Interfaces and scope
-- `Context(store, as_of_seq)` and `replay(...)` signatures hold, and `Context.stage_ms` has a default. But `Prediction.card` is now `Card | None`. PLAN T1.3 says `Prediction: scenario_id, card, stage_latency_ms`. Any later code doing `p.card.findings` needs a None guard, and none of it exists yet. `errored`, `ranked_turn_ids`, `claim_supported` and `raw_output` go beyond that interface. They are what the recompute fix needed and are used by tests, so I do not count them as bloat. The plan text should be updated to list them.
-- `check_run` now recomputes many metrics by category and origin (`name[category=x]`). Nothing in the plan asks for these breakdowns by name. T4.2 does ask for a category breakdown, so this is defensible.
-
-## Honesty
-No README or docs claim numbers, `results/claims.json` has no claims, and `results/runs/` is empty. Nothing exceeds the runs.
+## Checked and not a defect
+- Only T9.1 names the test split (`--split test` at tasks.json:537), so the all-experiment test-once count breaks no other task. The count also includes superseded test records, as documented.
+- `supersedes` can remove an earlier record from checking, which is the stated design. The reason is only required to be non-empty, so a weak reason like "x" is accepted. That is a limit of the design, not a bug. The note is printed by the CLI and the file stays.
+- `FAKE` matches only "fake" or "stub" (a model named "mock-model" passes). That matches the plan text.
+- `judge_review.agreement_rate` of 0.0 with `sample_size` 1 passes `claims check`. The docs say code checks only that these are recorded.
+- `tests/test_systems.py` and `tests/test_row_checks.py` are not in T1.5's Files line. Minor.
