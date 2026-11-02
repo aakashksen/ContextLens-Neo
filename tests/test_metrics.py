@@ -98,3 +98,15 @@ def test_paired_bootstrap_diff():
     b = [0.0, 0.0, 0.0, 0.0]
     d, lo, hi = paired_bootstrap_diff(a, b, ["x", "x", "y", "y"], n=200)
     assert (d, lo, hi) == (1.0, 1.0, 1.0)
+
+
+@pytest.mark.parametrize("call", [
+    lambda: macro_f1(["update", "update"], ["update"]),
+    lambda: false_alert_rate(["consistent"], []),
+    lambda: abstention_accuracy([True], [True, False]),
+    lambda: speaker_accuracy(["a", "b", "c"], ["a"]),
+    lambda: speaker_accuracy(["a"], ["a", "b"]),
+])
+def test_paired_metrics_reject_unequal_lengths(call) -> None:
+    with pytest.raises(ValueError):
+        call()

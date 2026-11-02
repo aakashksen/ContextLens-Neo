@@ -5,6 +5,11 @@ from contextlens.schemas import Card, ConsistencyLabel, Finding
 LABELS: tuple[ConsistencyLabel, ...] = ("consistent", "update", "contradiction", "insufficient")
 
 
+def _same_length(a: Sequence[object], b: Sequence[object]) -> None:
+    if len(a) != len(b):
+        raise ValueError(f"paired lists differ in length: {len(a)} vs {len(b)}")
+
+
 def recall_at_k(ranked_ids: Sequence[str], gold_ids: Sequence[str], k: int) -> float:
     return 1.0 if set(ranked_ids[:k]) & set(gold_ids) else 0.0
 
@@ -24,6 +29,7 @@ def mrr(ranks: Sequence[int | None]) -> float:
 
 
 def macro_f1(gold: Sequence[str], pred: Sequence[str]) -> float:
+    _same_length(gold, pred)
     f1s = []
     for label in LABELS:
         tp = sum(1 for g, p in zip(gold, pred) if g == label and p == label)
@@ -36,6 +42,7 @@ def macro_f1(gold: Sequence[str], pred: Sequence[str]) -> float:
 
 def false_alert_rate(gold: Sequence[str], pred: Sequence[str]) -> float:
     """Share of non-contradiction cases predicted as contradiction."""
+    _same_length(gold, pred)
     negatives = [p for g, p in zip(gold, pred) if g != "contradiction"]
     if not negatives:
         return 0.0
@@ -76,6 +83,7 @@ def abstention_accuracy(
     abstained: Sequence[bool], gold_insufficient: Sequence[bool]
 ) -> dict[str, float]:
     """Both sides: abstains when gold is insufficient, answers when gold has an answer."""
+    _same_length(abstained, gold_insufficient)
     on_insuff = [a for a, g in zip(abstained, gold_insufficient) if g]
     on_answer = [not a for a, g in zip(abstained, gold_insufficient) if not g]
     return {
@@ -85,6 +93,7 @@ def abstention_accuracy(
 
 
 def speaker_accuracy(pred_speakers: Sequence[str], gold_speakers: Sequence[str]) -> float:
+    _same_length(pred_speakers, gold_speakers)
     if not gold_speakers:
         return 0.0
     return sum(p == g for p, g in zip(pred_speakers, gold_speakers)) / len(gold_speakers)
