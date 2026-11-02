@@ -1,0 +1,24 @@
+{
+  "task": "T0.3",
+  "commit": "a43548348bc59d9589014f98f3c512a718f0c62b",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; no uncommitted changes outside orchestration/", "result": "pass", "evidence": "git rev-parse HEAD matched; git status --short showed only M orchestration/tasks.json"},
+    {"item": "Evidence log shows acceptance command ran at this commit and passed", "result": "pass", "evidence": "orchestration/evidence/T0.3.log: commit a435483..., 'datasets doc ok', exit 0, RESULT PASS"},
+    {"item": "Reran acceptance command", "result": "pass", "evidence": ".venv/Scripts/python tools/check_datasets_doc.py -> 'datasets doc ok', rc=0"},
+    {"item": "Each of the 4 datasets has URL, License, Size, Format, Labels, Access, Approved", "result": "pass", "evidence": "Read docs/datasets.md; DECODE, QMSum, LongMemEval, AMI each have all fields, with primary-source URLs (parl.ai, GitHub, arXiv, HF, ami license page); unconfirmed items are stated as 'couldn't confirm'"},
+    {"item": "DECODE binary-label assumption confirmed or corrected", "result": "pass", "evidence": "Labels line quotes the paper (0/1 non-contradiction/contradiction) and concludes the assumption is correct"},
+    {"item": "Candidates for diarization (pyannote + alternative with terms), consistency base model, small LLM, each with Approved line", "result": "pass", "evidence": "Sections for pyannote (no, needs the person, gated terms unreadable), Sortformer v2 (yes, CC BY 4.0), deberta-v3-base (yes, MIT), Qwen3-4B and Qwen2.5-1.5B (yes on license), Qwen2.5-3B (no, custom agreement)"},
+    {"item": "Approved: yes entries are consistent with the document's own evidence and standing rule", "result": "pass", "evidence": "LongMemEval (MIT on repo and card, ungated), AMI (CC BY 4.0 on the license page, consent forms) both have an explicit license plus URL. DECODE and QMSum, with no stated data license, are correctly 'no, needs the person'. The QMSum entry correctly says the AMI approval does not cover QMSum's copy. Qwen 'yes' lines are explicitly scoped to license, with 4-bit fit flagged as unconfirmed and deferred to the task that uses the model."},
+    {"item": "Checker script behavior (own negative tests)", "result": "pass", "evidence": "tools/check_datasets_doc.py reads docs/datasets.md by default; fails with rc=1 for a missing Approved line, blank License value, renamed section, and empty file; each message names the dataset and field"},
+    {"item": "git diff for secrets, legacy/ edits, weakened tests", "result": "pass", "evidence": "Commit touches only docs/datasets.md and tools/check_datasets_doc.py; no secrets, no legacy/, no tests changed"}
+  ],
+  "own_tests": [
+    {"input": "Copy of datasets.md with LongMemEval's Approved line deleted", "result": "checker rc=1: 'LongMemEval: Approved line missing'"},
+    {"input": "Every License line replaced by 'License:   ' (blank value)", "result": "rc=1, flags License missing for all 4 datasets"},
+    {"input": "Section heading '## QMSum' renamed to '## QMSumX'", "result": "rc=1: 'QMSum: section missing'"},
+    {"input": "Empty file", "result": "rc=1, all 4 sections reported missing"}
+  ],
+  "failures": [],
+  "notes": "The sources themselves were not re-fetched (no web tools); judgment is on internal consistency and per-entry URLs only. The checker verifies presence of lines, not their content (e.g. it would accept 'Approved: maybe'), which matches the plan's spec ('fails unless each ... has a ... line'). Qwen3-4B and Qwen2.5-1.5B are 'Approved: yes' on license only; 4-bit fit under 7 GB is unconfirmed and the doc says the downstream task must measure it. The AMI download-page access steps rest on an earlier fetch, because a later re-fetch returned 403, and the doc says so."
+}
