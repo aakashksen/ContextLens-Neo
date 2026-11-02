@@ -31,7 +31,14 @@
       "acceptance": [
         "{py} -m pytest tests/test_schemas.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-02T22:03:24+00:00",
+      "verified": {
+        "commit": "c308b1f901c7ef1e8061bb7d5b1fa07cdd367cf3",
+        "passed": true,
+        "at": "2026-11-02T22:04:22+00:00"
+      },
+      "done_at": "2026-11-02T22:05:18+00:00"
     },
     {
       "id": "T0.3",

@@ -1,0 +1,23 @@
+{
+  "task": "T0.2",
+  "commit": "c308b1f901c7ef1e8061bb7d5b1fa07cdd367cf3",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/tasks.json modified", "result": "pass", "evidence": "git rev-parse HEAD matched; git status --short showed only ' M orchestration/tasks.json'"},
+    {"item": "evidence log shows acceptance ran at this commit and passed", "result": "pass", "evidence": "orchestration/evidence/T0.2.log: commit c308b1f, 5 passed, RESULT PASS"},
+    {"item": "reran acceptance pytest tests/test_schemas.py -q", "result": "pass", "evidence": "5 passed; ruff check src tests: all checks passed"},
+    {"item": "all classes and fields match plan exactly (names, types, defaults, Literals)", "result": "pass", "evidence": "read src/contextlens/schemas.py; Turn, Conversation, MemoryItem, EvidenceRef, ConsistencyLabel, Finding, Card, ButtonRequest, Scenario all match the plan"},
+    {"item": "the 4 named tests plus JSON round trip exist and assert real behavior", "result": "pass", "evidence": "tests/test_schemas.py has all of them; the validators are real model_validators. Mutation: removing the evidence check would fail test_finding_recall_requires_evidence (the kind condition is not independently tested, see notes)"},
+    {"item": "git diff touches no legacy/, no secrets, no weakened earlier tests", "result": "pass", "evidence": "git diff --stat HEAD~1: only tasks.json, schemas.py, test_schemas.py"}
+  ],
+  "own_tests": [
+    {"input": "partial and abstained cards with empty findings", "result": "accepted, as expected"},
+    {"input": "context finding with no evidence; invalid kind; invalid label", "result": "context accepted; invalid kind and label rejected"},
+    {"input": "missing list default not shared across Card instances; cost_usd default", "result": "independent lists, default 0.0"},
+    {"input": "Scenario JSON round trip; missing gold_label raises; Turn source='web' rejected; split defaults None; detail defaults standard", "result": "all behaved correctly"},
+    {"input": "MemoryItem valid and invalid kind", "result": "valid accepted, invalid rejected, supersedes defaults None"},
+    {"input": "mutation: removed 'self.kind == recall and' from the Finding validator", "result": "repo tests still passed (the validator was restored via git checkout)"}
+  ],
+  "failures": [],
+  "notes": "No test checks that non-recall findings may have empty evidence, so a mutation that requires evidence for all kinds goes undetected. The plan does not require that test. My own tests pass 6/6 on this behavior. Working tree restored after the mutation."
+}
