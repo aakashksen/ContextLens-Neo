@@ -49,3 +49,38 @@ def test_results_are_order_stable() -> None:
     preds = replay(scs, Echo)
     assert [p.scenario_id for p in preds] == [s.id for s in scs]
     assert [p.card.missing[0] for p in preds] == [s.id for s in scs]
+
+
+class Staged:
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        ctx.stage_ms["retrieve"] = 7
+        ctx.stage_ms["generate"] = 11
+        return Card(mode="recall", status="partial", findings=[])
+
+
+class StagedBoom:
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        ctx.stage_ms["retrieve"] = 3
+        raise RuntimeError("late")
+
+
+def test_stage_timings_reach_prediction() -> None:
+    [p] = replay([_scenario("s1")], Staged)
+    assert p.stage_latency_ms["retrieve"] == 7
+    assert p.stage_latency_ms["generate"] == 11
+    assert "total" in p.stage_latency_ms
+    assert p.errored is False
+
+
+def test_error_card_is_marked_and_keeps_stages() -> None:
+    [p] = replay([_scenario("s1")], StagedBoom)
+    assert p.errored is True
+    assert any("late" in m for m in p.card.missing)
+    assert p.stage_latency_ms["retrieve"] == 3
+
+
+def test_context_still_builds_from_store_and_seq() -> None:
+    from contextlens.memory.store import InMemoryTranscriptStore
+
+    ctx = Context(InMemoryTranscriptStore(), 4)
+    assert ctx.as_of_seq == 4 and ctx.stage_ms == {}
