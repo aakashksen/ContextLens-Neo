@@ -16,7 +16,7 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
 
 
-RECORD_FILE = re.compile(r"^\?\? results/runs/[^/ ]+-\d{8}T\d{12}Z(\.predictions\.jsonl|\.json)$")
+RECORD_FILE = re.compile(r"^\?\? results/runs/[^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)$")
 
 
 def is_dirty(root: Path) -> bool:
@@ -58,21 +58,29 @@ def write_scenarios_manifest(root: Path = ROOT) -> Path:
     return path
 
 
+SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
 def write_run(
     experiment: str,
     split: str,
     config: dict[str, Any],
     models: dict[str, str],
     prompt_versions: dict[str, str],
-    metrics: dict[str, float],
-    intervals: dict[str, tuple[float, float]],
+    metrics: dict[str, dict[str, float | None]],
+    intervals: dict[str, dict[str, tuple[float, float]]],
     attempts: list[dict[str, Any]],
-    predictions: list[Prediction],
+    predictions: dict[str, list[Prediction]],
     dataset_hash: str,
     *,
+    comparisons: list[dict[str, Any]] | None = None,
+    supersedes: list[dict[str, str]] | None = None,
     root: Path = ROOT,
     allow_dirty: bool = False,
 ) -> Path:
+    bad = [name for name in predictions if not SYSTEM_NAME.match(name)]
+    if not predictions or bad:
+        raise ValueError(f"predictions must map system names (letters, digits, _ and -) to rows: {bad}")
     dirty = is_dirty(root)
     if dirty and not allow_dirty:
         raise RuntimeError("working tree has uncommitted changes; commit first")
@@ -80,8 +88,11 @@ def write_run(
     run_id = f"{experiment}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
     runs = root / RUNS_REL
     runs.mkdir(parents=True, exist_ok=True)
-    pred_path = runs / f"{run_id}.predictions.jsonl"
-    pred_path.write_text("".join(p.model_dump_json() + "\n" for p in predictions), encoding="utf-8")
+    pred_paths = {}
+    for name, rows in predictions.items():
+        pred_path = runs / f"{run_id}.{name}.predictions.jsonl"
+        pred_path.write_text("".join(p.model_dump_json() + "\n" for p in rows), encoding="utf-8")
+        pred_paths[name] = pred_path.relative_to(root).as_posix()
     record = {
         "run_id": run_id,
         "experiment": experiment,
@@ -92,13 +103,15 @@ def write_run(
         "config": config,
         "models": models,
         "prompt_versions": prompt_versions,
-        "n": len(predictions),
+        "n": len(next(iter(predictions.values()))),
         "metrics": metrics,
-        "intervals": {k: list(v) for k, v in intervals.items()},
+        "intervals": {sys: {k: list(v) for k, v in d.items()} for sys, d in intervals.items()},
+        "comparisons": comparisons or [],
+        "supersedes": supersedes or [],
         "attempts": attempts,
         "claude_calls": config.get("claude_calls", 0),
         "labels_reviewed": config.get("labels_reviewed", False),
-        "predictions_path": pred_path.relative_to(root).as_posix(),
+        "predictions": pred_paths,
         "started_at": config.get("started_at", now.isoformat()),
         "finished_at": now.isoformat(),
     }

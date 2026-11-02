@@ -66,14 +66,19 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _run(root: Path, split: str = "dev", *, models=None, attempts=None, preds=None, dhash=None,
-         metrics=None, config=None, experiment: str = "E1", allow_dirty: bool = False) -> Path:
+         metrics=None, config=None, experiment: str = "E1", allow_dirty: bool = False,
+         systems=None, **extra) -> Path:
+    """One system called "main" unless `systems` (name -> predictions) is given."""
     preds = preds if preds is not None else [_pred(s, g) for s, g in _predl(split)]
+    systems = systems if systems is not None else {"main": preds}
     scenarios = [_scenario(i, g) for i, g in _gold(split)]
+    per_system = {n: (metrics if metrics is not None else recompute_metrics(scenarios, p))
+                  for n, p in systems.items()}
     return write_run(
         experiment, split, config or {"labels_reviewed": True}, models or {"llm": "qwen-real"}, {"p": "v1"},
-        metrics if metrics is not None else recompute_metrics(scenarios, preds), {},
-        attempts if attempts is not None else [{"setting": "a", "ok": True}], preds,
-        dhash or split_hash(split, root), root=root, allow_dirty=allow_dirty)
+        per_system, extra.pop("intervals", {}),
+        attempts if attempts is not None else [{"setting": "a", "ok": True}], systems,
+        dhash or split_hash(split, root), root=root, allow_dirty=allow_dirty, **extra)
 
 
 def _edit(path: Path, **changes) -> None:
@@ -134,7 +139,7 @@ def test_check_run_fails_when_attempts_empty(repo: Path) -> None:
 
 def test_check_run_fails_when_predictions_missing(repo: Path) -> None:
     path = _run(repo)
-    (repo / json.loads(path.read_text(encoding="utf-8"))["predictions_path"]).unlink()
+    (repo / json.loads(path.read_text(encoding="utf-8"))["predictions"]["main"]).unlink()
     assert any("predictions" in p for p in check("E1", root=repo))
 
 
@@ -150,7 +155,7 @@ def test_check_run_fails_for_unrecomputable_metric(repo: Path) -> None:
 
 def test_recompute_matches_saved_metrics(repo: Path) -> None:
     path = _run(repo)
-    saved = json.loads(path.read_text(encoding="utf-8"))["metrics"]
+    saved = json.loads(path.read_text(encoding="utf-8"))["metrics"]["main"]
     scenarios = [_scenario(i, g) for i, g in _gold("dev")]
     fresh = recompute_metrics(scenarios, [_pred(s, g) for s, g in _predl("dev")])
     assert saved == fresh
@@ -185,7 +190,7 @@ def test_claim_without_matching_run_fails(repo: Path) -> None:
 def test_claim_value_must_equal_metric_in_run(repo: Path) -> None:
     path = _run(repo)
     rec = json.loads(path.read_text(encoding="utf-8"))
-    good = {"id": "c1", "run_id": rec["run_id"], "metric": "macro_f1", "value": rec["metrics"]["macro_f1"]}
+    good = {"id": "c1", "run_id": rec["run_id"], "metric": "macro_f1", "value": rec["metrics"]["main"]["macro_f1"]}
     _write_claims(repo, [good])
     assert claims.check_claims(repo) == []
     _write_claims(repo, [{**good, "value": good["value"] + 0.01}])
@@ -272,7 +277,7 @@ def test_none_saved_for_defined_metric_fails_cleanly(repo: Path) -> None:
 def test_claim_on_none_metric_fails(repo: Path) -> None:
     path = _run(repo)
     rec = json.loads(path.read_text(encoding="utf-8"))
-    rec["metrics"]["false_alert_rate"] = None
+    rec["metrics"]["main"]["false_alert_rate"] = None
     path.write_text(json.dumps(rec), encoding="utf-8")
     _write_claims(repo, [{"id": "c1", "run_id": rec["run_id"], "metric": "false_alert_rate", "value": None}])
     assert any("c1" in p and "undefined" in p for p in claims.check_claims(repo))

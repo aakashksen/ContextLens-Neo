@@ -12,6 +12,7 @@ from contextlens.replay.runner import Prediction
 from contextlens.schemas import ButtonRequest, Card, Conversation, EvidenceRef, Finding, Scenario, Turn
 
 IDS = ["d1", "d2", "d3", "d4"]
+JUDGE = {"model": "qwen-real", "rubric_version": "r1", "same_model_and_prompt_as_writer": False}
 
 
 def _scenario(sid: str, origin: str = "synthetic", category: str = "c") -> Scenario:
@@ -119,7 +120,9 @@ def test_schema_valid_rate_validates_raw_output() -> None:
     preds = _preds()
     preds[0] = preds[0].model_copy(update={"raw_output": good})
     preds[1] = preds[1].model_copy(update={"raw_output": '{"mode": "nope"}'})
-    assert recompute_metrics(_scenarios(), preds)["schema_valid_rate"] == pytest.approx(1 / 2)
+    preds[2] = preds[2].model_copy(update={"raw_output": good})
+    preds[3] = preds[3].model_copy(update={"raw_output": good})
+    assert recompute_metrics(_scenarios(), preds)["schema_valid_rate"] == pytest.approx(3 / 4)
     assert recompute_metrics(_scenarios(), _preds())["schema_valid_rate"] is None
 
 
@@ -141,8 +144,8 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _run(root: Path, preds: list[Prediction], metrics: dict) -> None:
-    write_run("E2", "dev", {"labels_reviewed": True}, {"llm": "qwen-real"}, {"p": "v1"}, metrics, {},
-              [{"setting": "a"}], preds, split_hash("dev", root), root=root)
+    write_run("E2", "dev", {"labels_reviewed": True, "judge": JUDGE}, {"llm": "qwen-real"}, {"p": "v1"}, {"main": metrics}, {},
+              [{"setting": "a"}], {"main": preds}, split_hash("dev", root), root=root)
 
 
 def test_check_run_accepts_recomputable_card_metrics(repo: Path) -> None:

@@ -2,38 +2,41 @@ import argparse
 import json
 import re
 import sys
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import metrics as M
+from contextlens.eval import series
 from contextlens.eval.records import MANIFEST_REL, ROOT, RUNS_REL, git, split_hash
+from contextlens.eval.series import JUDGED, base_name, grounded_per_card, label_of, schema_valid
 from contextlens.eval.stats import percentile
 from contextlens.replay.runner import Prediction
-from contextlens.schemas import Card, Scenario
+from contextlens.schemas import Scenario
 
 REQUIRED = (
     "run_id experiment git_commit dirty dataset_hash split config models prompt_versions n metrics "
-    "intervals attempts claude_calls labels_reviewed predictions_path started_at finished_at"
+    "intervals comparisons attempts claude_calls labels_reviewed predictions started_at finished_at"
 ).split()
 TOLERANCE = 1e-9
-
-
-def _label(card: Card) -> str:
-    for f in card.findings:
-        if f.label:
-            return f.label
-    return "insufficient"
-
-
 Metrics = dict[str, float | None]
 K_DEFAULT = (1, 3, 5, 10)
+FAKE = re.compile(r"fake|stub", re.I)
+TIMESTAMP = re.compile(r"\d{8}T\d{12}Z")
+
+
+def _complete(present: list[bool]) -> bool | None:
+    """True when every row has the field, None when no row has it, False when only some do."""
+    if all(present):
+        return True
+    return None if not any(present) else False
 
 
 def _base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int]) -> Metrics:
+    """A metric whose source field is on only some rows is left out, so it cannot be saved."""
     carded = [(s, p, p.card) for s, p in rows if p.card is not None]
-    labelled = [(s.gold_label, _label(c)) for s, _, c in carded if s.gold_label]
+    labelled = [(s.gold_label, label_of(c)) for s, _, c in carded if s.gold_label]
     gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
     out: Metrics = {
         "macro_f1": M.macro_f1(gold, pred),
@@ -57,48 +60,35 @@ def _base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int]) ->
     out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
 
     # "supports the claim" is a saved rubric judgement; without one per finding the metric is omitted
-    if all(p.claim_supported is not None and len(p.claim_supported) == len(c.findings)
-           for _, p, c in carded if c.findings):
-        per_card: list[list[bool]] = []
-        for s, p, c in carded:
-            judged = {id(f): j for f, j in zip(c.findings, p.claim_supported or [])}
-            turn_seq = {t.id: t.seq for t in s.conversation.turns}
-            per_card.append(M.grounded_flags(
-                [c], turn_seq, s.request.as_of_seq, lambda f, judged=judged: judged[id(f)]))
-        flat = [x for fl in per_card for x in fl]
+    flags = grounded_per_card(rows)
+    if flags is not None:
+        flat = [x for fl in flags for x in fl]
         out["grounded_rate"] = sum(flat) / len(flat) if flat else None
-        out["unsupported_claim_rate"] = M.unsupported_claim_rate(per_card)
+        out["unsupported_claim_rate"] = M.unsupported_claim_rate(flags)
 
-    raws = [p.raw_output for _, p in rows if p.raw_output is not None]
-    out["schema_valid_rate"] = M.mean([float(_schema_valid(r)) for r in raws])
+    raws = _complete([p.raw_output is not None for _, p in rows])
+    if raws is not False:
+        out["schema_valid_rate"] = M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output]) \
+            if raws else None
 
-    ranked = [(s, p.ranked_turn_ids) for s, p in rows
-              if p.ranked_turn_ids is not None and s.gold_evidence_turn_ids]
-    ranks = [M.first_gold_rank(r, s.gold_evidence_turn_ids) for s, r in ranked]
-    out["mrr"] = M.mrr(ranks)
-    for k in ks:
-        out[f"recall@{k}"] = M.mean(
-            [v for s, r in ranked if (v := M.recall_at_k(r, s.gold_evidence_turn_ids, k)) is not None])
+    need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
+    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need])
+    if has_ranks is not False:
+        ranked = [(s, p.ranked_turn_ids or []) for s, p in need] if has_ranks else []
+        out["mrr"] = M.mrr([M.first_gold_rank(r, s.gold_evidence_turn_ids) for s, r in ranked])
+        for k in ks:
+            out[f"recall@{k}"] = M.mean(
+                [v for s, r in ranked if (v := M.recall_at_k(r, s.gold_evidence_turn_ids, k)) is not None])
 
-    stages: dict[str, list[float]] = {}
-    for _, p in rows:
-        for name, ms in p.stage_latency_ms.items():
-            stages.setdefault(name, []).append(float(ms))
-    for name, vals in stages.items():
+    stage_names = {name for _, p in rows for name in p.stage_latency_ms}
+    for name in sorted(stage_names | {"total"}):
+        if name in stage_names and not all(name in p.stage_latency_ms for _, p in rows):
+            continue
         suffix = "" if name == "total" else f"[stage={name}]"
-        out[f"latency_p50_ms{suffix}"] = percentile(vals, 50)
-        out[f"latency_p95_ms{suffix}"] = percentile(vals, 95)
-    if "total" not in stages:
-        out["latency_p50_ms"] = out["latency_p95_ms"] = None
+        vals = [float(p.stage_latency_ms[name]) for _, p in rows if name in p.stage_latency_ms]
+        out[f"latency_p50_ms{suffix}"] = percentile(vals, 50) if vals else None
+        out[f"latency_p95_ms{suffix}"] = percentile(vals, 95) if vals else None
     return out
-
-
-def _schema_valid(raw: str) -> bool:
-    try:
-        Card.model_validate_json(raw)
-    except ValueError:
-        return False
-    return True
 
 
 def recompute_metrics(
@@ -108,8 +98,7 @@ def recompute_metrics(
     metrics.py. Also gives each metric restricted to one scenario category or origin as
     `name[category=x]` / `name[origin=y]`."""
     ks = tuple(ks)
-    by_id = {p.scenario_id: p for p in predictions}
-    rows = [(s, by_id[s.id]) for s in scenarios if s.id in by_id]
+    rows = _rows(scenarios, predictions)
     out = _base_metrics(rows, ks)
     for key in ("category", "origin"):
         for value in sorted({getattr(s, key) for s, _ in rows}):
@@ -118,10 +107,36 @@ def recompute_metrics(
     return out
 
 
+def _rows(scenarios: list[Scenario], predictions: list[Prediction]) -> list[tuple[Scenario, Prediction]]:
+    by_id = {p.scenario_id: p for p in predictions}
+    return [(s, by_id[s.id]) for s in scenarios if s.id in by_id]
+
+
+def recompute_intervals(
+    scenarios: list[Scenario], predictions: list[Prediction], names: Iterable[str]
+) -> dict[str, tuple[float, float] | None]:
+    """Bootstrap interval per metric name (seed 13, 10,000 resamples, by conversation); None when
+    the interval cannot be recomputed."""
+    rows = _rows(scenarios, predictions)
+    return {n: series.interval(rows, n) for n in names}
+
+
+def recompute_comparison(
+    scenarios: list[Scenario], a: list[Prediction], b: list[Prediction], metric: str
+) -> dict[str, object] | None:
+    """System a minus system b on one metric, as saved in a record's `comparisons`."""
+    return series.comparison(_rows(scenarios, a), _rows(scenarios, b), metric)
+
+
 def _same_value(fresh: float | None, saved: object) -> bool:
     if fresh is None or saved is None:
         return fresh is None and saved is None
     return isinstance(saved, (int, float)) and abs(fresh - saved) <= TOLERANCE
+
+
+def _same_pair(fresh: tuple[float, float] | list[float], saved: object) -> bool:
+    return (isinstance(saved, (list, tuple)) and len(saved) == len(fresh)
+            and all(_same_value(f, v) for f, v in zip(fresh, saved)))
 
 
 def _strings(x: Any) -> list[str]:
@@ -134,8 +149,65 @@ def _strings(x: Any) -> list[str]:
     return []
 
 
+def _timestamp(name: str) -> str:
+    found = TIMESTAMP.findall(name)
+    return found[-1] if found else name
+
+
 def records_for(experiment: str, root: Path = ROOT) -> list[Path]:
-    return sorted((root / RUNS_REL).glob(f"{experiment}-*Z.json"))
+    """Every record of the experiment, oldest first."""
+    found = (root / RUNS_REL).glob(f"{experiment}-*Z.json")
+    return sorted(found, key=lambda p: (_timestamp(p.name), p.name))
+
+
+def judge_problems(config: Any) -> list[str]:
+    """A record that saves a judged metric must say who judged it."""
+    judge = config.get("judge") if isinstance(config, dict) else None
+    if not isinstance(judge, dict):
+        return ["config.judge is missing: a record with grounded_rate or unsupported_claim_rate must name "
+                "its judge (model, rubric_version, same_model_and_prompt_as_writer)"]
+    out = []
+    for key in ("model", "rubric_version"):
+        if not (isinstance(judge.get(key), str) and judge[key].strip()):
+            out.append(f"config.judge.{key} is missing")
+    if isinstance(judge.get("model"), str) and FAKE.search(judge["model"]):
+        out.append("the judge model matches fake or stub")
+    if not isinstance(judge.get("same_model_and_prompt_as_writer"), bool):
+        out.append("config.judge.same_model_and_prompt_as_writer must say true or false")
+    return out
+
+
+def review_problems(config: Any) -> list[str]:
+    """A claim on a judged metric needs a person's check of the judgements on a random sample."""
+    review = config.get("judge_review") if isinstance(config, dict) else None
+    if not isinstance(review, dict):
+        return ["config.judge_review is missing: no recorded person review of the judgements"]
+    out = []
+    rate, size = review.get("agreement_rate"), review.get("sample_size")
+    if isinstance(rate, bool) or not isinstance(rate, (int, float)) or not 0 <= rate <= 1:
+        out.append("config.judge_review.agreement_rate must be a number from 0 to 1")
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        out.append("config.judge_review.sample_size must be a positive integer")
+    if review.get("sample") != "random":
+        out.append("config.judge_review.sample must be 'random'")
+    return out
+
+
+def _row_problems(scenarios: list[Scenario], preds: list[Prediction]) -> list[str]:
+    """Rows must be all cards or all retrieval, and may cite only turns at or before as_of_seq."""
+    out = []
+    if len({p.card is not None for p in preds}) > 1:
+        out.append("rows are mixed: some have cards and some do not")
+    by_id = {s.id: s for s in scenarios}
+    for p in preds:
+        s = by_id[p.scenario_id]
+        seq = {t.id: t.seq for t in s.conversation.turns}
+        cited = list(p.ranked_turn_ids or [])
+        cited += [e.turn_id for f in (p.card.findings if p.card else []) for e in f.evidence]
+        bad = [t for t in cited if t not in seq or seq[t] > s.request.as_of_seq]
+        if bad:
+            out.append(f"{p.scenario_id} cites turns that are unknown or past as_of_seq: {bad[:3]}")
+    return out
 
 
 def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
@@ -144,7 +216,7 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         return problems
     if rec["dirty"]:
         problems.append("record was made on a dirty tree")
-    if any(re.search(r"fake|stub", s, re.I) for s in _strings(rec["models"])):
+    if any(FAKE.search(s) for s in _strings(rec["models"])):
         problems.append("a model name matches fake or stub")
     if not rec["attempts"]:
         problems.append("attempts is empty")
@@ -152,9 +224,6 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         problems.append("git_commit is not an ancestor of HEAD")
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
-
-    if not rec["metrics"]:
-        problems.append("metrics is empty")
 
     scenarios: list[Scenario] = []
     split = rec["split"]
@@ -176,44 +245,157 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         if rec["n"] != entry["n"]:
             problems.append(f"n={rec['n']} differs from the split's {entry['n']} cases")
 
-    pred_path = root / rec["predictions_path"]
-    if not pred_path.is_file():
-        problems.append("predictions file is missing")
-        return problems
-    lines = pred_path.read_text(encoding="utf-8").splitlines()
-    preds = [Prediction.model_validate_json(x) for x in lines if x.strip()]
-    if len(preds) != rec["n"]:
-        problems.append(f"predictions hold {len(preds)} rows but n={rec['n']}")
-    ids_ok = True
-    if scenarios:
+    paths, metrics, intervals = rec["predictions"], rec["metrics"], rec["intervals"]
+    if not isinstance(paths, dict) or not paths:
+        return problems + ["predictions must map each system to its predictions file"]
+    if not isinstance(metrics, dict) or set(metrics) != set(paths):
+        return problems + ["metrics must hold one entry per system, matching predictions"]
+    if not isinstance(intervals, dict) or not set(intervals) <= set(paths):
+        problems.append(f"intervals name systems not in predictions: {sorted(set(intervals) - set(paths))}")
+        intervals = {}
+    if not isinstance(rec["comparisons"], list):
+        problems.append("comparisons must be a list")
+
+    usable: dict[str, list[tuple[Scenario, Prediction]]] = {}
+    for name, rel in paths.items():
+        tag = f"system {name}: "
+        pred_path = root / rel
+        if not pred_path.is_file():
+            problems.append(tag + "predictions file is missing")
+            continue
+        try:
+            preds = [Prediction.model_validate_json(x)
+                     for x in pred_path.read_text(encoding="utf-8").splitlines() if x.strip()]
+        except ValueError as exc:
+            problems.append(tag + f"predictions file is unreadable: {str(exc).splitlines()[0]}")
+            continue
+        if len(preds) != rec["n"]:
+            problems.append(tag + f"predictions hold {len(preds)} rows but n={rec['n']}")
+        if not metrics[name]:
+            problems.append(tag + "metrics is empty")
+        if not scenarios:
+            continue
         pred_ids = [p.scenario_id for p in preds]
         if len(set(pred_ids)) != len(pred_ids) or set(pred_ids) != {s.id for s in scenarios}:
-            ids_ok = False
-            problems.append("prediction ids do not match the split's scenario ids exactly once each")
-    if scenarios and ids_ok:
-        ks = {int(k) for name in rec['metrics'] for k in re.findall(r'recall@(\d+)', name)}
-        fresh = recompute_metrics(scenarios, preds, K_DEFAULT + tuple(sorted(ks)))
-        for name, saved in rec["metrics"].items():
-            if name not in fresh:
-                problems.append(f"metric {name} cannot be recomputed from predictions")
-            elif not _same_value(fresh[name], saved):
-                problems.append(f"metric {name} does not recompute from predictions")
+            problems.append(tag + "prediction ids do not match the split's scenario ids exactly once each")
+            continue
+        row_problems = _row_problems(scenarios, preds)
+        problems += [tag + m for m in row_problems]
+        if row_problems:
+            continue
+        rows = _rows(scenarios, preds)
+        usable[name] = rows
+        wanted = {int(k) for m in metrics[name] for k in re.findall(r"recall@(\d+)", m)}
+        fresh = recompute_metrics(scenarios, preds, K_DEFAULT + tuple(sorted(wanted)))
+        for metric, saved in metrics[name].items():
+            if metric not in fresh:
+                problems.append(tag + f"metric {metric} cannot be recomputed from predictions")
+            elif not _same_value(fresh[metric], saved):
+                problems.append(tag + f"metric {metric} does not recompute from predictions")
+        for metric, saved in (intervals.get(name) or {}).items():
+            got = series.interval(rows, metric)
+            if got is None:
+                problems.append(tag + f"interval {metric} cannot be recomputed from predictions")
+            elif not _same_pair(got, saved):
+                problems.append(tag + f"interval {metric} does not recompute from predictions")
+
+    for name in intervals:
+        if name in paths and name not in usable and scenarios:
+            problems.append(f"system {name}: its intervals cannot be checked without usable predictions")
+    if isinstance(rec["comparisons"], list):
+        problems += _comparison_problems(rec["comparisons"], usable, paths) if scenarios else []
+
+    saved_names = [m for d in metrics.values() for m in d] + [m for d in intervals.values() for m in d]
+    if any(base_name(m) in JUDGED for m in saved_names):
+        problems += judge_problems(rec["config"])
     return problems
 
 
+def _comparison_problems(
+    comps: list[Any], usable: dict[str, list[tuple[Scenario, Prediction]]], paths: dict[str, str]
+) -> list[str]:
+    out = []
+    for i, c in enumerate(comps):
+        tag = f"comparison {i}: "
+        if not (isinstance(c, dict) and {"a", "b", "metric", "diff", "ci", "mcnemar_p"} <= set(c)):
+            out.append(tag + "needs a, b, metric, diff, ci and mcnemar_p")
+            continue
+        a, b = c["a"], c["b"]
+        if a == b or a not in paths or b not in paths:
+            out.append(tag + f"{a} and {b} must be two different systems of this record")
+            continue
+        if a not in usable or b not in usable:
+            out.append(tag + "cannot be checked without usable predictions for both systems")
+            continue
+        fresh = series.comparison(usable[a], usable[b], c["metric"])
+        if fresh is None:
+            out.append(tag + f"{c['metric']} cannot be recomputed for {a} and {b}")
+        elif not (_same_value(fresh["diff"], c["diff"])  # type: ignore[arg-type]
+                  and _same_pair(fresh["ci"], c["ci"])  # type: ignore[arg-type]
+                  and _same_value(fresh["mcnemar_p"], c["mcnemar_p"])):  # type: ignore[arg-type]
+            out.append(tag + f"{c['metric']} for {a} vs {b} does not recompute from predictions")
+    return out
+
+
+def _load_records(experiment: str, root: Path) -> list[tuple[Path, dict[str, Any]]]:
+    return [(p, json.loads(p.read_text(encoding="utf-8"))) for p in records_for(experiment, root)]
+
+
+def superseded_by(experiment: str, root: Path = ROOT) -> dict[str, tuple[str, str]]:
+    """run_id -> (run_id of the later record that supersedes it, reason). Only an entry with a
+    non-empty reason, naming an earlier record of the same split, counts."""
+    recs = _load_records(experiment, root)
+    by_id = {r.get("run_id"): (p, r) for p, r in recs}
+    out: dict[str, tuple[str, str]] = {}
+    for p, r in recs:
+        for e in r.get("supersedes") or []:
+            target = by_id.get(e.get("run_id")) if isinstance(e, dict) else None
+            reason = e.get("reason") if isinstance(e, dict) else None
+            if (target and isinstance(reason, str) and reason.strip()
+                    and target[1].get("split") == r.get("split")
+                    and (_timestamp(target[0].name), target[0].name) < (_timestamp(p.name), p.name)):
+                out[e["run_id"]] = (r["run_id"], reason)
+    return out
+
+
+def _supersede_problems(recs: list[tuple[Path, dict[str, Any]]], effective: dict[str, Any]) -> list[str]:
+    out = []
+    for p, r in recs:
+        for e in r.get("supersedes") or []:
+            rid = e.get("run_id") if isinstance(e, dict) else None
+            if rid not in effective or effective[rid][0] != r.get("run_id"):
+                out.append(f"{p.name}: supersedes entry {e!r} needs the run_id of an earlier record of the "
+                           "same experiment and split, and a non-empty reason")
+    return out
+
+
 def check(experiment: str, *, root: Path = ROOT, min_n: int = 0, split: str | None = None) -> list[str]:
-    recs = [(p, json.loads(p.read_text(encoding="utf-8"))) for p in records_for(experiment, root)]
+    recs = _load_records(experiment, root)
     if split:
         recs = [(p, r) for p, r in recs if r.get("split") == split]
     if not recs:
         return [f"no run record for {experiment}"]
-    path, latest = recs[-1]
-    problems = [f"{path.name}: {m}" for m in check_record(latest, root, min_n)]
-    tests = [r for _, r in recs if r.get("split") == "test"]
-    for r in tests[1:]:
-        if not (r.get("config") or {}).get("override_note"):
-            problems.append(f"{r.get('run_id')}: more than one test record and no override_note in config")
+    gone = superseded_by(experiment, root)
+    problems = _supersede_problems(recs, gone)
+    for path, rec in recs:
+        if rec.get("run_id") not in gone:
+            problems += [f"{path.name}: {m}" for m in check_record(rec, root, min_n)]
+    if any(r.get("split") == "test" for _, r in recs):
+        problems += _test_once_problems(root)
     return problems
+
+
+def _test_once_problems(root: Path) -> list[str]:
+    """Every test-split record of every experiment counts: one record covers all systems, and
+    renaming an experiment does not give another touch. Superseded records still count."""
+    found = []
+    for p in (root / RUNS_REL).glob("*-*Z.json"):
+        rec = json.loads(p.read_text(encoding="utf-8"))
+        if rec.get("split") == "test":
+            found.append((_timestamp(p.name), p.name, rec))
+    found.sort(key=lambda t: t[:2])
+    return [f"{rec.get('run_id')}: more than one test record and no override_note in config"
+            for _, _, rec in found[1:] if not (rec.get("config") or {}).get("override_note")]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -223,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--split")
     a = ap.parse_args(argv)
     problems = check(a.experiment, min_n=a.min_n, split=a.split)
+    for old, (new, reason) in superseded_by(a.experiment).items():
+        print(f"note: {old} is superseded by {new}: {reason}")
     for p in problems:
         print("FAIL", p)
     if not problems:
