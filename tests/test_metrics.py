@@ -110,3 +110,22 @@ def test_paired_bootstrap_diff():
 def test_paired_metrics_reject_unequal_lengths(call) -> None:
     with pytest.raises(ValueError):
         call()
+
+
+def test_empty_input_is_none_not_zero() -> None:
+    assert mrr([]) is None
+    assert grounded_rate([], {}, 0) is None
+    assert grounded_rate([Card(mode="recall", status="abstained", findings=[])], {}, 0) is None
+    assert speaker_accuracy([], []) is None
+    assert macro_f1([], []) is None
+    assert false_alert_rate(["consistent"], ["consistent"]) == 0.0
+    assert false_alert_rate(["contradiction"], ["contradiction"]) is None
+    assert recall_at_k(["a"], [], 1) is None
+    assert abstention_accuracy([], []) == {"abstain_when_insufficient": None, "answer_when_answerable": None}
+    assert abstention_accuracy([True], [True]) == {"abstain_when_insufficient": 1.0, "answer_when_answerable": None}
+    assert abstention_accuracy([True], [False]) == {"abstain_when_insufficient": None, "answer_when_answerable": 0.0}
+
+
+def test_bootstrap_ci_empty_raises_clear_error() -> None:
+    with pytest.raises(ValueError, match="no values"):
+        bootstrap_ci([], [])

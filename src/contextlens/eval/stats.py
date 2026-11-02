@@ -40,6 +40,8 @@ def bootstrap_ci(
     values: Sequence[float], groups: Sequence[str], n: int = 10000, seed: int = 13
 ) -> tuple[float, float]:
     """95% interval of the mean, resampling whole conversations (groups)."""
+    if not values:
+        raise ValueError("bootstrap_ci got no values: there is nothing to resample")
     means = _resample_means(_by_group(values, groups), n, seed)
     return percentile(means, 2.5), percentile(means, 97.5)
 

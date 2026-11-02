@@ -262,3 +262,17 @@ def test_check_splits_verifies_scenario_manifest(repo: Path) -> None:
     f = repo / "datasets/scenarios/dev.jsonl"
     f.write_text(f.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     assert any("differs from the manifest" in p for p in check_splits(splits_dir, raw))
+
+
+def test_none_saved_for_defined_metric_fails_cleanly(repo: Path) -> None:
+    _run(repo, metrics={"false_alert_rate": None})
+    assert any("false_alert_rate" in p for p in check("E1", root=repo))
+
+
+def test_claim_on_none_metric_fails(repo: Path) -> None:
+    path = _run(repo)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["metrics"]["false_alert_rate"] = None
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    _write_claims(repo, [{"id": "c1", "run_id": rec["run_id"], "metric": "false_alert_rate", "value": None}])
+    assert any("c1" in p and "undefined" in p for p in claims.check_claims(repo))

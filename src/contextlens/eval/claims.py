@@ -22,6 +22,8 @@ def check_claims(root: Path = ROOT) -> list[str]:
         rec = json.loads(path.read_text(encoding="utf-8"))
         if c.get("metric") not in rec.get("metrics", {}):
             problems.append(f"claim {cid}: metric {c.get('metric')} not in run")
+        elif rec["metrics"][c["metric"]] is None:
+            problems.append(f"claim {cid}: metric {c.get('metric')} is undefined (None) in the run")
         elif rec["metrics"][c["metric"]] != c.get("value"):
             problems.append(f"claim {cid}: value differs from the metric in the run")
         if not rec.get("labels_reviewed"):

@@ -26,7 +26,7 @@ def _label(p: Prediction) -> str:
     return "insufficient"
 
 
-def recompute_metrics(scenarios: list[Scenario], predictions: list[Prediction]) -> dict[str, float]:
+def recompute_metrics(scenarios: list[Scenario], predictions: list[Prediction]) -> dict[str, float | None]:
     by_id = {p.scenario_id: p for p in predictions}
     pairs = [(s, by_id[s.id]) for s in scenarios if s.id in by_id]
     labelled = [(s.gold_label, _label(p)) for s, p in pairs if s.gold_label]
@@ -41,10 +41,15 @@ def recompute_metrics(scenarios: list[Scenario], predictions: list[Prediction]) 
         "false_alert_rate": M.false_alert_rate(gold, pred),
         **abst,
     }
-    if totals:
-        out["latency_p50_ms"] = percentile(totals, 50)
-        out["latency_p95_ms"] = percentile(totals, 95)
+    out["latency_p50_ms"] = percentile(totals, 50) if totals else None
+    out["latency_p95_ms"] = percentile(totals, 95) if totals else None
     return out
+
+
+def _same_value(fresh: float | None, saved: object) -> bool:
+    if fresh is None or saved is None:
+        return fresh is None and saved is None
+    return isinstance(saved, (int, float)) and abs(fresh - saved) <= TOLERANCE
 
 
 def _strings(x: Any) -> list[str]:
@@ -118,7 +123,7 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         for name, saved in rec["metrics"].items():
             if name not in fresh:
                 problems.append(f"metric {name} cannot be recomputed from predictions")
-            elif abs(fresh[name] - saved) > TOLERANCE:
+            elif not _same_value(fresh[name], saved):
                 problems.append(f"metric {name} does not recompute from predictions")
     return problems
 
