@@ -84,7 +84,14 @@
         "{py} -m pytest tests/test_data.py -q",
         "{py} -m contextlens.data.check_splits"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-02T22:15:25+00:00",
+      "verified": {
+        "commit": "5a690379d898ba3ee1535c7cf15c5a8260ef0cb7",
+        "passed": true,
+        "at": "2026-11-02T22:19:57+00:00"
+      },
+      "done_at": "2026-11-02T22:22:02+00:00"
     },
     {
       "id": "T1.2",

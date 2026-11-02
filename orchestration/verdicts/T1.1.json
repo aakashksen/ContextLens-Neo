@@ -1,0 +1,26 @@
+{
+  "task": "T1.1",
+  "commit": "5a690379d898ba3ee1535c7cf15c5a8260ef0cb7",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit, clean outside orchestration/", "result": "pass", "evidence": "git rev-parse HEAD matches; git status shows only orchestration/tasks.json modified"},
+    {"item": "evidence log shows acceptance ran and passed", "result": "pass", "evidence": "log: 8 passed, 'splits ok', RESULT PASS at the same commit"},
+    {"item": "reran acceptance commands", "result": "pass", "evidence": "pytest tests/test_data.py: 8 passed; python -m contextlens.data.check_splits: splits ok; full suite 31 passed; ruff clean"},
+    {"item": "all produced functions exist (load_dataset, load_gold, load_pairs, make_splits, dataset_hash) with required semantics", "result": "pass", "evidence": "loaders.py/splits.py read; gold origin='dataset' for QMSum and LongMemEval; Pair has the required fields"},
+    {"item": "required tests present and able to fail", "result": "pass", "evidence": "three named tests plus a loader test per dataset (longmemeval, ami, qmsum, decode); mutating dataset_hash to ignore text made the hash test fail; restored via git checkout"},
+    {"item": "DECODE/QMSum not in datasets/raw", "result": "pass", "evidence": "datasets/raw contains only ami and longmemeval"},
+    {"item": "no raw data committed; datasets/raw git-ignored", "result": "pass", "evidence": "git check-ignore datasets/raw matches; git ls-files lists only datasets/splits/*.json"},
+    {"item": "no AMI audio/video downloaded", "result": "pass", "evidence": "find for wav/mp4/avi/sph/mp3/flac under datasets/raw returned nothing; ami is 230M of annotation XML plus manual zip"},
+    {"item": "no legacy changes, secrets, or weakened tests", "result": "pass", "evidence": "diff touches only the data module, the new test, fixtures and manifests; grep for key/secret/token found nothing"},
+    {"item": "split manifests committed and match real data", "result": "pass", "evidence": "check_splits recomputed the hash and a fresh split on the real data (ami 171 conversations, 86/43/42; longmemeval 500)"}
+  ],
+  "own_tests": [
+    {"input": "make_splits([])", "result": "returns three empty lists, no crash"},
+    {"input": "real AMI and LongMemEval: seq contiguous, text nonempty, start_ms monotonic, gold counts", "result": "all hold; 500 gold scenarios, 479 with evidence (the rest are abstention questions)"},
+    {"input": "check_splits on a manifest with one id duplicated in two splits", "result": "reports 'a conversation is in two splits' and the fresh-split mismatch"},
+    {"input": "check_splits on a manifest with a corrupted hash", "result": "reports hash differs"},
+    {"input": "check_splits on an empty manifest directory", "result": "reports no manifests (nonzero exit path)"}
+  ],
+  "failures": [],
+  "notes": "load_pairs/DECODE and QMSum are verified only against fixtures, since the datasets are unapproved. The checker skips datasets whose raw data is absent and checks disjointness only; that is documented in its output. Dataset hash covers id, speaker and text only, not timings."
+}
