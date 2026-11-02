@@ -1,28 +1,47 @@
 VERDICT: DEFECTS
 
-Checked: docs/PLAN.md T1.1-T1.5, the T1.* verdicts, and an end-to-end run in a temp git repo (script at /tmp/e2e.py, nothing written to the real results/runs/). The run loaded the real 148 dev scenarios, replayed them with a simple fake assistant, computed metrics, wrote a record with write_run, and ran check_run on it. With only recomputable metrics, check_run passes (`[]` with min_n=100, split=dev). Splits, hashes, dirty check and the ids-exactly-once check behave as the verdicts say. I found no leakage: replay truncates at as_of_seq, and grounded_rate rejects future turns. I found no skipped tests.
+Second pass. I checked the four fix commits (86f8859, 1b693ad, 72d23e7, 76f2616) against the first review's defects. I also reran the full path on the real 148 dev and test scenarios in a temp git repo. The probe script is at `<local path>`. It wrote nothing to the real `results/runs/`. The suite passes (105 tests), ruff is clean, and the tree is clean.
 
-## Defect 1 (blocking for later phases): check_run rejects any saved metric it cannot recompute, so most metrics the plan needs for E1-E8 cannot be recorded
-- File: src/contextlens/eval/check_run.py, `recompute_metrics` (lines ~28-48) and the loop in `check_record` that emits "metric {name} cannot be recomputed from predictions".
-- Reproduce: in a temp repo, use the e2e script. Write a run whose metrics hold the recomputable ones plus `grounded_rate=1.0`, which is a correct value from `metrics.grounded_rate`. `check("E9", min_n=100, split="dev")` returns `['...: metric grounded_rate cannot be recomputed from predictions']`. Without the extra key it returns `[]`.
-- Recomputable set: macro_f1, false_alert_rate, abstain_when_insufficient, answer_when_answerable, latency_p50_ms, latency_p95_ms. Not recomputable: recall@k, mrr, grounded_rate, speaker_accuracy, tokens, cost, schema-valid rate and unsupported-claim rate, which PLAN names for T2.5, T3.3, T6.2 and T8.5.
-- Impact: every experiment's acceptance command (`check_run E1/E2/E5/E7 ...`) will fail if its record holds those metrics. The implementer's options are to drop them from the record, which hides the headline metrics, or to widen the recompute function without review. Claims can only cite metrics present in a record, so the headline numbers cannot reach `results/claims.json` honestly. E1 retrieval also does not fit at all: its output is ranked turns, not `Prediction` cards, and `check_record` requires Prediction rows. Fix: either extend `recompute_metrics` (grounded_rate, speaker_accuracy and token/cost sums from cards; retrieval ranks need a predictions format for E1), or have check_run recompute what it can and explicitly list unverifiable metrics as unverified. Do this before T2.5.
+## First-review defects: retested, fixed
+- D2 (length mismatch): `speaker_accuracy(["a","b","c"],["a"])` and `macro_f1(["update","update"],["update"])` now raise ValueError.
+- D3 (empty input): `mrr([])`, `speaker_accuracy([],[])`, `grounded_rate` with no findings, `abstention_accuracy([],[])` and `macro_f1([],[])` return None. `bootstrap_ci([],[])` raises ValueError. `claims.py` rejects a claim on a None metric. Saved None only matches a fresh None, and a saved 0.0 for an undefined metric is rejected.
+- D4 (stages/mode): `Context.stage_ms` flows into `stage_latency_ms`. Error cards carry `errored=True`. The card's mode is still the placeholder "recall"; this is now flagged rather than corrected. I count that as acceptable.
+- D1 (unrecomputable metrics): grounded_rate, unsupported_claim_rate, speaker_accuracy, tokens/cost per card, schema_valid_rate, recall@k, mrr, per-stage latency, and `[category=]` / `[origin=]` breakdowns now recompute. End-to-end on the real dev scenarios with a fake assistant, `check_run` returns `[]`. A made-up suffix (`macro_f1[category=bogus]`) and a wrong-k value (`recall@3` set to 0.5) are both rejected. Old prediction rows without the new fields still load.
 
-## Defect 2 (medium): zip-based metrics silently truncate on length mismatch and give a wrong, high score
-- File: src/contextlens/eval/metrics.py, `macro_f1`, `false_alert_rate`, `abstention_accuracy`, `speaker_accuracy` (lines ~27-75).
-- Reproduce: `speaker_accuracy(["a","b","c"], ["a"])` returns 1.0, since the extra predictions are dropped. `macro_f1(["update","update"], ["update"])` returns 0.25 and ignores the missing prediction. `speaker_accuracy(["a"], ["a","b"])` returns 0.5.
-- Impact: a misaligned list from a future experiment gives a plausible number with no error. The number would be saved in a record, and check_run would pass it if it uses the same function. Raise ValueError on unequal lengths, as `paired_bootstrap_diff` already does.
+## Defect A (blocking for E3 and E8, needs a design choice): check_run cannot verify a system comparison
+Files: `src/contextlens/eval/check_run.py` (`check`, lines ~168-180; the ids-exactly-once check in `check_record`), `src/contextlens/eval/records.py` (`write_run`).
 
-## Defect 3 (low): empty input returns 0.0, which looks like a real score
-- Same file: `mrr([])`, `grounded_rate` with no findings, `speaker_accuracy([], [])`, and both sides of `abstention_accuracy` with no cases all return 0.0. `bootstrap_ci([], [])` raises ZeroDivisionError.
-- Impact: an experiment that produces no findings, for example a model that abstains everywhere, reports grounded_rate=0.0, which is indistinguishable from "all findings ungrounded". It could end up as a claim. Return None or NaN, or raise, and document it.
+The record format holds one predictions file, and `check_record` requires each scenario id to appear exactly once. `check` verifies only the latest record. `intervals` is never read.
 
-## Defect 4 (low, becomes real in E7): Prediction.stage_latency_ms holds only "total"; the error card is always mode "recall"
-- File: src/contextlens/replay/runner.py lines ~46-52. The e2e run shows `{'total': 0}` for every prediction. `recompute_metrics` reads only "total".
-- Impact: T8.5 (E7) must report p50/p95 by stage, and PLAN T4.1 requires per-agent timing. Replay gives no stage hook (Context has no timer), so assistants cannot fill stages in through the documented interface. The abstained error card uses `mode="recall"` whatever was asked, so error cards for clarify/respond cases are mislabelled (a category breakdown by mode would be wrong). Neither blocks Phase 1 acceptance. Fix by letting the Assistant or Context report stage timings and by passing the intended mode through (or by recording the mode as unknown).
+Reproduced in the temp repo:
+1. Two systems in one record. Passing `preds + preds` to `write_run` fails with `n=296 differs from the split's 148 cases` and `prediction ids do not match ... exactly once each`. A paired record, which T4.2 asks for ("fixture writes a valid paired record"), cannot hold both systems' predictions.
+2. One record per system on the test split (E8, T9.1, seven systems). Writing two E8 test records gives `more than one test record and no override_note in config`. Seven systems would need six override notes. That defeats the once-only test rule, and it would hide a real second test run.
+3. One record per system on dev. I wrote an E3 record with `macro_f1=0.99` (wrong), then a correct E3 record. `check E3 --split dev` returns `[]`. Only `recs[-1]` is checked, so earlier records are never verified.
+4. Distinct experiment names do not escape the glob. `records_for` matches `E8-*Z.json`, so a record named `E8-recent-<ts>Z.json` joins the same group.
+5. Unverified comparison numbers. I wrote `intervals={"macro_f1": (0.99, 1.0), "diff_vs_baseline": (0.5, 0.6)}` with real metrics, and `check E4` returned `[]`. Paired bootstrap differences, McNemar p-values and CIs are plain assertions. TESTING.md requires them to compare systems ("Comparing systems"), and PLAN T1.2 says a saved metric must recompute. `claims.py` compares a claim against `metrics` only. An improvement claim from E3, E4, E5 or E8 therefore has no verified basis.
 
-## Not defects (checked)
-- The `Fake|stub` regex also matches model names that merely contain "fake" or "stub". This is conservative and fails closed.
-- Manifest trust, and a top-level-list claims.json raising AttributeError: both fail closed (nonzero exit).
-- Dataset hash ignores timings: documented.
-- README and docs claim no numbers. `results/claims.json` is `{"claims": []}` and `results/runs/` is empty, so no claim exceeds the runs.
+Impact: the acceptance commands `check_run E3 ... --split dev` and `check_run E8 ... --split test` either fail or pass without checking the comparison. This surfaces at T4.2 at the latest.
+
+Options (a design choice for the person or orchestrator, not made here):
+- (1) One record holds a map of system name to predictions file. `check_run` verifies every system (ids exactly once, metrics recompute per system) and recomputes `intervals`. Intervals can be recomputed deterministically: seed 13, 10,000 resamples, with `paired_bootstrap_diff` and `mcnemar_exact` taking correctness arrays derived from the rows. The once-only test rule then applies per record.
+- (2) One record per system with a `system` or `group` field. `check_run` verifies all non-superseded records for the group. The test-once rule counts per system, plus one comparison record whose `intervals` are recomputed from the referenced records' predictions.
+- (3) Keep records per system and require that comparison figures come only from a separate verified analysis. This needs a stated rule that `intervals` must not be cited in claims until verified, and check_run still needs to stop reading only `recs[-1]`.
+Whichever is chosen, PLAN T1.2 / T4.2 / T9.1 and `docs/TESTING.md` need amending, because the "one predictions file" assumption is baked into them.
+
+## Defect B (medium): rows can carry data from the future or be selectively omitted, and still pass the recompute
+Files: `src/contextlens/eval/check_run.py` (`_base_metrics`).
+
+New recompute paths trust fields in the predictions file with no cross-check. Reproduced on real dev:
+- Retrieval rows past `as_of_seq`. Rows with `ranked_turn_ids` listing the entire conversation, including turns after `as_of_seq`, give mrr=0.90 and recall@1=0.83 on dev. `check_run` accepts the record (`[]`). Ids not in the conversation (`"bogus"`) are also accepted. E1 retrieval does not go through `replay`, so nothing else enforces the cutoff. `grounded_flags` rejects future turns for cards, but `recall_at_k` and `mrr` do not. `speaker_accuracy` also counts card evidence on future turns, since it only skips ids missing from the conversation.
+- Mixed card and card-less rows. Half the rows were card-less (`ranked_turn_ids=[]`). `check_run` passed `macro_f1` and `answer_when_answerable` computed on only the carded half (macro_f1 0.09 vs 0.086 on all). Dropped or card-less rows silently leave the denominator. `n` still counts them.
+- `schema_valid_rate` over rows that have `raw_output`. With raw_output on only 1 of 148 rows, `schema_valid_rate=1.0` is accepted. Rows without raw_output are ignored, so failures can be omitted.
+- `claim_supported` all True is accepted with `grounded_rate=1.0`. The judgement is a saved input (the rubric judge plus person review described in TESTING.md), so `check_run` cannot verify it. Nothing ties it to a judge model or a review sample. This is unavoidable, but a headline grounded_rate is only as good as that field. The claim path should require a recorded judge and review before such a claim.
+
+Impact: honest-looking numbers can pass the gate that was meant to catch them. Suggested fix: reject `ranked_turn_ids` entries that are not turns at or before `as_of_seq`, and card evidence turns after `as_of_seq`. Either require all rows (or all rows of a stated kind) to carry cards, `raw_output`, and judgements, or put the row count behind each metric in `metrics`.
+
+## T1.3 Interfaces and scope
+- `Context(store, as_of_seq)` and `replay(...)` signatures hold, and `Context.stage_ms` has a default. But `Prediction.card` is now `Card | None`. PLAN T1.3 says `Prediction: scenario_id, card, stage_latency_ms`. Any later code doing `p.card.findings` needs a None guard, and none of it exists yet. `errored`, `ranked_turn_ids`, `claim_supported` and `raw_output` go beyond that interface. They are what the recompute fix needed and are used by tests, so I do not count them as bloat. The plan text should be updated to list them.
+- `check_run` now recomputes many metrics by category and origin (`name[category=x]`). Nothing in the plan asks for these breakdowns by name. T4.2 does ask for a category breakdown, so this is defensible.
+
+## Honesty
+No README or docs claim numbers, `results/claims.json` has no claims, and `results/runs/` is empty. Nothing exceeds the runs.
