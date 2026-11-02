@@ -157,7 +157,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_metrics.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-02T22:35:27+00:00",
+      "verified": {
+        "commit": "9b08073b1e71d2c46cca6f3898ec6ee60ea44445",
+        "passed": true,
+        "at": "2026-11-02T22:42:30+00:00"
+      },
+      "attempts": 2,
+      "reason": "c93b84f changed macro_f1 to average over labels present; docs/TESTING.md:31 defines it over the 4 fixed labels. Orchestrator's retry instruction caused this. Compare with sklearn using labels=LABELS instead",
+      "done_at": "2026-11-02T22:44:02+00:00"
     },
     {
       "id": "T1.5",

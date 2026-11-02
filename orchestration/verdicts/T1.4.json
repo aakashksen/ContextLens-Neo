@@ -1,0 +1,30 @@
+{
+  "task": "T1.4",
+  "commit": "9b08073b1e71d2c46cca6f3898ec6ee60ea44445",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; no uncommitted changes outside orchestration/", "result": "pass", "evidence": "git rev-parse HEAD = 9b08073...; git status shows only orchestration/tasks.json and orchestration/verdicts/T1.4.json"},
+    {"item": "Evidence log shows acceptance ran and passed; rerun", "result": "pass", "evidence": "evidence/T1.4.log: 11 passed, RESULT PASS; my rerun of pytest tests/test_metrics.py -q: 11 passed"},
+    {"item": "All produces exist: recall_at_k, mrr, macro_f1, false_alert_rate, grounded_rate, abstention_accuracy, speaker_accuracy, percentile, bootstrap_ci(values, groups, n=10000, seed=13), paired_bootstrap_diff, mcnemar_exact", "result": "pass", "evidence": "present in eval/metrics.py and eval/stats.py with the stated signature/defaults"},
+    {"item": "recall_at_k gold at rank 3: 0 at k=2, 1 at k=3", "result": "pass", "evidence": "test_recall_at_k_gold_rank_3 asserts exactly this"},
+    {"item": "mrr of ranks 1 and 2 is 0.75", "result": "pass", "evidence": "test_mrr asserts mrr([1,2]) == 0.75"},
+    {"item": "mcnemar_exact b=1,c=9 gives 0.0215 +-0.0005", "result": "pass", "evidence": "test asserts approx(0.0215, abs=0.0005); direct value 0.021484375. Also matched scipy binomtest for (0,0),(0,5),(5,5),(3,12),(1,9),(2,2)"},
+    {"item": "macro_f1 against scikit-learn on a fixed case", "result": "pass", "evidence": "tests compare to sklearn f1_score(labels=LABELS, average='macro', zero_division=0) on two fixed cases, plus a hand value. I ran 300 random cases incl. single-class and prediction-only labels against sklearn: 0 mismatches"},
+    {"item": "macro_f1 definition per docs/TESTING.md (unweighted mean over the four labels)", "result": "pass", "evidence": "LABELS fixed to 4; absent label scores 0 (perfect single-class gives 0.25, empty gives 0.0), consistent with the doc's literal wording"},
+    {"item": "bootstrap_ci resamples whole conversations", "result": "pass", "evidence": "implementation buckets by group and draws groups with replacement; test uses two homogeneous groups and asserts (0.0,1.0), which row-level resampling would not give. Deterministic with seed"},
+    {"item": "grounded_rate is 0 when a cited turn is after as_of_seq", "result": "pass", "evidence": "test_grounded_rate_future_turn_is_zero: t5 with as_of_seq=3 gives 0; unknown turn gives 0; supports=False gives 0; code uses seq > as_of_seq (boundary inclusive, matches 'at or before')"},
+    {"item": "false_alert_rate, abstention_accuracy (both sides), speaker_accuracy, percentile definitions vs TESTING.md", "result": "pass", "evidence": "false_alert denominator is non-contradiction cases; abstention returns both sides; percentile matches numpy linear interpolation at 0,25,50,95,100"},
+    {"item": "Diff hygiene", "result": "pass", "evidence": "git diff HEAD~3: only eval/metrics.py, eval/stats.py, tests/test_metrics.py, eval/__init__.py, pyproject dev extra (adds scikit-learn), tasks.json. No legacy/ changes, no secrets, no earlier tests weakened"}
+  ],
+  "own_tests": [
+    {"input": "300 random macro_f1 cases (1-12 items, 1-4 gold classes) vs sklearn with labels=LABELS", "result": "0 mismatches"},
+    {"input": "mcnemar_exact on (b,c) in (0,0),(0,5),(5,5),(3,12),(1,9),(2,2) vs scipy binomtest", "result": "identical, incl. 1.0 for no discordant pairs and for ties"},
+    {"input": "percentile on unsorted [3,1,2,5,4,10,7] at 0/25/50/95/100 and single-element list", "result": "matches numpy; single element returns itself"},
+    {"input": "recall_at_k with empty ranked, empty gold, k=0; mrr empty, all None, [1,3]", "result": "0.0, 0.0, 0.0; 0.0, 0.0, 0.667"},
+    {"input": "bootstrap_ci with one group of size 1; three singleton groups; unequal groups (9 zeros + one 1); paired diff; mismatched lengths", "result": "(0.2,0.2); (1.0,3.0); (0.0,1.0); (0.333,0.0,1.0); ValueError on length mismatch"},
+    {"input": "bootstrap_ci([], [])", "result": "raises ZeroDivisionError (unhelpful but not a silent wrong number)"},
+    {"input": "Mutation check: no-op edit then git checkout of stats.py", "result": "tree restored; status clean outside orchestration/"}
+  ],
+  "failures": [],
+  "notes": "Minor non-blocking: bootstrap_ci on empty input raises ZeroDivisionError rather than a clear ValueError; grounded_rate/mrr/speaker_accuracy return 0.0 on empty input and zip-based metrics (macro_f1, false_alert_rate, speaker_accuracy) silently truncate on length mismatch, so callers must pass aligned lists. bootstrap mean is a ratio of sums (weights conversations by size), a reasonable reading of 'mean'. The unsupported-claim rate and ECE listed in TESTING.md are not in T1.4's produces list, so not required here."
+}
