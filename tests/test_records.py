@@ -1,0 +1,183 @@
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from contextlens.eval import claims
+from contextlens.eval.check_run import check, recompute_metrics
+from contextlens.eval.records import split_hash, write_run
+from contextlens.replay.runner import Prediction
+from contextlens.schemas import ButtonRequest, Card, Conversation, EvidenceRef, Finding, Scenario, Turn
+
+
+def _scenario(sid: str, label: str | None) -> Scenario:
+    turns = [
+        Turn(id=f"{sid}-t{i}", conversation_id=sid, seq=i, speaker="A", text=f"w{i}",
+             start_ms=i * 1000, end_ms=i * 1000 + 900, source="synthetic")
+        for i in range(3)
+    ]
+    return Scenario(
+        id=sid, conversation=Conversation(id=sid, turns=turns, source="test"),
+        request=ButtonRequest(conversation_id=sid, as_of_seq=2), category="c",
+        gold_evidence_turn_ids=[], gold_label=label, gold_answer=None, origin="synthetic",  # type: ignore[arg-type]
+    )
+
+
+def _pred(sid: str, label: str | None, ms: int = 10) -> Prediction:
+    if label is None:
+        card = Card(mode="recall", status="abstained", findings=[])
+    else:
+        f = Finding(agent="a", kind="consistency", statement="s", label=label, confidence=0.5,  # type: ignore[arg-type]
+                    evidence=[EvidenceRef(turn_id=f"{sid}-t0", quote="w0", speaker="A", start_ms=0)])
+        card = Card(mode="clarify", status="answered", findings=[f])
+    return Prediction(scenario_id=sid, card=card, stage_latency_ms={"total": ms})
+
+
+GOLD = [("s1", "contradiction"), ("s2", "consistent"), ("s3", "update"), ("s4", "insufficient")]
+PRED = [("s1", "contradiction"), ("s2", "contradiction"), ("s3", "update"), ("s4", None)]
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True,
+                   capture_output=True)
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    d = tmp_path / "datasets/scenarios"
+    d.mkdir(parents=True)
+    for split in ("dev", "test"):
+        (d / f"{split}.jsonl").write_text(
+            "".join(_scenario(i, g).model_dump_json() + "\n" for i, g in GOLD), encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    return tmp_path
+
+
+def _run(root: Path, split: str = "dev", *, models=None, attempts=None, preds=None, dhash=None,
+         metrics=None, config=None, experiment: str = "E1", allow_dirty: bool = False) -> Path:
+    preds = preds if preds is not None else [_pred(s, g) for s, g in PRED]
+    scenarios = [_scenario(i, g) for i, g in GOLD]
+    return write_run(
+        experiment, split, config or {"labels_reviewed": True}, models or {"llm": "qwen-real"}, {"p": "v1"},
+        metrics if metrics is not None else recompute_metrics(scenarios, preds), {},
+        attempts if attempts is not None else [{"setting": "a", "ok": True}], preds,
+        dhash or split_hash(split, root), root=root, allow_dirty=allow_dirty)
+
+
+def _edit(path: Path, **changes) -> None:
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec.update(changes)
+    path.write_text(json.dumps(rec), encoding="utf-8")
+
+
+def test_good_run_passes(repo: Path) -> None:
+    _run(repo)
+    assert check("E1", root=repo) == []
+
+
+def test_write_run_refuses_dirty_tree(repo: Path) -> None:
+    (repo / "stray.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        _run(repo)
+    path = _run(repo, allow_dirty=True)
+    assert json.loads(path.read_text(encoding="utf-8"))["dirty"] is True
+
+
+def test_check_run_fails_when_dirty(repo: Path) -> None:
+    (repo / "stray.txt").write_text("x", encoding="utf-8")
+    _run(repo, allow_dirty=True)
+    assert any("dirty" in p for p in check("E1", root=repo))
+
+
+@pytest.mark.parametrize("name", ["fake-llm", "my_Stub"])
+def test_check_run_fails_on_fake_model(repo: Path, name: str) -> None:
+    _run(repo, models={"llm": name})
+    assert any("fake or stub" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_on_dataset_hash_mismatch(repo: Path) -> None:
+    _run(repo, dhash="0" * 64)
+    assert any("dataset_hash" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_when_commit_not_ancestor(repo: Path) -> None:
+    _edit(_run(repo), git_commit="1" * 40)
+    assert any("ancestor" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_when_n_differs_from_split(repo: Path) -> None:
+    _edit(_run(repo), n=3)
+    assert any("differs from the split" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_below_min_n(repo: Path) -> None:
+    _run(repo)
+    assert any("min-n" in p for p in check("E1", root=repo, min_n=5))
+
+
+def test_check_run_fails_when_attempts_empty(repo: Path) -> None:
+    _run(repo, attempts=[])
+    assert any("attempts" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_when_predictions_missing(repo: Path) -> None:
+    path = _run(repo)
+    (repo / json.loads(path.read_text(encoding="utf-8"))["predictions_path"]).unlink()
+    assert any("predictions" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_when_metric_does_not_recompute(repo: Path) -> None:
+    _run(repo, metrics={"macro_f1": 0.123})
+    assert any("macro_f1" in p for p in check("E1", root=repo))
+
+
+def test_check_run_fails_for_unrecomputable_metric(repo: Path) -> None:
+    _run(repo, metrics={"mystery": 1.0})
+    assert any("cannot be recomputed" in p for p in check("E1", root=repo))
+
+
+def test_recompute_matches_saved_metrics(repo: Path) -> None:
+    path = _run(repo)
+    saved = json.loads(path.read_text(encoding="utf-8"))["metrics"]
+    scenarios = [_scenario(i, g) for i, g in GOLD]
+    fresh = recompute_metrics(scenarios, [_pred(s, g) for s, g in PRED])
+    assert saved == fresh
+    assert fresh["false_alert_rate"] == pytest.approx(1 / 3)
+    assert fresh["abstain_when_insufficient"] == 1.0
+
+
+def test_second_test_record_needs_override_note(repo: Path) -> None:
+    _run(repo, "test")
+    assert check("E1", root=repo, split="test") == []
+    _run(repo, "test")
+    assert any("override_note" in p for p in check("E1", root=repo, split="test"))
+    _run(repo, "test", config={"labels_reviewed": True, "override_note": "rerun after label fix"})
+    assert check("E1", root=repo, split="test") != []  # the middle record still lacks a note
+
+
+def _write_claims(root: Path, items: list[dict]) -> None:
+    (root / "results").mkdir(exist_ok=True)
+    (root / "results/claims.json").write_text(json.dumps({"claims": items}), encoding="utf-8")
+
+
+def test_empty_claims_pass(repo: Path) -> None:
+    _write_claims(repo, [])
+    assert claims.check_claims(repo) == []
+
+
+def test_claim_without_matching_run_fails(repo: Path) -> None:
+    _write_claims(repo, [{"id": "c1", "run_id": "E1-nope", "metric": "macro_f1", "value": 0.5}])
+    assert any("no run record" in p for p in claims.check_claims(repo))
+
+
+def test_claim_value_must_equal_metric_in_run(repo: Path) -> None:
+    path = _run(repo)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    good = {"id": "c1", "run_id": rec["run_id"], "metric": "macro_f1", "value": rec["metrics"]["macro_f1"]}
+    _write_claims(repo, [good])
+    assert claims.check_claims(repo) == []
+    _write_claims(repo, [{**good, "value": good["value"] + 0.01}])
+    assert any("value differs" in p for p in claims.check_claims(repo))
