@@ -296,11 +296,7 @@ def _dev_scenario(i: int, cat: str, label: str | None, lines: list[str]) -> Scen
     return s.model_copy(update={"id": cid, "conversation": conv, "request": s.request.model_copy(update={"conversation_id": cid})})
 
 
-@pytest.fixture
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
-    from contextlens.eval import series as ser
-
-    monkeypatch.setattr(ser, "RESAMPLES", 100)
+def _build_repo(tmp_path: Path) -> Repo:
     root = tmp_path / "repo"
     d = root / "datasets/scenarios"
     d.mkdir(parents=True)
@@ -320,13 +316,44 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
     return Repo(root, tmp_path / "base")
 
 
+@pytest.fixture
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
+    from contextlens.eval import series as ser
+
+    monkeypatch.setattr(ser, "RESAMPLES", 100)
+    return _build_repo(tmp_path)
+
+
+@pytest.fixture(scope="module")
+def finished_run(tmp_path_factory: pytest.TempPathFactory):
+    """One default run, made once. Tests that only read its records, or damage them on purpose, use a copy."""
+    from contextlens.eval import series as ser
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ser, "RESAMPLES", 100)
+        built = _build_repo(tmp_path_factory.mktemp("e4shared"))
+        said: list[str] = []
+        result = built.run(say=said.append)
+    return built, result, said
+
+
+@pytest.fixture
+def run_copy(finished_run, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from contextlens.eval import series as ser
+
+    monkeypatch.setattr(ser, "RESAMPLES", 100)
+    built, result, said = finished_run
+    shutil.copytree(built.root, tmp_path / "copy")
+    return Repo(tmp_path / "copy", built.base), result, said
+
+
 def _records(root: Path) -> dict[str, dict]:
     recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((root / "results/runs").glob("E4-*.json"))]
     return {r["scenario_source"]: r for r in recs}
 
 
-def test_the_run_writes_valid_records_for_both_sources(repo: Repo) -> None:
-    result = repo.run()
+def test_the_run_writes_valid_records_for_both_sources(run_copy) -> None:
+    repo, result, _ = run_copy
     assert result["complete"] and result["winner"] in {"lr0.001_ep2", "lr0.003_ep2"}
     assert check("E4", root=repo.root, min_n=1, split="dev") == []
     recs = _records(repo.root)
@@ -346,8 +373,8 @@ def test_the_run_writes_valid_records_for_both_sources(repo: Repo) -> None:
     assert any((repo.root / "models/e4").glob("*/label_map.json"))
 
 
-def test_decode_rows_hold_ids_and_labels_only_and_check_run_enforces_it(repo: Repo) -> None:
-    repo.run()
+def test_decode_rows_hold_ids_and_labels_only_and_check_run_enforces_it(run_copy) -> None:
+    repo, _, _ = run_copy
     rec = _records(repo.root)["decode"]
     for rel in rec["predictions"].values():
         for line in (repo.root / rel).read_text(encoding="utf-8").splitlines():
@@ -362,8 +389,9 @@ def test_decode_rows_hold_ids_and_labels_only_and_check_run_enforces_it(repo: Re
     assert any("ids and metrics only" in p for p in check("E4", root=repo.root, split="dev"))
 
 
-def test_a_tampered_ece_is_rejected_and_an_honest_one_is_not(repo: Repo) -> None:
-    repo.run()
+def test_a_tampered_ece_is_rejected_and_an_honest_one_is_not(run_copy) -> None:
+    repo, _, _ = run_copy
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
     run_json = next(p for p in (repo.root / "results/runs").glob("E4-*.json")
                     if json.loads(p.read_text(encoding="utf-8"))["scenario_source"] == "scenarios")
     rec = json.loads(run_json.read_text(encoding="utf-8"))
@@ -482,9 +510,8 @@ def test_fit_reports_seconds_per_epoch_and_no_memory_figure_without_a_gpu(tmp_pa
     assert all("epoch_seconds" in m for m in logged) and not any("peak_gpu_memory_mb" in m for m in logged)
 
 
-def test_the_first_finished_search_run_prints_its_speed_and_memory(repo: Repo) -> None:
-    said: list[str] = []
-    repo.run(say=said.append)
+def test_the_first_finished_search_run_prints_its_speed_and_memory(run_copy) -> None:
+    repo, _, said = run_copy
     first = [m for m in said if m.startswith("FIRST SEARCH RUN DONE")]
     assert len(first) == 1 and "s/epoch" in first[0] and "not measured: no GPU" in first[0] and "lr0.001_ep2" in first[0]
     assert said.index(first[0]) < said.index("training lr0.003_ep2")
