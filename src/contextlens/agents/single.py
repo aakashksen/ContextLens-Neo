@@ -161,9 +161,9 @@ def fit_turns(turns: list[Turn], max_tokens: int) -> list[Turn]:
 
 
 _NUMBER_WORDS = frozenset(
-    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
-    "seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand "
-    "million billion".split()
+    "billion eight eighteen eighty eleven fifteen fifty five forty four fourteen hundred million nine "
+    "nineteen ninety one seven seventeen seventy six sixteen sixty ten thirteen thirty thousand three "
+    "twelve twenty two zero".split()
 )
 _TOKEN = re.compile(r"\d+(?:\.\d+)?|[a-z]+")
 
