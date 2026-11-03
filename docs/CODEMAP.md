@@ -12,6 +12,7 @@ Entry points were read from the code. Module paths are under `src/contextlens/` 
 - `data/`: `loaders.py` `load_dataset()` reads a public dataset by name into conversations.
 - `eval/`: `records.py` `write_run()` writes a run record; `metrics.py` holds the metric functions.
 - `experiments/`: one script per experiment: `e1_retrieval.py` `main()`, `e2_context.py` `main()`, `e4_consistency.py` `main()`, `e9_study.py` `main(argv)`.
+  `judge_check.py` `main()` is a runner, not an experiment: the cloud grader re-grades a sample of the local judge's claims.
 - `guard/`: `citations.py` `guard_card()` keeps only findings whose citations are real turns that quote them.
 - `llm/`: `client.py` `LLMClient` protocol; `OllamaClient` for local models, `FakeLLM` for tests.
 - `memory/`: `store.py` `TranscriptStore` (in-memory and Postgres); `extract.py` `MemoryExtractor` builds memory items.
