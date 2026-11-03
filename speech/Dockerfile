@@ -1,14 +1,15 @@
-# CPU build by default. A GPU build is a different base and a flag, untested here:
-#   docker build --build-arg BUILD_BASE=nvidia/cuda:12.4.1-devel-ubuntu22.04 \
-#                --build-arg RUNTIME_BASE=nvidia/cuda:12.4.1-runtime-ubuntu22.04 \
-#                --build-arg GGML_CUDA=ON speech
-# and run it with a GPU (docker run --gpus all). The service reports "gpu:<name>" or "cpu" at start-up
-# and in the x-compute-backend gRPC header.
+# CPU build by default (compose service "speech"). The GPU image (compose service "speech-gpu",
+# profile "gpu") is the same file with CUDA bases and GGML_CUDA=ON:
+#   docker compose --profile gpu build speech-gpu
+# The CUDA runtime is Ubuntu 24.04 too, because the runtime stage installs the 24.04 gRPC packages.
+# The service reports "gpu:<name>" only if whisper.cpp initialised that GPU, else "cpu", at start-up
+# and in the x-compute-backend gRPC header. ctest gates both builds.
 ARG BUILD_BASE=ubuntu:24.04
 ARG RUNTIME_BASE=ubuntu:24.04
 
 FROM ${BUILD_BASE} AS build
 ARG GGML_CUDA=OFF
+ARG CUDA_ARCHS=75;86;89
 ARG WHISPER_CPP_TAG=v1.7.6
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       build-essential cmake pkg-config git ca-certificates \
@@ -20,11 +21,11 @@ COPY CMakeLists.txt ./
 COPY proto proto
 COPY src src
 COPY tests tests
-RUN cmake -S . -B build -DWHISPER_DIR=/opt/whisper.cpp -DGGML_CUDA=${GGML_CUDA} \
+RUN cmake -S . -B build -DWHISPER_DIR=/opt/whisper.cpp -DGGML_CUDA=${GGML_CUDA}       $( [ "${GGML_CUDA}" = ON ] && echo "-DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHS}" ) \
     && cmake --build build -j"$(nproc)" \
     && ctest --test-dir build --output-on-failure
 
-FROM ${BUILD_BASE} AS model
+FROM ubuntu:24.04 AS model
 ARG MODEL_REVISION=5359861c739e955e79d9a303bcbc70fb988958b1
 ARG MODEL_SHA256=921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \

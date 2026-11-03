@@ -1,22 +1,21 @@
 #include "transcriber.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <stdexcept>
 #include <thread>
 
-#include "ggml-backend.h"
+#include "backend_log.h"
 #include "whisper.h"
 
 namespace {
 
-std::string detect_backend() {
-  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
-      return std::string("gpu:") + ggml_backend_dev_name(dev);
-    }
-  }
-  return "cpu";
+// whisper.cpp logs which backend it initialised; keep that text to report what it really used.
+std::string g_init_log;
+
+void capture_log(ggml_log_level level, const char* text, void*) {
+  g_init_log += text;
+  if (level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR) std::fputs(text, stderr);
 }
 
 std::string trim(const std::string& s) {
@@ -31,9 +30,12 @@ std::string trim(const std::string& s) {
 Transcriber::Transcriber(const std::string& model_path) {
   whisper_context_params cp = whisper_context_default_params();
   cp.use_gpu = true;  // falls back to CPU by itself when no GPU backend is present
+  g_init_log.clear();
+  whisper_log_set(capture_log, nullptr);
   ctx_ = whisper_init_from_file_with_params(model_path.c_str(), cp);
   if (!ctx_) throw std::runtime_error("cannot load whisper model: " + model_path);
-  backend_ = detect_backend();
+  backend_ = backend_from_log(g_init_log);
+  g_init_log.clear();
 }
 
 Transcriber::~Transcriber() {

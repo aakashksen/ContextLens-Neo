@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 
+#include "backend_log.h"
 #include "ring_buffer.h"
 #include "vad.h"
 
@@ -85,6 +86,17 @@ static void speech_between_silence_yields_one_utterance() {
   }
 }
 
+static void backend_is_gpu_only_when_whisper_reports_using_it() {
+  CHECK(backend_from_log("whisper_init: loading\n") == "cpu");
+  CHECK(backend_from_log("whisper_backend_init_gpu: no GPU found\n") == "cpu");
+  CHECK(backend_from_log("whisper_backend_init_gpu: using CUDA0 backend\n") == "gpu:CUDA0");
+  // a GPU that was registered but failed to initialise is not in use
+  CHECK(backend_from_log("whisper_backend_init_gpu: using CUDA0 backend\n"
+                         "whisper_backend_init_gpu: failed to initialize CUDA0 backend\n") == "cpu");
+  // other backends (accelerators) are not the GPU
+  CHECK(backend_from_log("whisper_backend_init: using BLAS backend\n") == "cpu");
+}
+
 int main() {
   struct T {
     const char* name;
@@ -96,6 +108,7 @@ int main() {
       {"low noise yields no segments", low_noise_yields_no_segments},
       {"gate opens on loud and closes after hangover", gate_opens_on_loud_and_closes_after_hangover},
       {"speech between silence yields one utterance", speech_between_silence_yields_one_utterance},
+      {"backend is gpu only when whisper reports using it", backend_is_gpu_only_when_whisper_reports_using_it},
   };
   for (auto& t : tests) {
     int before = failures;

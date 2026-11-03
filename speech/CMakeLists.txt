@@ -10,7 +10,7 @@ endif()
 enable_testing()
 
 # Audio ring buffer and voice activity gate: no third-party dependencies.
-add_library(speech_core src/ring_buffer.cpp src/vad.cpp)
+add_library(speech_core src/ring_buffer.cpp src/vad.cpp src/backend_log.cpp)
 target_include_directories(speech_core PUBLIC src)
 
 add_executable(test_core tests/test_core.cpp)

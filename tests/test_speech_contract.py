@@ -51,11 +51,11 @@ def _stubs(tmp_path):
         sys.path.remove(str(out))
 
 
-def _transcribe(tmp_path, pcm: bytes):
+def _transcribe(tmp_path, pcm: bytes, addr: str | None = None):
     import grpc
 
     pb, pb_grpc = _stubs(tmp_path)
-    addr = os.environ.get("SPEECH_ADDR", "localhost:50051")
+    addr = addr or os.environ.get("SPEECH_ADDR", "localhost:50051")
     with grpc.insecure_channel(addr) as channel:
         grpc.channel_ready_future(channel).result(timeout=30)
         call = pb_grpc.SpeechStub(channel).Transcribe(
@@ -83,3 +83,15 @@ def test_fixture_wav_returns_the_expected_phrase(tmp_path):
 def test_silence_returns_no_segments(tmp_path):
     segments, _ = _transcribe(tmp_path, bytes(16000 * 2 * 3))
     assert segments == []
+
+
+@pytest.mark.real
+@pytest.mark.gpu
+def test_gpu_service_runs_on_the_gpu_and_transcribes(tmp_path):
+    # `docker compose --profile gpu up -d speech-gpu` (host port 50052). Fails if it fell back to CPU.
+    addr = os.environ.get("SPEECH_GPU_ADDR", "localhost:50052")
+    segments, meta = _transcribe(tmp_path, _read_wav(), addr)
+    assert meta["x-compute-backend"].startswith("gpu:"), meta["x-compute-backend"]
+    text = " ".join(s.text for s in segments).lower()
+    assert "budget review" in text
+    assert "thursday" in text

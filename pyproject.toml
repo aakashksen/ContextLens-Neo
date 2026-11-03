@@ -22,7 +22,10 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-m 'not real'"
-markers = ["real: needs a GPU, Ollama, or a network; runs only when a task asks for it"]
+markers = [
+  "real: needs a GPU, Ollama, or a network; runs only when a task asks for it",
+  "gpu: needs the GPU service and a GPU turn; runs only when -m names gpu",
+]
 
 [tool.ruff]
 extend-exclude = ["legacy"]
