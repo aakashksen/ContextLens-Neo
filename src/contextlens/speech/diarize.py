@@ -94,8 +94,9 @@ class Diarizer:
         self._offset_ms = 0  # stream times restart at 0 on each new stream; turn times keep running
 
     def set_backend(self, backend: SpeakerBackend | WindowBackend) -> None:
-        self.backend = backend
-        self.background = hasattr(backend, "spans")
+        background = hasattr(backend, "spans")  # outside the lock: a property here may call back into us
+        with self._mu:
+            self.backend, self.background = backend, background
 
     def new_stream(self) -> None:
         with self._mu:
@@ -117,13 +118,14 @@ class Diarizer:
     def assign(self, segments: list[Segment]) -> list[Turn]:
         with self._mu:
             audio, audio_start = bytes(self._audio), self._audio_start_ms
+            backend, background = self.backend, self.background
         turns = []
         for seg in segments:
             speaker, confidence = "unknown", 0.0
-            if self.backend is not None and not self.background:
+            if backend is not None and not background:
                 lo = max(0, (seg.start_ms - audio_start) * BYTES_PER_MS)
                 hi = max(lo, (seg.end_ms - audio_start) * BYTES_PER_MS)
-                speaker, confidence = self.backend.label(audio[lo:hi], seg.start_ms, seg.end_ms)
+                speaker, confidence = backend.label(audio[lo:hi], seg.start_ms, seg.end_ms)
             turn = Turn(
                 id=f"{self.conversation_id}-t{self.next_seq}",
                 conversation_id=self.conversation_id,
