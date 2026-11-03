@@ -20,6 +20,7 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 RECORD_FILE = re.compile(
     r"^\?\? results/runs/([^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)|\.[^/ ]+\.tmp)$"
+    r"|^(\?\?| M) results/error-analysis-e2\.md$"  # E2 writes it before its cloud record, so it must not block that record
 )
 
 
@@ -39,7 +40,7 @@ def write_atomic(path: Path, text: str) -> None:
 
 
 def is_dirty(root: Path) -> bool:
-    """Uncommitted changes, except new untracked run-record and predictions files."""
+    """Uncommitted changes, except new untracked run-record and predictions files and E2's error analysis."""
     out = git(root, "status", "--porcelain", "-uall")
     if out.returncode != 0:
         raise RuntimeError(f"git status failed: {out.stderr.strip()}")

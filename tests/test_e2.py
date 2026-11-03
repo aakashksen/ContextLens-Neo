@@ -654,3 +654,66 @@ def test_the_cloud_stage_alone_needs_a_committed_unchanged_local_record(repo: Pa
     with pytest.raises(e2.RunBroken, match="committed"):
         _alone(repo, first["records"]["local"].stem, cloud)  # the local record is only on disk
     assert llm.raw_calls == 0
+
+
+# ---------------------------------------------------------------- the error analysis
+
+STATED = ["Dev labels are unreviewed", "unreviewed judgements", "nearly the same turns", "high by construction",
+          "coordinator decided afterward", "under half of answerable cases", "Known limits of the rule",
+          "docs/interview-notes.md"]
+
+
+def _commit_records(repo: Path) -> None:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "records")
+
+
+def test_the_analysis_is_built_from_saved_rows_alone_for_both_records(repo: Path) -> None:
+    llm, cloud = _cloud()
+    result, _ = _go(repo, cloud=cloud)
+    (repo / e2.ERROR_ANALYSIS_REL).unlink()
+    _commit_records(repo)
+    before = {p.name: p.read_bytes() for p in (repo / "results/runs").iterdir()}
+    calls = llm.raw_calls
+    out = e2.analysis_only(root=repo, local_run=result["records"]["local"].stem, cloud_run=result["records"]["cloud"].stem)
+    text = out.read_text(encoding="utf-8")
+    assert out == repo / e2.ERROR_ANALYSIS_REL and llm.raw_calls == calls
+    assert result["records"]["local"].stem in text and result["records"]["cloud"].stem in text
+    assert f"{result['winner']}_cloud" in text and "Prompt-injection" in text and "Number rule" in text
+    for phrase in STATED:
+        assert phrase in text, phrase
+    assert "Not measured" in text and "answer rate" in text.lower()
+    assert before == {p.name: p.read_bytes() for p in (repo / "results/runs").iterdir()}
+
+
+def test_the_analysis_from_records_matches_the_one_a_full_run_writes(repo: Path) -> None:
+    _, cloud = _cloud()
+    result, _ = _go(repo, cloud=cloud)
+    written = (repo / e2.ERROR_ANALYSIS_REL).read_text(encoding="utf-8")
+    _commit_records(repo)
+    out = e2.analysis_only(root=repo, local_run=result["records"]["local"].stem, cloud_run=result["records"]["cloud"].stem)
+    again = out.read_text(encoding="utf-8")
+    for phrase in STATED:
+        assert phrase in written and phrase in again
+    assert written.count("- ") > 5 and set(written.splitlines()) >= {ln for ln in again.splitlines() if ln.startswith("## ")}
+
+
+def test_the_local_analysis_is_on_disk_before_a_cloud_failure(repo: Path) -> None:
+    llm = Scripted("test-cloud")
+    cloud = e2.Cloud(llm, lambda: llm.raw_calls * 3, budget=len(SUBSET_IDS) + 1)
+    with pytest.raises(e2.RunBroken, match="call budget"):
+        _go(repo, cloud=cloud)
+    text = (repo / e2.ERROR_ANALYSIS_REL).read_text(encoding="utf-8")
+    assert "Number rule" in text and "no cloud record" in text
+    for phrase in STATED:
+        assert phrase in text, phrase
+
+
+def test_the_analysis_command_needs_a_local_run_and_no_model(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    with pytest.raises(SystemExit):
+        e2.main(["--analysis-only"])
+    with pytest.raises(SystemExit):
+        e2.main(["--analysis-only", "--local-run", "x", "--cloud-only"])
+    monkeypatch.setattr(e2.shutil, "which", lambda name: pytest.fail("the analysis must not look for claude"))
+    assert e2.main(["--analysis-only", "--local-run", "E2-none"]) == 2
+    assert "E2 analysis stopped" in capsys.readouterr().err

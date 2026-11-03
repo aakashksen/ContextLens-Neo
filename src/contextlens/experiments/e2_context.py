@@ -517,13 +517,43 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
             "passed_but_unsupported_with_limit_word": with_limit_word}
 
 
+STATED_LIMITS = [
+    "Dev labels are unreviewed (`labels_reviewed` is false), so every figure here is provisional.",
+    "Grounded rates rest on the local judge's unreviewed judgements; no person has checked a sample.",
+    "recent, full and retrieval may see nearly the same turns in short dev conversations, so their differences are small.",
+    "speaker_accuracy is high by construction: the citation guard rewrites the evidence speaker from the store.",
+    "E2's fixed rule picked `{winner}`. The coordinator decided afterward, having seen the dev results, to carry "
+    "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
+    "cases (see the answer rates below). That choice was made on dev results, not by the rule.",
+]
+NUMBER_RULE_LIMITS = (
+    "Known limits of the rule: a lone one, half, dozen and ordinals are not number tokens, and punctuation does not break "
+    "a run of number tokens (`_runs` in `agents/single.py`). `docs/interview-notes.md` does not exist yet, so no "
+    "interview-based limits are recorded.")
+NOT_MEASURED = [
+    "How many findings the number rule dropped, and whether each dropped finding was true: only the `missing` note on "
+    "the card is saved, so the counts below are of cases carrying that note, and the dropped text is not in the rows.",
+    "Whether an injected claim reached a suggestion: the count is a word-overlap proxy, and the flagged suggestions are "
+    "listed for a person to read.",
+]
+
+
 def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
-                   winner: str) -> str:
+                   winner: str, metrics: dict[str, dict[str, Any]] | None = None, records: list[str] | None = None,
+                   cloud_done: bool = False) -> str:
     by_id = {s.id: s for s in scenarios}
     lines = ["# E2 error analysis: context strategies on dev", "",
-             "Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. `labels_reviewed` is false "
-             "and no person has reviewed the judge, so these are provisional.", "",
-             f"Best local strategy by the fixed rule: {winner}.", "", "## Health", ""]
+             "Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. Only scenario text is quoted.",
+             "", f"Records: {', '.join(records) if records else 'this run'}. "
+             + ("" if cloud_done else "There is no cloud record yet; the cloud part is added when the cloud stage writes it."),
+             "", "## What this rests on", ""]
+    lines += [f"- {x.format(winner=winner)}" for x in STATED_LIMITS]
+    lines += ["", "## Not measured from the saved rows", ""] + [f"- {x}" for x in NOT_MEASURED]
+    lines += ["", "## Answer rate on answerable cases", ""]
+    for n, m in (metrics or {}).items():
+        v = m.get("answer_when_answerable")
+        lines.append(f"- {n}: answer rate {'not recorded' if v is None else f'{v:.3f}'}")
+    lines += ["", "## Health", ""]
     lines += [f"- {n}: {json.dumps(h)}" for n, h in health.items()]
     lines += ["", "## Unsupported findings by category", ""]
     for name, preds in systems.items():
@@ -532,9 +562,7 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
             if p.card:
                 count[by_id[p.scenario_id].category] += sum(not ok for ok in p.claim_supported or [])
         lines.append(f"- {name}: " + (", ".join(f"{c} {v}" for c, v in sorted(count.items()) if v) or "none"))
-    lines += ["", "## Number rule", "",
-              "Known limits of the rule: a lone one, half, dozen and ordinals are not number tokens, and punctuation does "
-              "not break a run of number tokens (`_runs` in `agents/single.py`).", ""]
+    lines += ["", "## Number rule", "", NUMBER_RULE_LIMITS, ""]
     for name, preds in systems.items():
         r = number_rule_check(scenarios, preds)
         lines.append(f"- {name}: dropped by the rule in {len(r['dropped'])} cases, {len(r['answerable_lost'])} of them "
@@ -764,6 +792,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     say(f"wrote {local_path.name}")
     result: dict[str, Any] = {"winner": winner, "records": {"local": local_path}, "calls_used": 0, "analysis_systems": systems}
 
+    _write_analysis(root, scenarios, systems, health, winner, metrics, [local_path.stem], False)  # before the cloud can fail
     try:
         if cloud is not None:
             _assert_writable(root, cloud)
@@ -772,10 +801,48 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
                 digest, subset, own_cloud, cold, gpu, gpu_mb, say, result, local_path.stem)
     except RunBroken as exc:
         raise RunBroken(f"{exc} (the local record {local_path.name} was written; there is no cloud record)") from exc
+    if "cloud" in result["records"]:
+        _write_analysis(root, scenarios, result["analysis_systems"], {**health, **result.pop("analysis_health")}, winner,
+                        {**metrics, **result.pop("analysis_metrics")}, [local_path.stem, result["records"]["cloud"].stem], True)
+    result.pop("analysis_systems")
+    return result
+
+
+def _write_analysis(root: Path, scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
+                    winner: str, metrics: dict[str, dict[str, Any]], records: list[str], cloud_done: bool) -> Path:
     out = root / ERROR_ANALYSIS_REL
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(out, error_analysis(scenarios, result.pop("analysis_systems"), health, winner))
-    return result
+    write_atomic(out, error_analysis(scenarios, systems, health, winner, metrics, records, cloud_done))
+    return out
+
+
+def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = None) -> Path:
+    """Write the error analysis from the saved predictions of committed records, with no model call."""
+    def load(run: str) -> dict[str, Any]:
+        path = root / RUNS_REL / f"{run}.json"
+        if not path.exists():
+            raise RunBroken(f"no record {path.relative_to(root).as_posix()}")
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        if rec["experiment"] != "E2" or rec["split"] != SPLIT:
+            raise RunBroken(f"{run} is not an E2 dev record")
+        return rec
+
+    def rows(rec: dict[str, Any]) -> dict[str, list[Prediction]]:
+        return {n: [Prediction.model_validate_json(ln) for ln in (root / p).read_text(encoding="utf-8").splitlines()]
+                for n, p in rec["predictions"].items()}
+
+    local = load(local_run)
+    systems, health, metrics = rows(local), dict(local["config"]["health"]), dict(local["metrics"])
+    if cloud_run:
+        cloud = load(cloud_run)
+        if cloud["config"].get("local_run") != local_run:
+            raise RunBroken(f"{cloud_run} was not made from {local_run}")
+        systems |= rows(cloud)
+        health |= cloud["config"]["health"]
+        metrics |= cloud["metrics"]
+    scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
+    return _write_analysis(root, scenarios, systems, health, local["config"]["winner"], metrics,
+                           [local_run, *([cloud_run] if cloud_run else [])], bool(cloud_run))
 
 
 def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
@@ -845,6 +912,8 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
     path = write_run("E2", SPLIT, config, models, {"recall": PROMPT_VERSION}, metrics, intervals, attempts, systems, digest,
                      comparisons=comparisons, subset=subset, scenario_source=SCENARIO_SOURCE, root=root, supersedes=supersedes)
     result["analysis_systems"] = {**result["analysis_systems"], f"{winner}_cloud": rows}
+    result["analysis_health"] = {f"{winner}_cloud": health}
+    result["analysis_metrics"] = {f"{winner}_cloud": metrics[f"{winner}_cloud"]}
     (root / PARTIAL_REL).unlink(missing_ok=True)  # the record holds them now
     say(f"wrote {path.name}")
     return path
@@ -966,7 +1035,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--supersedes", nargs="+", metavar="RUN_ID", default=[], help="earlier E2 records this run replaces")
     ap.add_argument("--cloud-only", action="store_true", help="run only the cloud stage for a committed local record")
     ap.add_argument("--local-run", metavar="RUN_ID", help="the committed local E2 record whose winner the cloud stage runs")
+    ap.add_argument("--analysis-only", action="store_true",
+                    help="write results/error-analysis-e2.md from the saved rows of --local-run (and --cloud-run); no model call")
+    ap.add_argument("--cloud-run", metavar="RUN_ID", help="with --analysis-only, the cloud E2 record made from --local-run")
     args = ap.parse_args(argv)
+    if args.analysis_only:
+        if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
+            ap.error("--analysis-only needs --local-run, and takes only --cloud-run besides")
+        try:
+            print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run))
+        except (RunBroken, OSError, ValueError, KeyError) as exc:
+            print(f"E2 analysis stopped: {exc}", file=sys.stderr)
+            return 2
+        return 0
+    if args.cloud_run:
+        ap.error("--cloud-run goes with --analysis-only")
     if args.cloud_only != bool(args.local_run) or (args.cloud_only and args.supersedes):
         ap.error("--cloud-only and --local-run go together, and take no --supersedes")
     if args.make_subset:
