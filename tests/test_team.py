@@ -226,11 +226,13 @@ def test_agents_do_not_share_private_context():
     assert "Ravi said Monday" in prompts["assistance"] and "Sue moved it" in prompts["assistance"]
     for private in ("The deadline is Monday", "moved the deadline to Wednesday", "<transcript>", "t2", "start_ms"):
         assert private not in prompts["assistance"]
-    # after a follow-up the specialist still sees only its own work
-    ls = llms([mem, mem], [con], [ask("memory"), PLAN])
+    # a follow-up to the other specialist, after memory used a tool, still shows it only its own work
+    ls = llms([get_turns, mem], [con, con], [ask("consistency"), PLAN])
     team, ctx, _ = build(ls, turns=t)
     team.answer(req(7), ctx)
-    assert "Sue moved it" not in str(ls["memory"].calls) and "Ravi said Monday" not in str(ls["consistency"].calls)
+    assert len(ls["consistency"].calls) == 2 and "zebra" in str(ls["memory"].calls)
+    assert "zebra" not in str(ls["consistency"].calls) and "zebra" not in str(ls["assistance"].calls)
+    assert "Ravi said Monday" not in str(ls["consistency"].calls)
 
 
 def test_followup_request_is_escaped_for_the_specialist():
