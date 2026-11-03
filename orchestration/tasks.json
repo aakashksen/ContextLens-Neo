@@ -566,7 +566,14 @@
       "acceptance": [
         "{py} -m pytest tests/test_api.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T07:44:16+00:00",
+      "verified": {
+        "commit": "2dbadc2a054f306818167685859ca190d01ba0c3",
+        "passed": true,
+        "at": "2026-11-03T07:56:51+00:00"
+      }
     },
     {
       "id": "T8.3",
@@ -703,7 +710,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_e9.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:44:17+00:00",
+      "verified": {
+        "commit": "51853f7f8af90509d1866035c3a2d7038095b56c",
+        "passed": true,
+        "at": "2026-11-03T08:02:38+00:00"
+      },
+      "attempts": 1,
+      "reason": "e9_study._t_interval falls back to 1.96 above 8 people (too-narrow interval, no warning); duplicate or both-condition rows for the same person and task are silently accepted",
+      "done_at": "2026-11-03T08:05:10+00:00"
     },
     {
       "id": "H4",
