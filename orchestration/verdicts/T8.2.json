@@ -1,0 +1,22 @@
+{
+  "task": "T8.2",
+  "commit": "4e0f436db30a7db53ad95ab5945277c1a7251426",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit, tree clean outside orchestration/", "result": "pass", "evidence": "git rev-parse HEAD = 4e0f436d...; git status --short empty in worktree (also after my mutations were restored by path)"},
+    {"item": "Repo test test_assign_never_sees_a_backend_without_its_flag catches the bug", "result": "pass", "evidence": "Reverted set_backend to the old order (backend assigned, then hasattr computed background): test FAILED (assert seen == {} at line 22). Restored with git checkout -- src/contextlens/speech/diarize.py."},
+    {"item": "Mutation: lock removed from set_backend (hasattr still hoisted)", "result": "pass", "evidence": "Repo test still passes with the lock removed (1 passed). The test guards the hoist of hasattr, not the lock. Reported in notes, not a failure. Restored by path."},
+    {"item": "Own deterministic test test_set_backend_race_between_backend_and_background now passes", "result": "pass", "evidence": "Ran test_own.py and test_own2.py from a temp dir with PYTHONPATH set to the worktree src: 57 passed. Needed a temp dir because pytest in the main folder puts the main src ahead on sys.path."},
+    {"item": "Natural stress run, no lost batch", "result": "pass", "evidence": "Copy of stress_race.py with N=3000: 'natural hits (default switch interval): 0 of 3000'. The full N=20000 run exceeded the time limit."},
+    {"item": "stream.py unlocked reads of diarizer.background and diarizer.backend (lines ~166, ~186) with set_backend", "result": "pass", "evidence": "Reasoned, plus the 57 own tests including backend-load tests. set_backend runs once, None to backend, and writes backend before background. schedule_speakers reads background: False (before the swap) returns early and only skips a speaker run, with no corruption (audio is not retained while backend is None, and the next schedule picks up). True means backend is already set, so _speaker_step's read of backend is non-None and has .spans. A backend never goes back to None or changes kind. No exception, no lost or corrupt batch found in any order. assign() reads both under the lock, and the hasattr call is outside the lock, so a spans property calling assign cannot deadlock."},
+    {"item": "Diff against bd7d9609 is only the fix, its test, and one docs sentence", "result": "pass", "evidence": "git diff bd7d9609 --stat: docs/datasets.md (+1 -1), src/contextlens/speech/diarize.py (+6 -4), tests/test_diarize_set_backend.py (+23). The docs sentence now reads 'has run (result under the 2026-11-03 run below)', which exists, and holds no timing."},
+    {"item": "Reran tests on CPU with CUDA_VISIBLE_DEVICES empty", "result": "pass", "evidence": "pytest tests/test_api.py tests/test_diarize_unavailable.py tests/test_no_raw_text.py tests/test_diarize_real.py tests/test_diarize_set_backend.py: 36 passed, 1 deselected (the real-marked test is deselected by default)."}
+  ],
+  "own_tests": [
+    {"input": "set_backend where the spans property calls assign on the way (deterministic race)", "result": "passes with the fix, fails with the old order"},
+    {"input": "Stress: 3000 rounds of a thread hammering assign() while set_backend runs", "result": "0 AttributeErrors"},
+    {"input": "Earlier scripts test_own.py and test_own2.py (57 tests: unlabelled early turns, speaker updates, API flows)", "result": "57 passed"}
+  ],
+  "failures": [],
+  "notes": "1) The repo test does not fail if only the lock is removed, because it only exercises the ordering of hasattr versus the stores. Without the lock, assign could in principle see the new backend with the old background=False between the two stores, and then call .label on a spans-only backend. I did not reproduce that by timing, and the lock does protect it by reasoning. A test that makes the stores themselves interleave would pin it. 2) stream.py reads background and backend outside the diarizer's lock; judged safe under the one-time None-to-backend swap with the write order backend then background, and relies on that order. 3) Running my scripts through pytest from the main folder picks up the main src first through the pytest pythonpath setting; I ran them from a temp dir to avoid that. 4) tests/test_diarize_real.py is real-marked and deselected, so only its collection ran. The datasets.md claim that it has run rests on the earlier-checked run record."
+}

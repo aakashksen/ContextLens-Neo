@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -17,7 +18,24 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
 
 
-RECORD_FILE = re.compile(r"^\?\? results/runs/[^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)$")
+RECORD_FILE = re.compile(
+    r"^\?\? results/runs/([^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)|\.[^/ ]+\.tmp)$"
+)
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Write beside the target, fsync, then rename. The temp name starts with a dot and ends in .tmp, so no
+    record glob (`*Z.json`) matches it; on failure it is removed and the target is untouched."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def is_dirty(root: Path) -> bool:
@@ -58,11 +76,11 @@ def write_local_manifest(source: str, scenarios: dict[str, list[Scenario]], root
     (root / directory).mkdir(parents=True, exist_ok=True)
     splits = {}
     for split, scs in scenarios.items():
-        (root / directory / f"{split}.jsonl").write_text("".join(s.model_dump_json() + "\n" for s in scs), encoding="utf-8")
+        write_atomic(root / directory / f"{split}.jsonl", "".join(s.model_dump_json() + "\n" for s in scs))
         splits[split] = {"hash": split_hash(split, root, source), "n": len(scs), "ids": [s.id for s in scs]}
     path = root / manifest_rel
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"kind": "scenarios", "source": source, "splits": splits}, indent=1) + "\n", encoding="utf-8")
+    write_atomic(path, json.dumps({"kind": "scenarios", "source": source, "splits": splits}, indent=1) + "\n")
     return path
 
 
@@ -78,7 +96,7 @@ def write_scenarios_manifest(root: Path = ROOT) -> Path:
         }
     path = root / MANIFEST_REL
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"kind": "scenarios", "splits": splits}, indent=1) + "\n", encoding="utf-8")
+    write_atomic(path, json.dumps({"kind": "scenarios", "splits": splits}, indent=1) + "\n")
     return path
 
 
@@ -119,7 +137,7 @@ def write_run(
     pred_paths = {}
     for name, rows in predictions.items():
         pred_path = runs / f"{run_id}.{name}.predictions.jsonl"
-        pred_path.write_text("".join(p.model_dump_json() + "\n" for p in rows), encoding="utf-8")
+        write_atomic(pred_path, "".join(p.model_dump_json() + "\n" for p in rows))
         pred_paths[name] = pred_path.relative_to(root).as_posix()
     record = {
         "run_id": run_id,
@@ -146,5 +164,5 @@ def write_run(
         "finished_at": now.isoformat(),
     }
     path = runs / f"{run_id}.json"
-    path.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+    write_atomic(path, json.dumps(record, indent=1) + "\n")
     return path

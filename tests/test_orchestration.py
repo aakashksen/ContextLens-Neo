@@ -327,6 +327,63 @@ class Tracks(Sandbox):
         self.assertEqual((data / "image.txt").read_text(), "keep me")
         self.assertFalse(linked.exists())
 
+    def ignore_outputs(self):
+        (self.root / ".gitignore").write_text("orchestration/\ndatasets/raw/\nmodels/\nmlruns/\nresults/calls.json\n__pycache__/\n")
+        self.git("add", ".gitignore")
+        self.git("commit", "-qm", "ignore outputs")
+
+    def test_models_written_in_a_worktree_survive_landing(self):
+        self.ignore_outputs()
+        self.assertEqual(self.ctl("start", "T1", "--worktree").returncode, 0)
+        worktree = Path(self.state("T1")["worktree"])
+        (worktree / "models" / "run").mkdir(parents=True)
+        (worktree / "models" / "run" / "best.pt").write_text("weights")
+        (self.root / "models" / "run" / "best.pt").read_text()  # one folder, seen from both sides
+        commit = self.build("T1", "one.txt", "1")
+        self.pass_gates("T1", commit)
+        self.assertEqual(self.ctl("land", "T1").returncode, 0)
+        self.assertEqual((self.root / "models" / "run" / "best.pt").read_text(), "weights")
+
+    def test_a_real_output_folder_from_before_the_fix_is_moved_on_landing(self):
+        self.ignore_outputs()
+        self.ctl("start", "T1", "--worktree")
+        worktree = Path(self.state("T1")["worktree"])
+        for folder in ("models", "mlruns"):
+            link = worktree / folder
+            os.rmdir(link) if os.path.isjunction(link) else link.unlink()
+            link.mkdir()
+            (link / "kept.txt").write_text(folder)
+        (worktree / "results").mkdir()
+        (worktree / "results" / "calls.json").write_text("7")
+        (worktree / "__pycache__").mkdir()
+        (worktree / "__pycache__" / "x.pyc").write_text("junk")
+        commit = self.build("T1", "one.txt", "1")
+        self.pass_gates("T1", commit)
+        out = self.ctl("land", "T1")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual((self.root / "models" / "kept.txt").read_text(), "models")
+        self.assertEqual((self.root / "mlruns" / "kept.txt").read_text(), "mlruns")
+        self.assertEqual((self.root / "results" / "calls.json").read_text(), "7")
+        self.assertFalse((self.root / "__pycache__").exists())
+
+    def test_a_differing_ignored_file_refuses_to_land_and_deletes_nothing(self):
+        self.ignore_outputs()
+        self.ctl("start", "T1", "--worktree")
+        worktree = Path(self.state("T1")["worktree"])
+        (self.root / "results").mkdir()
+        (self.root / "results" / "calls.json").write_text("main")
+        (worktree / "results").mkdir()
+        (worktree / "results" / "calls.json").write_text("worktree")
+        commit = self.build("T1", "one.txt", "1")
+        self.pass_gates("T1", commit)
+        out = self.ctl("land", "T1")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("nothing landed", out.stderr)
+        self.assertEqual((worktree / "results" / "calls.json").read_text(), "worktree")
+        self.assertEqual((self.root / "results" / "calls.json").read_text(), "main")
+        self.assertEqual(self.state("T1")["status"], "in_progress")
+        self.assertFalse((self.root / "one.txt").exists())
+
     def test_tracked_data_folder_links_only_the_ignored_children(self):
         (self.root / ".gitignore").write_text("orchestration/\ndatasets/raw/*\n!datasets/raw/pointer.dvc\n")
         data = self.root / "datasets" / "raw"
@@ -352,6 +409,37 @@ class Tracks(Sandbox):
         running = [subprocess.Popen([sys.executable, str(CTL), "start", t["id"]], env=env, stdout=subprocess.DEVNULL) for t in tasks]
         self.assertEqual([p.wait() for p in running], [0] * 12)
         self.assertEqual({self.state(t["id"])["status"] for t in tasks}, {"in_progress"})
+
+
+class AddDep(Sandbox):
+    def setUp(self):
+        super().setUp()
+        self.write([task("T1"), task("T2"), task("T3", deps=["T1"])])
+
+    def refused(self, *args):
+        before = (self.root / "orchestration" / "tasks.json").read_text()
+        out = self.ctl("add-dep", *args)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        self.assertEqual((self.root / "orchestration" / "tasks.json").read_text(), before)
+        return out.stderr
+
+    def test_adds_an_earlier_task_as_a_dependency(self):
+        out = self.ctl("add-dep", "T3", "T2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.state("T3")["deps"], ["T1", "T2"])
+
+    def test_refuses_an_unknown_task_or_dependency(self):
+        self.assertIn("no such task", self.refused("T9", "T1"))
+        self.assertIn("no such task", self.refused("T3", "T9"))
+
+    def test_refuses_a_dependency_later_in_the_list_or_itself(self):
+        self.assertIn("later", self.refused("T1", "T3"))
+        self.assertIn("later", self.refused("T2", "T2"))
+
+    def test_refuses_a_task_already_started_or_done(self):
+        for status in ("in_progress", "done", "blocked"):
+            self.write([task("T1"), {**task("T2"), "status": status}])
+            self.assertIn(status, self.refused("T2", "T1"))
 
 
 class PlanMatchesState(unittest.TestCase):

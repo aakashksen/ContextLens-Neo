@@ -6,6 +6,7 @@ __pycache__/
 !.env.example
 node_modules/
 datasets/raw/
+datasets/cards/
 models/
 mlruns/
 *.pth
@@ -18,3 +19,4 @@ orchestration/run_loop.log
 *.egg-info/
 orchestration/.state.lock
 orchestration/.land.lock
+results/study/

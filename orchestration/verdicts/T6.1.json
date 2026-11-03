@@ -1,0 +1,27 @@
+{
+  "task": "T6.1",
+  "commit": "6968ed45fb6b8b23c83092b5885730532d4ae6c5",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit, worktree clean", "result": "pass", "evidence": "git rev-parse HEAD = 6968ed45...; git status --short empty at start and after all mutations were restored by path"},
+    {"item": "Rule in code: whole conversation, per held-out conversation, >= 0.5 inclusive, dev and test both", "result": "pass", "evidence": "dataset.py _check_train_scenarios: mine = windows over all turns; len(mine & theirs)/len(mine) >= CONV_MATCH_REFUSE for each (id, windows) in held_out; CONV_MATCH_REFUSE = 0.5 named constant with limit comment. Normalization re.findall(r'\\w+', lower()) with 3-word windows per turn matches tests/test_no_raw_text.py _windows."},
+    {"item": "Reproduce measured shares on dev", "result": "pass", "evidence": "my own script (leak2.py), dev 148: middle-word swap median 0.49, 74 below 50% (matches claim exactly); 'Well,' prefix: 0 below (matches). One-letter-added on word 2 gave median 0.59, 51 below, versus the stated 0.46/76; this depends on which word the letter edit hits, so it is my edit definition, not a code discrepancy. Direction (a fair share passes) is consistent."},
+    {"item": "Exact copy and 8+ turn edits refused; unrelated passes; message has ids only", "result": "pass", "evidence": "variants exact, oneword, twoword, everyother, synonym, prefix, goldonly of an 8+ turn dev scenario all refused. Invented unrelated conversation passed. Error text: 'scenario syn-x-exact shares 50% or more of its 3-word windows with held-out scenario e8a79c70'; no turn text in it."},
+    {"item": "Mutation: threshold 0.51", "result": "pass", "evidence": "2 tests failed (test_one_word_edit_of_an_invented_copy_is_refused, test_error_names_ids_only_even_when_threshold_is_just_met)"},
+    {"item": "Mutation: dev only", "result": "pass", "evidence": "5 tests failed (test-split light edit cases letter/two_words/swap_middle/prefix, and the text leak case)"},
+    {"item": "Mutation: >= changed to >", "result": "pass", "evidence": "2 tests failed (same two as the threshold case), so inclusivity is pinned"},
+    {"item": "Copied-gold-turn exclusion test fails when rule removed", "result": "pass", "evidence": "removed the 'answered or text not in gold_text' clause: test_abstained_input_excludes_turns_that_copy_a_gold_turn failed"},
+    {"item": "Recent window test fails when rule changed", "result": "pass", "evidence": "start = gold[0] + 1: test_recent_window_stops_before_the_first_gold_turn and the copied-gold test failed (4 failed total)"},
+    {"item": "requests connection error not an architecture error", "result": "pass", "evidence": "train_lora.py is_architecture_error returns False for RequestException; disabling that line made test_requests_connection_error_is_not_an_architecture_error fail; restored by path"},
+    {"item": "tests/test_cards_data.py and tests/test_no_raw_text.py", "result": "pass", "evidence": "47 passed, 1 deselected"},
+    {"item": "Full suite at this commit", "result": "pass", "evidence": "pytest -q: 385 passed, 8 deselected in 312.97s; git status clean afterwards"}
+  ],
+  "own_tests": [
+    {"input": "7 variants (exact, one-word, two-word, every-other-turn, synonym, prefix, gold-only edits) of an 8+ turn dev scenario via _check_train_scenarios", "result": "all refused"},
+    {"input": "invented conversation with unrelated text on the same structure", "result": "accepted"},
+    {"input": "refusal message for an exact copy", "result": "names syn-x-exact and e8a79c70 only; no turn text"},
+    {"input": "swap-middle-word and 'Well,' prefix edits across all 148 dev conversations", "result": "swap: median 0.49, 74 below 50%; prefix: 0 below, as stated"}
+  ],
+  "failures": [],
+  "notes": "The documented short-conversation limit (light edits on short-turn conversations can pass) is accepted per the coordinator. The one-letter median I got (0.59) differs from the stated 0.46 because my edit placement differed; I did not reproduce test-split numbers or the two-word figure. The old leak.py in tmp-T6.1 references a removed helper (_long_turns) so I used leak2.py. All mutations were restored with git checkout by path."
+}

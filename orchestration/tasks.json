@@ -339,16 +339,17 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:41:55+00:00",
+      "attempts": 1,
+      "reason": "finding dropped by the number rule leaves no note on the card: card.missing stays empty in 12 of 13 should-drop cases (single.py _finish lines 275-281)",
+      "note": "one more attempt, decided by the coordinator: simple token-run number rule",
       "verified": {
-        "commit": "4efc114f83d3771ae2d38ed8337d826729f2c764",
+        "commit": "2706b61afe3a7ae023bb338f5258cc9b405734d0",
         "passed": true,
-        "at": "2026-11-03T06:06:45+00:00"
+        "at": "2026-11-03T07:02:41+00:00"
       },
-      "attempts": 2,
-      "reason": "suggestion rule drops 6 of 16 good dev suggestions yet paraphrased injected claims pass, drops unmarked; baselines have no deadline (20s invalid-reply path); no test for dropping suggestion on a findingless card"
+      "done_at": "2026-11-03T07:05:49+00:00"
     },
     {
       "id": "T3.3",
@@ -376,7 +377,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_team.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:05:56+00:00",
+      "verified": {
+        "commit": "19b3d62dc6017bc6a109058cf18d26b240fb2b0f",
+        "passed": true,
+        "at": "2026-11-03T07:36:42+00:00"
+      },
+      "attempts": 1,
+      "reason": "assistance_ms includes follow-up time already in the specialist's own ms; isolation test passes when Assistance gets raw quotes; follow-up escape and forced agent labels are untested",
+      "done_at": "2026-11-03T07:43:06+00:00"
     },
     {
       "id": "T4.2",
@@ -427,7 +437,9 @@
         "{py} -m pytest tests/test_e4.py -q",
         "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:47:48+00:00"
     },
     {
       "id": "T7.1",
@@ -468,9 +480,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
-      "started_at": "2026-11-03T06:23:49+00:00"
+      "status": "done",
+      "started_at": "2026-11-03T06:23:49+00:00",
+      "verified": {
+        "commit": "6968ed45fb6b8b23c83092b5885730532d4ae6c5",
+        "passed": true,
+        "at": "2026-11-03T07:31:23+00:00"
+      },
+      "attempts": 2,
+      "reason": "_check_train_scenarios compares whole turns exactly, so a dev conversation with one word edited per turn passes into training",
+      "done_at": "2026-11-03T07:44:14+00:00"
     },
     {
       "id": "T6.2",
@@ -480,7 +499,8 @@
       "deps": [
         "T6.1",
         "T3.3",
-        "T7.1"
+        "T7.1",
+        "T5.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_e5.py -q",
@@ -546,7 +566,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_api.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:44:16+00:00",
+      "verified": {
+        "commit": "4e0f436db30a7db53ad95ab5945277c1a7251426",
+        "passed": true,
+        "at": "2026-11-03T09:06:59+00:00"
+      },
+      "attempts": 2,
+      "reason": "Diarizer.set_backend sets backend then background with no lock; assign in a worker thread can see a window backend with background false, call backend.label, and lose that batch",
+      "done_at": "2026-11-03T09:14:51+00:00"
     },
     {
       "id": "T8.3",
@@ -585,7 +614,16 @@
         "{py} -m pytest tests/test_obs.py tests/test_vision.py -q",
         "docker compose config -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T08:05:15+00:00",
+      "verified": {
+        "commit": "fd201cfcb0ccd4d6311d5543d7e17806c3d9dd39",
+        "passed": true,
+        "at": "2026-11-03T08:30:39+00:00"
+      },
+      "attempts": 1,
+      "reason": "SingleAgent gets no agent span or token metric; a slow exporter delays answer by 2s; span start approximation unstated; SceneStore has no delete; privacy test never fills suggestion or missing",
+      "done_at": "2026-11-03T08:35:57+00:00"
     },
     {
       "id": "T8.6",
@@ -598,16 +636,16 @@
       "acceptance": [
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T06:00:09+00:00",
       "verified": {
-        "commit": "816f34e98ae73c8236c4d9626b4d68e4ffe38ab0",
+        "commit": "f4b243aed5dff77942db5aaf21ca3250a1739cf7",
         "passed": true,
-        "at": "2026-11-03T06:08:23+00:00"
+        "at": "2026-11-03T06:40:55+00:00"
       },
       "attempts": 1,
-      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
+      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply",
+      "done_at": "2026-11-03T06:51:32+00:00"
     },
     {
       "id": "T8.7",
@@ -624,7 +662,16 @@
         "{py} -m pytest tests/test_integration.py -q",
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T09:15:00+00:00",
+      "verified": {
+        "commit": "3cae2fb8b432d499ff3ecd694d902fca3d64cca7",
+        "passed": true,
+        "at": "2026-11-03T10:00:22+00:00"
+      },
+      "attempts": 1,
+      "reason": "all-real test returns abstained card; run_everything uses system Python and leaves Vite running; compose publishes 5432 and 50051 on all interfaces; no committed browser microphone check"
     },
     {
       "id": "T8.5",
@@ -683,7 +730,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_e9.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:44:17+00:00",
+      "verified": {
+        "commit": "51853f7f8af90509d1866035c3a2d7038095b56c",
+        "passed": true,
+        "at": "2026-11-03T08:02:38+00:00"
+      },
+      "attempts": 1,
+      "reason": "e9_study._t_interval falls back to 1.96 above 8 people (too-narrow interval, no warning); duplicate or both-condition rows for the same person and task are silently accepted",
+      "done_at": "2026-11-03T08:05:10+00:00"
     },
     {
       "id": "H4",

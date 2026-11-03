@@ -22,8 +22,20 @@ CLAUDE_CALLS_PATH = REPO_ROOT / "results" / "claude_calls.json"
 CLAUDE_CALL_CAP = 1000
 
 
+_caller = threading.local()
+
+
+def stop_retries_when(stopped: threading.Event) -> None:
+    """On this thread, once `stopped` is set, `complete` makes no further attempt.
+
+    A caller that gave up waiting sets it, so an abandoned call does not start a paid retry."""
+    _caller.stopped = stopped
+
+
 class LLMError(Exception):
-    pass
+    def __init__(self, *args: object, results: list[LLMResult] | None = None) -> None:
+        super().__init__(*args)
+        self.results = results or []  # model replies received before the failure
 
 
 class LLMResult(BaseModel):
@@ -83,16 +95,27 @@ class _Base:
                 f"That was not valid for the required JSON schema: {err}\n"
                 "Reply again with only valid JSON."
             )
+        stopped = getattr(_caller, "stopped", None)
+        if stopped is not None and stopped.is_set():
+            raise LLMError("no retry: the caller stopped waiting", results=[res])
         retry = [
             *messages,
             {"role": "assistant", "content": res.text},
             {"role": "user", "content": note},
         ]
-        res2 = self._raw(retry, schema, max_tokens, temperature, timeout_s)
+        try:
+            res2 = self._raw(retry, schema, max_tokens, temperature, timeout_s)
+        except LLMError as err:
+            err.results = [res]
+            raise
         try:
             res2.parsed = _parse(res2.text, schema)
         except (ValidationError, ValueError) as err:
-            raise LLMError(f"output failed schema validation twice: {err}") from err
+            raise LLMError(f"output failed schema validation twice: {err}", results=[res, res2]) from err
+        res2.prompt_tokens += res.prompt_tokens  # both attempts were paid for
+        res2.completion_tokens += res.completion_tokens
+        res2.cost_usd += res.cost_usd
+        res2.latency_ms += res.latency_ms
         return res2
 
 

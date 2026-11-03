@@ -108,6 +108,9 @@ class MemoryStore:
             used.add(m.id)
         self._items.extend(items)
 
+    def delete(self, conv_id: str) -> None:
+        self._items = [m for m in self._items if m.conversation_id != conv_id]
+
     def items(self, conv_id: str, as_of_seq: int) -> list[MemoryItem]:
         """Every item of the conversation known at `as_of_seq`, oldest first, superseded ones included."""
         seen = [m for m in self._items if m.conversation_id == conv_id and m.as_of_seq <= as_of_seq]

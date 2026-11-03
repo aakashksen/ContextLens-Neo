@@ -175,13 +175,16 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Produces:** `SingleAgent(llm, tools, prompt_version, max_steps=4, deadline_s=8.0)` implementing `Assistant`, using a tool-calling loop with structured output, then `guard_card`. Also `RecentTurnsAssistant`, `FullTranscriptAssistant`, and `RetrievalAssistant` as the simple baselines for E2.
 **Tests:** `test_empty_conversation_abstains`; `test_one_short_turn_abstains_or_answers_only_from_it`; `test_stops_after_max_steps`; `test_deadline_returns_partial`; `test_llm_error_returns_abstained`; `test_injection_turn_does_not_change_card` (`FakeLLM` scripted to obey would be stopped by the guard; check the invented claim is dropped); `test_default_press_uses_latest_exchange`.
 **From phase review:** Tool results sent back to a model must go through the shared escaping in `src/contextlens/llm/untrusted.py`, since `Tools` returns raw objects. `guard_card` lets a store error out, so the agent must catch it and abstain. A card's `suggestion` is not verified by the guard.
+**Decision (the person):** No word-overlap filter on suggestions. The first step's suggestion is always discarded; in respond mode a second call, shown only the verified finding statements and the question, writes it, and every drop is noted in `missing`.
 **Accept:** `{py} -m pytest tests/test_single_agent.py -q`.
 
 ### T3.3: Experiment E2, context strategies
 **Files:** `src/contextlens/experiments/e2_context.py`, `tests/test_e2.py`.
 **Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Also run the best strategy on `ClaudeCodeClient` over at most 100 synthetic or benchmark cases, as the cloud comparison. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
+**Suggestions:** Also count, on the prompt-injection scenarios, injected claims that appear in a card's suggestion (T3.2's second call can still repeat one a kept finding repeated).
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
 **From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run. `tests/test_no_raw_text.py` misses a quote hard-wrapped across lines in a non-JSON file, and one used as a JSON dict key; close both before this task writes committed output from restricted sources.
+**Decision (the coordinator):** E2's error analysis has a named check for number-rule misses, so the data decides whether to revisit T3.2's rule. Its known limits: a lone "one", "half", "dozen", and ordinals aren't number tokens, and punctuation doesn't break a run. List them in `docs/interview-notes.md` once that file exists.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
 
 ---
@@ -207,7 +210,9 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 ### T4.2: Experiment E3, team vs single agent
 **Files:** `src/contextlens/experiments/e3_team.py`, `tests/test_e3.py`.
 **Do:** Same cases, same tools, same model, on dev. Compare quality, latency, tokens, with paired bootstrap and McNemar. Also break it down by category. Write the finding in plain language in the record's `notes`, including if the team loses.
+**Suggestions:** Also count injected claims in suggestions on the prompt-injection scenarios, for both systems, as in T3.3.
 **Tests:** tiny fixture writes a valid record holding both systems, with their comparison.
+**Decision (the coordinator):** After T5.2 lands and before this experiment, save the trained model's probabilities on DECODE dev by rescoring T5.2's chosen checkpoint, with no retraining and no test split. Compare a threshold sweep with a cascade, and add `CascadeChecker` implementing `ConsistencyChecker`: the trained model runs first, and only its flagged cases go to the prompted checker. Select the operating point on dev, by false-alert rate first with a catch-rate floor recorded before selecting. Carry it into this experiment and E8 as a system. Report its real latency. Report alert precision at 5% and 20% contradiction rates, labeled as calculated, not measured. Hand-read 30 false alarms for a pattern; DECODE text stays out of tracked files.
 **Accept:** `{py} -m pytest tests/test_e3.py -q`; `{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev`.
 
 ---
@@ -226,6 +231,8 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **From phase review:** this task adds calibration (expected calibration error) to `metrics.py`, `check_run.py` and `series.py`, with a row field for the model probability on `Prediction`, so a saved `ece` recomputes from the predictions and `check_run` does not reject it.
 **Do:** Fine-tune the base model chosen in `docs/datasets.md` with PyTorch and Transformers, using class weights, early stopping on dev macro-F1, a small hyperparameter search (learning rate and epochs, 6 runs at most, all recorded), and MLflow logging. Compare to TF-IDF, zero-shot, and prompted on dev. Save an error analysis of 50 mistakes to `results/error-analysis-e4.md`, by category. Add `TrainedChecker` implementing `ConsistencyChecker`.
 **Tests:** `test_train_one_step_on_tiny_model_reduces_loss`; `test_checkpoint_saves_label_map`; `test_trained_checker_abstains_below_threshold`; `test_deadline_update_pair_is_in_eval_set`.
+**Decision (the person):** Training combines DECODE with a new, small, invented train-only scenario set at `datasets/scenarios_train/`, covering all four consistency labels, marked `origin="synthetic"`, reusing no dev or test text. The person can review a sample. Alongside the four-label results on our scenarios, report contradiction vs non-contradiction separately on DECODE's dev conversations, which training doesn't use; DECODE's test split stays for T9.1. State in the record and report that training used our own writing style, so scores on our scenarios could look better than real use. **Decision (the coordinator):** the set also covers all three card modes (recall, clarify, respond), abstention, and injected turns, because T6.1 trains on it too.
+**Decision (the coordinator):** This record states that an independent read of the invented train-only set, before training, is what caught real near-copies of held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it couldn't have caught them. Those cases were rewritten and read again.
 **Accept:** `{py} -m pytest tests/test_e4.py -q`; `{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev`.
 
 ---
@@ -237,12 +244,16 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Do:** Build instruction examples: recent exchange + retrieved evidence → valid `Card` JSON, from QMSum and reviewed scenarios, split by conversation. Pipeline: 4-bit QLoRA with PEFT on Qwen3.5-4B, the same model the agents run (`docs/model-choice.md`), falling back to Qwen3-4B if its image-capable architecture blocks PEFT, and recording that. It must fit under 7 GB; if it can't, block the task and don't change the model class silently.
 **Tests:** `test_every_example_parses_as_card`; `test_every_citation_exists_in_its_input`; `test_no_conversation_in_two_splits`; `test_tokenized_labels_mask_the_prompt`; `test_dry_run_one_step_on_tiny_model`.
 **From phase review:** Training examples built from QMSum go only under a git-ignored path, and the tracked-text test from T2.5 must still pass.
+**Decision (the coordinator):** Training examples come from QMSum train plus the invented train-only set from T5.2, marked synthetic, with all three card modes and abstention represented. Never train on dev or test scenarios. T6.1 finishes on QMSum with a tested loader option for the set, so it doesn't wait for T5.2.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
 ### T6.2: Experiment E5, fine-tuned vs prompted
 **Files:** `src/contextlens/llm/hf.py`, `src/contextlens/experiments/e5_cards.py`, `tests/test_e5.py`.
 Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_path, adapter_path=None)` implementing `LLMClient`, since Ollama can't load a PEFT adapter. Train. On dev, using `HFClient` for both sides so the runtime is the same, compare the base model with the best prompt from E6 against the adapter: grounded rate, unsupported claims, schema-valid rate, abstention, latency. Save the adapter under `models/`, with its hash in the record. If it doesn't beat the prompted version, record that, and keep the prompted version in the product.
 **Tests:** tiny fixture writes a valid record; `test_adapter_hash_recorded`.
+**Decision (the coordinator):** Requires the invented train-only set from T5.2 to exist. The record reports results per source and per mode, and states that the training mix includes synthetic data. Keep the honest citation rule and `MAX_GOLD` at 4, and apply T6.1's cap of 25% abstained examples to the combined QMSum plus invented training set, with a fixed seed. The record states the final size and mix, and the share that's synthetic. If the combined training set is under 300 examples, tell the coordinator before training. Convert `consistent` scenarios from the invented set to clarify cards saying the statements agree, citing both turns, and count them as answered examples for the 25% cap. The record reports the false-alarm rate on them separately, so the benefit is measured, not assumed. The record also states the limit of T6.1's overlap guard, which refuses at 50% of 3-word windows: it guards against accidental reuse in our hand-written set, not a deliberate paraphrase. **Approval (the person):** QMSum may train this adapter locally; never publish the adapter, QMSum text, or examples derived from it.
+**Decision (the coordinator):** This record states that an independent read of the invented train-only set, before training, is what caught real near-copies of held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it couldn't have caught them. Those cases were rewritten and read again.
+**Decision (the coordinator):** Use T5.2's NaN guard in `train_lora.py`, so a non-finite loss fails the run and is never recorded as a result. `check_run` rejects a record whose chosen model has a non-finite training loss.
 **Accept:** `{py} -m pytest tests/test_e5.py -q`; `{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev`.
 
 ---
@@ -302,6 +313,10 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Do:** Replay AMI audio through speech and diarization, then run the same questions as on the clean transcript. Report word error rate, diarization error, how much transcription and speaker errors change quality, button-to-card p50 and p95 by stage, and tokens per card. Optimize the top two bottlenecks, then rerun and report before and after.
 **Tests:** tiny fixture writes a valid record; `test_wer_on_known_strings`.
 **From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
+**Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
+**Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
+**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
+**Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
@@ -316,6 +331,11 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Do:** Run the real backend with the real agent team, the speech service, and the web client together, and connect Unity's message types to the real server. The earlier client tasks used the fake server, so this is where any mismatch has to surface and get fixed. Document starting everything with one command.
 **Tests:** `test_real_backend_matches_contract` (fakes for models); real-marked `test_press_end_to_end_returns_a_cited_card`, covering audio → transcript → press → card; `test_fake_server_and_real_backend_send_same_shapes`.
 **From T8.3's verifier:** In the web client, a server `error` status while recording leaves the microphone live and sending while the indicator reads "Error", so stop capture on it; and `Session` still accepts transcript and card messages after `deleted`, so reject them, and check the real backend can't send a late transcript. Run the real browser microphone, `AudioContext`, and WebSocket path here, since nothing has yet.
+**Decision (the coordinator):** Add a turn-update message to the contract and the clients, so a speaker assigned after a turn was sent reaches them live. T8.2 sends each turn as `unknown` and relabels it later in the store.
+**Decision (the coordinator):** T8.7 owns the pyannote adapter's real run. It needs the person to accept the terms of `pyannote/speaker-diarization-community-1`; until then, turns stay honest `unknown`. Don't patch around that fetch, and don't change the shared venv's torch.
+**From T8.4's verifier:** Wire telemetry and vision into the backend: call `TracedAssistant.flush(timeout)` at shutdown, since its worker thread is non-daemon and an exporter that never returns would block exit; build a fresh `Context` per press; have delete call `SceneStore.delete` and clear queued telemetry jobs for that conversation, which hold cards in memory until the worker runs them; and count dropped presses in a metric, not only a log warning.
+**From T8.2's verifier:** Models are per conversation, and `app.py`'s `conversations` dict never evicts, so each conversation id keeps its own pyannote pipeline until the process exits. Share the model and evict idle conversations.
+**Decision (the coordinator):** Metrics are off by default, opt-in through the `obs` profile, and bound only to Docker's host-side address. Add one real-marked test that brings up the `obs` profile and sees a metric reach Prometheus, and document it in `docs/run-everything.md`.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
