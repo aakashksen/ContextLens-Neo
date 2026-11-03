@@ -29,12 +29,13 @@ from contextlens.agents.consistency_check import ConsistencyChecker, PromptedChe
 from contextlens.consistency import model as cm
 from contextlens.consistency import train as ct
 from contextlens.consistency.baselines import ZERO_SHOT_MODEL, TfidfChecker, ZeroShotChecker
-from contextlens.consistency.data import build_pairs
+from contextlens.consistency.data import assert_trainable, build_pairs
 from contextlens.data import train_scenarios as ts
 from contextlens.data.loaders import Pair
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
 from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_local_manifest, write_run
+from contextlens.llm.client import unload_ollama
 from contextlens.eval.series import F1_LABELS, base_name, predicted_label
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import ButtonRequest, Card, Conversation, Finding, Scenario, Turn
@@ -62,6 +63,7 @@ WINNER_RULE = ("highest dev macro-F1 over the four labels on our dev scenarios (
                "by fewer epochs, then by lower learning rate")
 SAMPLE_RULE = ("pairs ordered by sha256 of conversation_id|label|statement, the first N taken; the same rule picks the "
                "DECODE train sample and the DECODE dev sample")
+SELECTION_NOTE = "dev scenarios (early stopping and winner), so dev scores are not held-out"
 STYLE_NOTE = ("training used our own writing style (the train-only scenario set was written for this project, like the "
               "dev and test scenarios), so scores on our scenarios could look better than real use")
 TRAIN_SET_REVIEW_NOTE = ("an independent read of the invented train-only set, before training, caught real near-copies of "
@@ -141,17 +143,15 @@ def training_data(raw_root: Path, root: Path, dev_scenarios: list[Scenario]) -> 
     mine = ts.load_train_scenarios(root / ts.TRAIN_DIR)
     if mine != ts.build_train_scenarios():
         raise RuntimeError("datasets/scenarios_train/train.jsonl is not what the code builds; rebuild and commit it")
-    clash = ts.overlap_problems(mine, dev_scenarios)
+    clash = ts.overlap_problems(mine, dev_scenarios + ts.held_out_present(root / SCENARIO_SOURCES["scenarios"][1]))
     if clash:
-        raise RuntimeError("the train-only scenarios share text with dev: " + "; ".join(clash))
+        raise RuntimeError("the train-only scenarios share text with dev or test: " + "; ".join(clash))
     got = build_pairs("train", raw_root, root / ts.TRAIN_DIR)
     if any(p.split != "train" for p in got):
         raise RuntimeError("a non-train pair reached training")
     decode = sample_pairs([p for p in got if p.source == "decode"], DECODE_TRAIN_N)
     own = [p for p in got if p.source == "scenarios"]
-    dev_convs = {p.conversation_id for p in build_pairs(SPLIT, raw_root, root / "datasets/none")}
-    if dev_convs & {p.conversation_id for p in decode}:
-        raise RuntimeError("a dev conversation reached training")
+    assert_trainable(decode + own, raw_root, root / SCENARIO_SOURCES["scenarios"][1])
     pairs = decode + own * SCENARIO_REPEAT
     examples = cm.examples_from_pairs(decode) + cm.examples_from_scenarios(mine, "scenarios_train") * SCENARIO_REPEAT
     labels = [e.label for e in examples]
@@ -209,7 +209,7 @@ def search(base_model: str, data: TrainingData, dev: list[cm.Example], *, device
         name = f"lr{lr:g}_ep{epochs}"
         out = root / CHECKPOINTS / name
         row: dict[str, Any] = {"setting": name, "lr": lr, "epochs": epochs, "ok": False, "error": None,
-                               "best_epoch": None, "dev_macro_f1": None, "history": [], "checkpoint": out.as_posix(),
+                               "best_epoch": None, "dev_macro_f1": None, "history": [], "checkpoint": out.relative_to(root).as_posix(),
                                "batch_size": BATCH_SIZE, "lowered_batch_size": False, "oom_retries": [],
                                "device": device, "seconds_per_epoch": None, "peak_gpu_memory_mb": None,
                                "peak_gpu_memory_note": None}
@@ -358,7 +358,7 @@ def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[P
     total = sum(len(v) for v in wrong.values())
     lines = ["# E4 error analysis: the trained model's mistakes on dev", "",
              f"{total} mistakes among {scored} scored dev cases; {len(shown)} are listed, chosen by a fixed rule "
-             "(categories in alphabetical order, one at a time from each, by id). " + DECODE_CAVEAT, "",
+             "(categories in alphabetical order, one at a time from each, by id). " + DECODE_CAVEAT + " Caveats: " + STYLE_NOTE + "; " + SELECTION_NOTE + ".", "",
              "## Mistakes by category", ""]
     lines += [f"- {c}: {len(v)}" for c, v in sorted(wrong.items())] or ["- none"]
     lines += ["", "## Listed mistakes", ""]
@@ -463,7 +463,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "threshold": cm.THRESHOLD, "freeze_word_embeddings": True, "training": train.counts,
             "train_only_balance": train.balance,
             "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
-            "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
+            "selection_data": SELECTION_NOTE,
             "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
             "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started, "labels_reviewed": False,
             "failed_systems": failed,
@@ -478,6 +478,14 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(error_md, encoding="utf-8")
     return {"winner": winner["setting"], "complete": not failed, "records": paths, "failed": failed}
+
+
+def run_and_unload(**kw: Any) -> dict[str, Any]:
+    """`run_e4`, then unload the prompted Ollama model whether or not the run succeeded."""
+    try:
+        return run_e4(**kw)
+    finally:
+        unload_ollama(kw.get("prompted_model", PROMPTED_MODEL))
 
 
 def smoke(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cuda",
@@ -549,7 +557,7 @@ def main() -> int:
         return 0
     from contextlens.llm.client import OllamaClient
 
-    result = run_e4(device="cuda", make_zeroshot=ZeroShotChecker,
+    result = run_and_unload(device="cuda", make_zeroshot=ZeroShotChecker,
                     make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)), num_workers=NUM_WORKERS,
                     supersedes=[{"run_id": r, "reason": RERUN_REASON} for r in args.supersedes] or None)
     print(json.dumps({"winner": result["winner"], "complete": result["complete"], "failed": result["failed"],
