@@ -566,16 +566,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_api.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T07:44:16+00:00",
       "verified": {
-        "commit": "eaa7b8c52716af7832885d6bff57cd63eef5ffe2",
+        "commit": "4e0f436db30a7db53ad95ab5945277c1a7251426",
         "passed": true,
-        "at": "2026-11-03T08:23:04+00:00"
+        "at": "2026-11-03T09:06:59+00:00"
       },
-      "attempts": 1,
-      "reason": "a raising make_backend kills the websocket (stream.py:78 runs in the handler), so a diarizer load failure breaks every connection instead of leaving turns unknown"
+      "attempts": 2,
+      "reason": "Diarizer.set_backend sets backend then background with no lock; assign in a worker thread can see a window backend with background false, call backend.label, and lose that batch",
+      "done_at": "2026-11-03T09:14:51+00:00"
     },
     {
       "id": "T8.3",
