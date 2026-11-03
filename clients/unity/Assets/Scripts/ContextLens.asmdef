@@ -1,0 +1,8 @@
+{
+    "name": "ContextLens",
+    "rootNamespace": "ContextLens",
+    "references": [
+        "UnityEngine.UI"
+    ],
+    "autoReferenced": true
+}

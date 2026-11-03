@@ -1,0 +1,24 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+.app { max-width: 42rem; margin: 0 auto; padding: 1rem; font-size: 1rem; }
+.app.size-small { font-size: 0.875rem; }
+.app.size-large { font-size: 1.375rem; }
+header { display: flex; justify-content: space-between; align-items: center; }
+button, select { font: inherit; padding: 0.4em 0.8em; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+.controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+.primary { font-weight: 600; }
+.danger { background: #b3261e; color: #fff; }
+.indicator { display: flex; align-items: center; gap: 0.4em; font-weight: 600; }
+.dot { width: 0.8em; height: 0.8em; border-radius: 50%; background: #888; }
+.indicator-recording .dot { background: #d93025; }
+.confirm { border: 2px solid #b3261e; padding: 1rem; margin: 1rem 0; }
+.card { border: 1px solid #888; border-radius: 0.5rem; padding: 0.5rem 1rem; margin: 1rem 0; }
+.recalled { border-left: 6px solid #1a73e8; padding-left: 0.75rem; }
+.suggestion { border: 2px dashed #8e24aa; background: rgba(142, 36, 170, 0.08); padding: 0.5rem 0.75rem; font-style: italic; }
+.suggestion .note { font-size: 0.85em; font-style: normal; }
+.missing { border-left: 6px solid #f9ab00; padding-left: 0.75rem; }
+.badge { font-size: 0.8em; padding: 0.1em 0.5em; border-radius: 0.5em; border: 1px solid currentColor; }
+.source blockquote { margin: 0.25rem 0 0.5rem 1rem; }
+.settings { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+.error { color: #b3261e; font-weight: 600; }

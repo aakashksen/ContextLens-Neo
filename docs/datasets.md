@@ -6,7 +6,7 @@ Standing rule (`CLAUDE.md`): a dataset is used only if a primary-source license 
 
 Summary:
 - DECODE: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (no data license stated).
-- QMSum: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
+- QMSum: yes, by the person, for local, non-commercial evaluation and for training the T6.2 adapter locally; never commit or redistribute its data, and never publish that adapter or examples derived from it (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
 - LongMemEval: yes (MIT).
 - AMI Meeting Corpus: yes (CC BY 4.0).
 - pyannote (diarization): yes, by the person, who accepted its terms on Hugging Face (gated model).
@@ -21,10 +21,27 @@ Summary:
 URL: https://parl.ai/projects/contradiction/ (project page); https://github.com/facebookresearch/ParlAI/blob/main/projects/contradiction/README.md (README); paper https://arxiv.org/abs/2012.13391 (Nie et al., "I like fish, especially dolphins", ACL 2021).
 License: Couldn't confirm. The parl.ai page and the README state no license or terms for the data. The paper says only that it is "publicly available at https://parl.ai/projects/contradiction". The ParlAI repo license (https://github.com/facebookresearch/ParlAI/blob/main/LICENSE) is MIT, but that is the code license, not a data license. The "Terms of Service" link on parl.ai belongs to the ParlAI website.
 Size: 6 groups of dialogues (README and parl.ai): Train 27,184; Dev 4,026; Test 4,216; Human-Bot 764; A2T 2,079 and RCT 2,011 (auxiliary test sets built from Test).
-Format: Couldn't confirm. The pages read do not describe the file format. Access is through ParlAI (`parlai display_data -t decode -dt train|valid|test`, with `--test_type vanilla|human-bot|a2t|rct`) or by raw S3 download (`projects/contradiction/download_with_raw_format.md` in the ParlAI repo, not read).
+Format: Confirmed in T5.1 by downloading `http://parl.ai/downloads/decode/decode_v0.1.zip` (the link in `projects/contradiction/download_with_raw_format.md` in the ParlAI repo; 16.5 MB, no registration) into the git-ignored `datasets/raw/decode/`. The zip holds `decode_v0.1/{train,dev,test,human-bot,a2t,rct}.jsonl`, one JSON record per line. Fields used: `record_id` (unique per line), `conversation_id` (a string, shared by at most 2 records), `turns` (list of `{turn_id, agent_id, text, ...}`; `turn_id` equals the list index; agent_id is 0 or 1), `is_contradiction` (bool). The last turn is the statement to judge and the others are the history. Other fields (`aggregated_contradiction_indices`, `verifications`, `agents`, ...) are unused. Record counts match the README: train 27,184, dev 4,026, test 4,216, human-bot 764, a2t 2,079, rct 2,011. Observations: train, dev and test are balanced 50/50. `conversation_id` is not unique per record: each repeated id has one contradiction and one non-contradiction record with different last turns (distinct conversation_ids: train 26,252, dev 3,778, test 3,957). 22 conversation_ids appear in both dev and test, and every a2t and rct conversation_id is also in test (they are built from test). human-bot has no evidence indices. One turn in the files has empty text.
 Labels: Confirmed binary, not three-way. Paper (render at https://ar5iv.labs.arxiv.org/html/2012.13391): "y can be 0 or 1 corresponding to the non-contradiction and the contradiction label respectively." Splits are balanced between the two labels. In the Human-Bot set, half of the 764 dialogues end with a bot utterance that contradicts itself, and the labels were checked by three extra annotators. Every A2T example is "contradiction", and every RCT example is "non-contradiction". The paper maps entailment and neutral from other NLI data to non-contradiction when that data is used for training. So the assumption "DECODE only labels contradiction vs not" is correct.
 Access: ParlAI loader or the S3 raw download above. No registration or signed agreement was found in the pages read. Nothing was downloaded.
 Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation only. Its data must never be committed or redistributed. Original finding: no primary source states a license or terms for the DECODE data, so the standing rule cannot be met. The person can decide whether to accept the ParlAI distribution as it is.
+
+### DECODE label map and splits (T5.1)
+
+Source labels: `is_contradiction` true is `contradiction`, false is `non_contradiction`. The consistency checker has four labels (`consistent`, `update`, `contradiction`, `insufficient`) and DECODE is binary, so it can fill only two of them. The map used by `build_pairs`:
+
+| DECODE label | Our label |
+| --- | --- |
+| `contradiction` | `contradiction` |
+| `non_contradiction` | `consistent` |
+
+Reasoning and limits:
+- `contradiction` is a direct match: the last turn contradicts something earlier in the dialogue.
+- `non_contradiction` is not the same as `consistent`. DECODE's non-contradictions are human-written continuations that do not conflict, so `consistent` is the nearest of our labels. But DECODE never marks a legitimate update ("we moved the deadline to Wednesday") or a case with too little evidence. Nothing in DECODE maps to `update` or `insufficient`, and none is invented. Scored on DECODE, only the binary question "contradiction or not" is meaningful.
+- Training on DECODE alone (the train split) therefore teaches two labels. The only sources with `update` and `insufficient` are our written scenarios, which exist for dev and test only, so a four-label model cannot be trained on train data. "Fits and predicts all four labels" holds only for the fixture in `tests/test_consistency_baselines.py`, not for the real sources. What may train the four-way model is a decision for T5.2 and the person.
+- Scenario pairs keep their own gold label and carry `source` `scenarios`; DECODE pairs carry `source` `decode`. Scenarios without a gold label (recall questions) are not pairs.
+
+Splits: DECODE keeps its official train, dev and test files. A conversation_id found in two files (22, in dev and test) is placed wholly in test, so no conversation spans two splits, and both records of a conversation stay together. Resulting records: train 27,184, dev 4,004, test 4,238; conversation_ids: train 26,252, dev 3,756, test 3,957. The human-bot, a2t and rct sets are not used. The manifest `datasets/splits/decode.json` stores the first 16 hex characters of the sha256 of each conversation_id (so it holds none of DECODE's text) and a hash of the loaded data; `python -m contextlens.data.check_splits` checks it against the raw files.
 
 ## QMSum
 
@@ -37,7 +54,7 @@ Size: 1,808 query-summary pairs over 232 meetings in three domains (paper abstra
 Format: JSON and JSONL under `data/ALL`, `data/Academic`, `data/Product`, `data/Committee`, with train, val and test splits (README). Each record has `topic_list` (topic with `relevant_text_span`), `general_query_list`, `specific_query_list` (query, answer, span), and `meeting_transcripts` (speaker, content).
 Labels: No classification labels. The gold items are the query-answer pairs and the topic spans in the transcript (README).
 Access: Public GitHub repo, no gate. Derived from the AMI, ICSI and parliamentary sources, so the terms of those sources also apply. Nothing was downloaded.
-Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation only. Its data must never be committed or redistributed. Original finding: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
+Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation, and for training the T6.2 adapter locally. Its data must never be committed or redistributed. That adapter, QMSum text, and examples derived from it must never be published. Original finding: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
 
 ## LongMemEval
 
@@ -118,6 +135,14 @@ Classes: none; it's a language and vision model.
 Use: the local model through Ollama, as `qwen3.5:4b-q4_K_M`. See `docs/model-choice.md`.
 Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.
 
+## Zero-shot NLI model: cross-encoder/nli-deberta-v3-xsmall (T5.1)
+
+URL: https://huggingface.co/cross-encoder/nli-deberta-v3-xsmall (model card); API https://huggingface.co/api/models/cross-encoder/nli-deberta-v3-xsmall.
+License: Apache-2.0 (card header and API tag `license:apache-2.0`). Not gated. About 70.8M parameters (API). Base model microsoft/deberta-v3-xsmall. Checked 2026-11-02.
+Training data (card): SNLI and MultiNLI. Their own licenses were not checked here; only the model weights are used.
+Use: `ZeroShotChecker` in `src/contextlens/consistency/baselines.py`, loaded lazily through sentence-transformers. It scores contradiction, entailment and neutral, so the checker can output only `contradiction` or `consistent`. Not downloaded or run in T5.1.
+Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.
+
 ## Reranker: cross-encoder/ms-marco-MiniLM-L6-v2
 
 URL: https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2 (model card); API https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L6-v2.
@@ -138,3 +163,10 @@ URL: https://ollama.com/library/gemma4:e4b-it-qat (Ollama tag page, license blob
 License: Apache License 2.0 for Gemma 4. The Ollama tag page shows "Apache License Version 2.0, January 2004" for this tag, and the Google Gemma 4 license page at the URL above reads as the Apache 2.0 text. The Hugging Face card says `License: apache-2.0`. The older Gemma Terms of Use page (custom, accepted by use) says: "The terms below apply to Gemma models listed in the Appendix" and "For Gemma 4 terms, see the Gemma 4 license." So the custom Gemma terms do not govern Gemma 4 per Google. No signed agreement is required on any of these pages; the Gemma 4 license page mentions none. Couldn't confirm: that the Hugging Face model card covers the exact QAT build that Ollama serves (I did not find a separate QAT card); a secondary site (canirun.ai) lists Gemma 4 under the custom Gemma terms, which conflicts with the primary pages above and was not used.
 Use: the separate local judge where the writer and judge must differ (`docs/TESTING.md`, `docs/model-choice.md`). Served locally by Ollama.
 Approved: yes. Reason: Apache 2.0 for Gemma 4 per the Google license page, the Ollama license blob, and the Hugging Face card. It allows research use, requires no signed agreement, and is not a custom agreement accepted by use. The QAT-build confirmation above is the remaining gap.
+
+## Speech model: whisper.cpp ggml-tiny.en (T8.1)
+
+URL: https://huggingface.co/ggerganov/whisper.cpp (model files, pinned at revision 5359861c739e955e79d9a303bcbc70fb988958b1, file `ggml-tiny.en.bin`, sha256 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f); runtime https://github.com/ggml-org/whisper.cpp (tag v1.7.6); original model https://github.com/openai/whisper.
+License: MIT. The Hugging Face API for the model repo lists `license: mit` and the repo is not gated; the whisper.cpp LICENSE is MIT ("Copyright (c) 2023-2026 The ggml authors") and the OpenAI Whisper LICENSE is MIT ("Copyright (c) 2022 OpenAI"). Checked 2026-11-02.
+Access: ungated HTTP download, no registration or signed agreement. The Dockerfile downloads it at build time and checks the sha256; the weights are not in git.
+Approved: yes. Reason: MIT, ungated, no signed agreement.

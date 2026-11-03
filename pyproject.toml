@@ -14,6 +14,7 @@ dev = ["pytest", "ruff", "scikit-learn", "fastapi", "httpx", "uvicorn", "jsonsch
 server = ["fastapi", "uvicorn", "websockets"]
 postgres = ["psycopg[binary]", "pgvector"]
 rerank = ["sentence-transformers"]
+speech = ["grpcio", "grpcio-tools"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -22,7 +23,10 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-m 'not real'"
-markers = ["real: needs a GPU, Ollama, or a network; runs only when a task asks for it"]
+markers = [
+  "real: needs a GPU, Ollama, or a network; runs only when a task asks for it",
+  "gpu: needs the GPU service and a GPU turn; runs only when -m names gpu",
+]
 
 [tool.ruff]
 extend-exclude = ["legacy"]
