@@ -1,0 +1,490 @@
+{
+ "run_id": "E4-20261103T102930546849Z",
+ "experiment": "E4",
+ "git_commit": "1eb9583ed2af004518ff7383034634443dd0ccde",
+ "dirty": false,
+ "dataset_hash": "409ac3772f7a2f5dc01ee7a95581e23874361284bc3614c244aaffc4a3bc58a1",
+ "split": "dev",
+ "scenario_source": "decode",
+ "config": {
+  "experiment": "E4",
+  "source": "decode",
+  "winner_rule": "highest dev macro-F1 over the four labels on our dev scenarios (the best epoch of the run); ties broken by fewer epochs, then by lower learning rate",
+  "winner": "lr3e-05_ep3",
+  "grid": [
+   [
+    1e-05,
+    2
+   ],
+   [
+    1e-05,
+    3
+   ],
+   [
+    2e-05,
+    2
+   ],
+   [
+    2e-05,
+    3
+   ],
+   [
+    3e-05,
+    2
+   ],
+   [
+    3e-05,
+    3
+   ]
+  ],
+  "batch_size": 8,
+  "min_batch_size": 2,
+  "settings_at_lower_batch_size": [],
+  "winner_batch_size": 8,
+  "batch_size_note": "on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like",
+  "num_workers": 2,
+  "patience": 1,
+  "threshold": 0.5,
+  "freeze_word_embeddings": true,
+  "training": {
+   "decode_train_pairs": 8000,
+   "scenarios_train_pairs": 48,
+   "scenario_repeat": 8,
+   "examples": 8384,
+   "label_consistent": 4129,
+   "label_contradiction": 4079,
+   "label_insufficient": 80,
+   "label_update": 96
+  },
+  "train_only_balance": {
+   "distinct_cases_per_label": {
+    "consistent": 14,
+    "update": 12,
+    "contradiction": 12,
+    "insufficient": 10
+   },
+   "repeats": 8,
+   "class_weights": {
+    "consistent": 0.5076289658512957,
+    "update": 21.833333333333332,
+    "contradiction": 0.5138514341750429,
+    "insufficient": 26.2
+   },
+   "weight_ratio": 51.612500000000004,
+   "note": "class weights change how much a label counts in the loss but add no new examples: `update` and `insufficient` rest on very few distinct train-only cases (each repeated `repeats` times), so scores on them should be read with that in mind"
+  },
+  "sample_rule": "pairs ordered by sha256 of conversation_id|label|statement, the first N taken; the same rule picks the DECODE train sample and the DECODE dev sample",
+  "decode_dev_sample": 1000,
+  "decode_train_sample": 8000,
+  "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
+  "style_note": "training used our own writing style (the train-only scenario set was written for this project, like the dev and test scenarios), so scores on our scenarios could look better than real use",
+  "train_set_review_note": "an independent read of the invented train-only set, before training, caught real near-copies of held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it could not have caught them; those cases were rewritten and read again",
+  "decode_note": "DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Its score covers contradiction vs not only and is not four-label performance. Metrics are accuracy, false alert rate and the F1 of contradiction and of non-contradiction; the four-label macro-F1 is not saved for it. DECODE dev was used for no training; DECODE test is untouched.",
+  "checkpoint_sha256": "6f0cc95019bfc44a14adb8ccf13b52fdec05870392858b8e0fc7574cb2f4eba9",
+  "scored_cases": 1000,
+  "started_at": "2026-11-03T09:37:53.157312+00:00",
+  "labels_reviewed": false,
+  "failed_systems": {},
+  "rerun_note": "rerun after a bug: pretrained weights were loaded in float16 (the stored dtype), the first AdamW step made them NaN, and every run was recorded ok. Fix: weights load as float32 (bf16 autocast on GPU is unchanged), a non-finite loss now fails its setting, and check_run rejects a winner with a non-finite training loss. The grid, winner rule, data and manifests are unchanged; the fix changes the weight precision of every trained setting, so the first run's numbers cannot be compared with this one's"
+ },
+ "models": {
+  "trained": "microsoft/deberta-v3-base fine-tuned",
+  "tfidf": "tfidf-logreg",
+  "zeroshot": "cross-encoder/nli-deberta-v3-xsmall",
+  "prompted": "qwen3.5:4b-q4_K_M"
+ },
+ "prompt_versions": {
+  "consistency": "v1"
+ },
+ "n": 1000,
+ "metrics": {
+  "trained": {
+   "false_alert_rate": 0.12127236580516898,
+   "f1[label=consistent]": 0.9141675284384695,
+   "f1[label=contradiction]": 0.9196515004840271,
+   "label_accuracy": 0.917,
+   "latency_p50_ms": 17.0,
+   "latency_p95_ms": 25.0
+  },
+  "tfidf": {
+   "false_alert_rate": 0.2485089463220676,
+   "f1[label=consistent]": 0.7613293051359517,
+   "f1[label=contradiction]": 0.7646474677259185,
+   "label_accuracy": 0.763,
+   "latency_p50_ms": 0.0,
+   "latency_p95_ms": 1.0
+  },
+  "zeroshot": {
+   "false_alert_rate": 0.4731610337972167,
+   "f1[label=consistent]": 0.6503067484662577,
+   "f1[label=contradiction]": 0.759493670886076,
+   "label_accuracy": 0.715,
+   "latency_p50_ms": 16.0,
+   "latency_p95_ms": 23.049999999999955
+  },
+  "prompted": {
+   "false_alert_rate": 0.02186878727634195,
+   "f1[label=consistent]": 0.831081081081081,
+   "f1[label=contradiction]": 0.7549019607843137,
+   "label_accuracy": 0.8,
+   "latency_p50_ms": 528.0,
+   "latency_p95_ms": 606.0
+  }
+ },
+ "intervals": {
+  "trained": {
+   "label_accuracy": [
+    0.8994974874371859,
+    0.9332669322709163
+   ],
+   "false_alert_rate": [
+    0.09368635437881874,
+    0.15030091498236559
+   ]
+  },
+  "tfidf": {
+   "label_accuracy": [
+    0.7364729458917836,
+    0.7889461055276381
+   ],
+   "false_alert_rate": [
+    0.2118315752242658,
+    0.28712972111875135
+   ]
+  },
+  "zeroshot": {
+   "label_accuracy": [
+    0.6863727454909819,
+    0.7424849699398798
+   ],
+   "false_alert_rate": [
+    0.4301438894523327,
+    0.5172447077619491
+   ]
+  },
+  "prompted": {
+   "label_accuracy": [
+    0.7749993693239152,
+    0.8248248248248248
+   ],
+   "false_alert_rate": [
+    0.010040160642570281,
+    0.03557477979135073
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "label_accuracy",
+   "diff": 0.15400000000000003,
+   "ci": [
+    0.12612612612612617,
+    0.18209176887838033
+   ],
+   "mcnemar_p": 3.318510506175273e-26
+  },
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "false_alert_rate",
+   "diff": -0.12723658051689862,
+   "ci": [
+    -0.16831732772475644,
+    -0.08720930232558138
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "label_accuracy",
+   "diff": 0.20200000000000007,
+   "ci": [
+    0.17080436941410138,
+    0.2332332332332332
+   ],
+   "mcnemar_p": 6.274510033843665e-35
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "false_alert_rate",
+   "diff": -0.3518886679920477,
+   "ci": [
+    -0.40159085646762,
+    -0.30223012835764324
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "label_accuracy",
+   "diff": 0.11699999999999999,
+   "ci": [
+    0.0859105324544275,
+    0.14711804249577617
+   ],
+   "mcnemar_p": 1.3890186570597495e-13
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "false_alert_rate",
+   "diff": 0.09940357852882703,
+   "ci": [
+    0.06868643516712186,
+    0.13111545988258316
+   ],
+   "mcnemar_p": null
+  }
+ ],
+ "supersedes": [
+  {
+   "run_id": "E4-20261103T084834918198Z",
+   "reason": "the first run's training loss was NaN in every epoch of all six settings, so its trained model was untrained and its records are void; the weights had loaded as float16 and AdamW's epsilon underflowed"
+  }
+ ],
+ "attempts": [
+  {
+   "setting": "lr1e-05_ep2",
+   "lr": 1e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 2,
+   "dev_macro_f1": 0.690121491411814,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.6844729071994888,
+     "dev_macro_f1": 0.6072212270488132,
+     "epoch_seconds": 125.32466820000263
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.2505584095843769,
+     "dev_macro_f1": 0.690121491411814,
+     "epoch_seconds": 113.32490590000089
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 119.32478705000176,
+   "peak_gpu_memory_mb": 4108.77783203125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr1e-05_ep3",
+   "lr": 1e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 3,
+   "dev_macro_f1": 0.7566641840835389,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.6215251074154783,
+     "dev_macro_f1": 0.673515430323941,
+     "epoch_seconds": 165.35103320000053
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.2372307447646167,
+     "dev_macro_f1": 0.7443783068783069,
+     "epoch_seconds": 131.5159335999997
+    },
+    {
+     "epoch": 3,
+     "train_loss": 0.16036533458322333,
+     "dev_macro_f1": 0.7566641840835389,
+     "epoch_seconds": 136.30501829999412
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 144.3906616999981,
+   "peak_gpu_memory_mb": 4113.73583984375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep2",
+   "lr": 2e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 2,
+   "dev_macro_f1": 0.7511442104662444,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.532647134183874,
+     "dev_macro_f1": 0.7453715859321359,
+     "epoch_seconds": 142.2754556
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.1967176702791089,
+     "dev_macro_f1": 0.7511442104662444,
+     "epoch_seconds": 136.2330015999978
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 139.2542285999989,
+   "peak_gpu_memory_mb": 4113.73583984375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep3",
+   "lr": 2e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 3,
+   "dev_macro_f1": 0.7741702741702742,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.5871569301563365,
+     "dev_macro_f1": 0.6823928296397707,
+     "epoch_seconds": 153.12775139999576
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.19953099759287807,
+     "dev_macro_f1": 0.7475374310480694,
+     "epoch_seconds": 135.34075190000294
+    },
+    {
+     "epoch": 3,
+     "train_loss": 0.09713935119603456,
+     "dev_macro_f1": 0.7741702741702742,
+     "epoch_seconds": 137.17945010000403
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 141.88265113333424,
+   "peak_gpu_memory_mb": 4113.73583984375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep2",
+   "lr": 3e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 2,
+   "dev_macro_f1": 0.789166775499543,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.5377481523650176,
+     "dev_macro_f1": 0.7824634894280292,
+     "epoch_seconds": 195.70050469999842
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.18971774656712592,
+     "dev_macro_f1": 0.789166775499543,
+     "epoch_seconds": 213.82676429999992
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 204.76363449999917,
+   "peak_gpu_memory_mb": 4113.73583984375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep3",
+   "lr": 3e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 2,
+   "dev_macro_f1": 0.792519305019305,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 0.5580087182150251,
+     "dev_macro_f1": 0.7885529770775672,
+     "epoch_seconds": 176.99701769999956
+    },
+    {
+     "epoch": 2,
+     "train_loss": 0.20639343862066345,
+     "dev_macro_f1": 0.792519305019305,
+     "epoch_seconds": 130.38147590000153
+    },
+    {
+     "epoch": 3,
+     "train_loss": 0.09532569736541498,
+     "dev_macro_f1": 0.7894505160898603,
+     "epoch_seconds": 121.30476599999383
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 142.89441986666498,
+   "peak_gpu_memory_mb": 4113.73583984375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "tfidf",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "zeroshot",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "prompted",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": false,
+ "predictions": {
+  "trained": "results/runs/E4-20261103T102930546849Z.trained.predictions.jsonl",
+  "tfidf": "results/runs/E4-20261103T102930546849Z.tfidf.predictions.jsonl",
+  "zeroshot": "results/runs/E4-20261103T102930546849Z.zeroshot.predictions.jsonl",
+  "prompted": "results/runs/E4-20261103T102930546849Z.prompted.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T09:37:53.157312+00:00",
+ "finished_at": "2026-11-03T10:29:30.546849+00:00"
+}
