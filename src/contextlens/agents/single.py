@@ -447,6 +447,10 @@ class _OneShot:
     def _select(self, req: ButtonRequest, ctx: Context) -> list[Turn]:
         raise NotImplementedError
 
+    def _note(self, req: ButtonRequest, ctx: Context) -> str:
+        """Extra data appended to the user message, already escaped; none by default."""
+        return ""
+
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         start = time.perf_counter()
         end = start + self.deadline_s
@@ -461,7 +465,7 @@ class _OneShot:
             return _abstained("the conversation has no turns yet")
         messages = [
             {"role": "system", "content": self.system},
-            {"role": "user", "content": _user_message(turns, req)},
+            {"role": "user", "content": _user_message(turns, req) + self._note(req, ctx)},
         ]
         remaining = end - time.perf_counter()
         call = functools.partial(
