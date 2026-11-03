@@ -126,7 +126,7 @@ def _post_json(url: str, payload: dict, timeout_s: float) -> dict:
 
 
 class OllamaClient(_Base):
-    def __init__(self, model: str, base_url: str = "http://localhost:11434"):
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434"):
         self.model, self.base_url = model, base_url.rstrip("/")
 
     def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
@@ -187,7 +187,7 @@ class OpenAICompatClient(_Base):
 
 
 class Embedder:
-    def __init__(self, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434"):
+    def __init__(self, model: str = "nomic-embed-text", base_url: str = "http://127.0.0.1:11434"):
         self.model, self.base_url = model, base_url.rstrip("/")
 
     def embed(self, texts: list[str]) -> list[list[float]]:

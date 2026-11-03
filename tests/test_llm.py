@@ -252,3 +252,11 @@ def test_cap_holds_across_threads(claude, monkeypatch, tmp_path):
         started = sum(pool.map(one, range(40)))
     assert started == 10
     assert json.loads(path.read_text())["count"] == 1000
+
+
+def test_ollama_defaults_use_ipv4_loopback():
+    import inspect
+
+    for cls in (c.OllamaClient, c.Embedder):
+        default = inspect.signature(cls.__init__).parameters["base_url"].default
+        assert default == "http://127.0.0.1:11434", cls.__name__
