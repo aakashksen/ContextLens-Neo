@@ -343,12 +343,12 @@
       "worktree": "<local path>",
       "started_at": "2026-11-03T05:41:55+00:00",
       "verified": {
-        "commit": "b1f7aec24616682ce64fe45f9422f1b06350d081",
+        "commit": "4efc114f83d3771ae2d38ed8337d826729f2c764",
         "passed": true,
-        "at": "2026-11-03T05:48:43+00:00"
+        "at": "2026-11-03T06:06:45+00:00"
       },
-      "attempts": 1,
-      "reason": "deadline overrun on slow tools/embedder/LLM (0.3s took 4s); injected claim survives in suggestion when a finding quotes the turn; baseline budget unenforced, future turn via req.as_of_seq; failed-attempt tokens uncounted"
+      "attempts": 2,
+      "reason": "suggestion rule drops 6 of 16 good dev suggestions yet paraphrased injected claims pass, drops unmarked; baselines have no deadline (20s invalid-reply path); no test for dropping suggestion on a findingless card"
     },
     {
       "id": "T3.3",
@@ -405,9 +405,14 @@
       "acceptance": [
         "{py} -m pytest tests/test_consistency_baselines.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
-      "started_at": "2026-11-03T05:45:45+00:00"
+      "status": "done",
+      "started_at": "2026-11-03T05:45:45+00:00",
+      "verified": {
+        "commit": "fdf0ccb42baf370fd14d0f8fbb748ad69b1d2d9e",
+        "passed": true,
+        "at": "2026-11-03T06:10:23+00:00"
+      },
+      "done_at": "2026-11-03T06:23:15+00:00"
     },
     {
       "id": "T5.2",
@@ -593,7 +598,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T06:00:09+00:00"
+      "started_at": "2026-11-03T06:00:09+00:00",
+      "verified": {
+        "commit": "816f34e98ae73c8236c4d9626b4d68e4ffe38ab0",
+        "passed": true,
+        "at": "2026-11-03T06:08:23+00:00"
+      },
+      "attempts": 1,
+      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
     },
     {
       "id": "T8.7",
