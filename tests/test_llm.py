@@ -148,3 +148,107 @@ def test_ollama_round_trip():
 def test_claude_haiku_round_trip():
     res = ClaudeCodeClient().complete(MSGS, timeout_s=120)
     assert res.text
+
+
+def _no_process(monkeypatch):
+    def no_run(*a, **k):
+        raise AssertionError("process must not start")
+
+    monkeypatch.setattr(subprocess, "run", no_run)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{garbage",
+        "{}",
+        '{"count": "5", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}',
+        '{"count": -1, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}',
+        '{"count": true, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}',
+        "[]",
+        "",
+    ],
+)
+def test_corrupt_counter_raises_llm_error_and_starts_no_process(claude, monkeypatch, tmp_path, content):
+    path = tmp_path / "claude_calls.json"
+    path.write_text(content)
+    _no_process(monkeypatch)
+    with pytest.raises(LLMError):
+        claude.complete(MSGS)
+    assert path.read_text() == content
+
+
+def test_reply_mentioning_usage_limit_is_not_an_error(claude, monkeypatch):
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **kw: Proc(_ok("Explain what a usage limit is"))
+    )
+    assert claude.complete(MSGS).text == "Explain what a usage limit is"
+
+
+def test_lock_that_cannot_be_acquired_raises_llm_error(claude, monkeypatch, tmp_path):
+    monkeypatch.setattr(c, "LOCK_TIMEOUT_S", 0.3)
+    _no_process(monkeypatch)
+    with c._locked(tmp_path / "claude_calls.json", 5.0):
+        with pytest.raises(LLMError):
+            claude.complete(MSGS)
+
+
+_WORKER = """
+import sys
+from pathlib import Path
+from contextlens.llm import client as c
+c.shutil.which = lambda name: "/bin/claude"
+class P:
+    stdout = '{"is_error": false, "result": "x", "usage": {}}'
+    returncode = 0
+    stderr = ""
+c.subprocess.run = lambda cmd, **kw: P()
+ok = 0
+for _ in range(int(sys.argv[2])):
+    try:
+        c.ClaudeCodeClient(calls_path=Path(sys.argv[1]), cap=int(sys.argv[3])).complete([{"role": "user", "content": "hi"}])
+        ok += 1
+    except c.LLMError:
+        pass
+print(ok)
+"""
+
+
+def test_cap_holds_across_processes(tmp_path):
+    import sys
+
+    path = tmp_path / "claude_calls.json"
+    path.write_text(json.dumps({"count": 90, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
+    script = tmp_path / "worker.py"
+    script.write_text(_WORKER)
+    procs = [
+        subprocess.Popen(
+            [sys.executable, str(script), str(path), "10", "100"],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        for _ in range(6)
+    ]
+    started = sum(int(p.communicate()[0]) for p in procs)
+    assert started == 10
+    assert json.loads(path.read_text())["count"] == 100
+
+
+def test_cap_holds_across_threads(claude, monkeypatch, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    path = tmp_path / "claude_calls.json"
+    path.write_text(json.dumps({"count": 990, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: Proc(_ok()))
+
+    def one(_):
+        try:
+            claude.complete(MSGS)
+            return 1
+        except LLMError:
+            return 0
+
+    with ThreadPoolExecutor(40) as pool:
+        started = sum(pool.map(one, range(40)))
+    assert started == 10
+    assert json.loads(path.read_text())["count"] == 1000

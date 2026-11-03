@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -195,10 +198,87 @@ class Embedder:
         return vectors
 
 
+LOCK_TIMEOUT_S = 30.0
+_COUNTER_KEYS = ("count", "input_tokens", "output_tokens", "cost_usd")
+
+
+def _try_lock(fh) -> bool:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock(fh) -> None:
+    if os.name == "nt":
+        import msvcrt
+
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _locked(path: Path, timeout_s: float):
+    """Exclusive lock across threads and processes; the OS drops it if the holder dies."""
+    lock_path = path.with_name(path.name + ".lock")
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(lock_path, "a+b")  # noqa: SIM115
+    except OSError as err:
+        raise LLMError(f"cannot open lock file {lock_path}: {err}") from err
+    try:
+        deadline = time.monotonic() + timeout_s
+        while not _try_lock(fh):
+            if time.monotonic() >= deadline:
+                raise LLMError(f"could not lock {lock_path} within {timeout_s}s")
+            time.sleep(0.01)
+        try:
+            yield
+        finally:
+            _unlock(fh)
+    finally:
+        fh.close()
+
+
 def _load_calls(path: Path) -> dict:
-    if path.exists():
-        return json.loads(path.read_text())
-    return {"count": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    if not path.exists():
+        return {"count": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as err:
+        raise LLMError(f"call counter {path} is unreadable: {err}") from err
+    if not isinstance(data, dict):
+        raise LLMError(f"call counter {path} is not an object")
+    for key in _COUNTER_KEYS:
+        v = data.get(key)
+        if isinstance(v, bool) or not isinstance(v, int | float) or v < 0:
+            raise LLMError(f"call counter {path} has an invalid {key!r}")
+    if not isinstance(data["count"], int):
+        raise LLMError(f"call counter {path} has a non-integer count")
+    return data
+
+
+def _save_calls(path: Path, calls: dict) -> None:
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(calls, indent=2))
+        os.replace(tmp, path)
+    except OSError as err:
+        raise LLMError(f"cannot write call counter {path}: {err}") from err
 
 
 class ClaudeCodeClient(_Base):
@@ -210,17 +290,16 @@ class ClaudeCodeClient(_Base):
     ):
         self.model, self.calls_path, self.cap = model, Path(calls_path), cap
 
-    def _save(self, calls: dict) -> None:
-        self.calls_path.parent.mkdir(parents=True, exist_ok=True)
-        self.calls_path.write_text(json.dumps(calls, indent=2))
-
     def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
         exe = shutil.which("claude")
         if exe is None:
             raise LLMError("claude command not found")
-        calls = _load_calls(self.calls_path)
-        if calls["count"] >= self.cap:
-            raise LLMError(f"Claude Code call cap of {self.cap} reached; only the person can raise it")
+        with _locked(self.calls_path, LOCK_TIMEOUT_S):
+            calls = _load_calls(self.calls_path)
+            if calls["count"] >= self.cap:
+                raise LLMError(f"Claude Code call cap of {self.cap} reached; only the person can raise it")
+            calls["count"] += 1  # reserved before the process starts; a started call counts even if it fails
+            _save_calls(self.calls_path, calls)
         prompt = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
         if schema is not None:
             prompt += "\n\nReply with only JSON matching this schema:\n" + json.dumps(
@@ -238,8 +317,6 @@ class ClaudeCodeClient(_Base):
             "--no-session-persistence",
             "--max-turns", "1",
         ]  # fmt: skip
-        calls["count"] += 1  # a started call counts even if it fails
-        self._save(calls)
         t0 = time.perf_counter()
         try:
             with tempfile.TemporaryDirectory() as tmp:
@@ -261,7 +338,7 @@ class ClaudeCodeClient(_Base):
         except ValueError as err:
             raise LLMError(f"claude output was not JSON: {proc.stdout[:200]}") from err
         text = str(data.get("result", ""))
-        if data.get("is_error") or "usage limit" in text.lower():
+        if data.get("is_error"):
             raise LLMError(f"claude reported an error: {text[:300]}")
         usage = data.get("usage") or {}
         res = LLMResult(
@@ -272,9 +349,10 @@ class ClaudeCodeClient(_Base):
             latency_ms=(time.perf_counter() - t0) * 1000,
             cost_usd=float(data.get("total_cost_usd", 0.0)),
         )
-        calls = _load_calls(self.calls_path)
-        calls["input_tokens"] += res.prompt_tokens
-        calls["output_tokens"] += res.completion_tokens
-        calls["cost_usd"] += res.cost_usd
-        self._save(calls)
+        with _locked(self.calls_path, LOCK_TIMEOUT_S):
+            calls = _load_calls(self.calls_path)
+            calls["input_tokens"] += res.prompt_tokens
+            calls["output_tokens"] += res.completion_tokens
+            calls["cost_usd"] += res.cost_usd
+            _save_calls(self.calls_path, calls)
         return res
