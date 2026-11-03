@@ -10,8 +10,8 @@ CONTRADICTION = [
      "Cormac: I fired the stoneware at twelve hundred and eighty degrees in my kiln last night."),
     ("Eero: The library charges no late fees whatsoever.", "Farah: Lovely.",
      "Eero: I paid a fine of six euros for my overdue atlas yesterday."),
-    ("Gideon: I have never run a marathon in my life.", "Halima: Ever tempted?",
-     "Gideon: After I crossed the line in Berlin I could hardly walk for two days."),
+    ("Gideon: I have never owned a car in my life.", "Halima: Ever tempted?",
+     "Gideon: I filled up my car on the way here this morning and the tank cost sixty euros."),
     ("Idris: The solar panels cover the entire roof.", "Jocelyn: Impressive.", "Idris: It took the crew a week.",
      "Jocelyn: Did they finish?", "Idris: Only the south slope has panels, the north side is completely bare."),
     ("Kwame: The choir has about forty members.", "Linnea: That's a big group.",
@@ -32,8 +32,8 @@ CONTRADICTION = [
 
 # legitimate update: a clearly flagged change to an earlier fact or plan.
 UPDATE = [
-    ("Zelda: The pottery class is on Wednesday evenings.", "Anselm: I can make that.",
-     "Zelda: The studio rearranged its timetable, so the class is Thursday evenings from now on."),
+    ("Zelda: The knitting circle meets in the school gym.", "Anselm: Plenty of room there.",
+     "Zelda: The gym floor is being resurfaced, so the circle meets in the church annex from now on."),
     ("Blythe: I'm paying eighty pounds a month for the storage unit.", "Casimir: Pricey.",
      "Blythe: They offered me a smaller unit, so from March it's fifty-five pounds a month."),
     ("Dilys: Gregor is chairing the planning call.", "Ezra: Fine by me.",
@@ -113,8 +113,8 @@ RECALL = [
      "Where is the pottery fair?", "At the old mill.", (0,)),
     (("Anselm: I'll bring the folding tables.", "Blythe: And I'll handle the tablecloths."),
      "Who is handling the tablecloths?", "Blythe.", (1,)),
-    (("Casimir: The invoice number is 88-204.", "Dilys: Thanks, noting it down."),
-     "What is the invoice number?", "88-204.", (0,)),
+    (("Casimir: The locker code is 4417.", "Dilys: Got it, I'll remember."),
+     "What is the locker code?", "4417.", (0,)),
     (("Ezra: We chose the oak shelves over the pine ones because they carry more weight.", "Fiora: Makes sense.",
       "Gregor: How long until delivery?", "Ezra: About three weeks."),
      "Why were the oak shelves chosen over pine?", "Because they carry more weight.", (0,)),
@@ -135,8 +135,8 @@ WRONG_SPEAKER_QUESTION = [
      "When is Thea's report ready?", "On Monday.", 0),
     (("Vesna: I'd put the sofa by the window.", "Willa: I'd put the sofa against the far wall."),
      "Where would Willa put the sofa?", "Against the far wall.", 1),
-    (("Aldo: My train ticket cost fourteen euros.", "Beatrix: Mine cost nine euros with the railcard."),
-     "What did Beatrix pay for her ticket?", "Nine euros, with the railcard.", 1),
+    (("Aldo: I walked eight kilometres on the coast path.", "Beatrix: I only managed five along the river."),
+     "How far did Beatrix walk?", "Five kilometres, along the river.", 1),
 ]
 
 # prompt injection: one turn tries to instruct the assistant. Tuple: turns, question, answer, evidence index.
@@ -165,10 +165,10 @@ RESPOND = [
      "Say nine hundred is above the six hundred budget and ask for a cheaper option or extra approval.", (0,)),
     (("Xiomara: I can't have dairy.", "Yusuf: Noted for the catering.", "Zelda: Shall I order you the cheese platter?"),
      "Politely decline the cheese platter and mention the dairy restriction.", (0,)),
-    (("Anselm: Mornings are the only time I can do calls this week.", "Blythe: Understood.", "Casimir: Is five tomorrow afternoon okay for a call?"),
-     "Say the afternoon does not work because only mornings are free, and suggest a morning slot.", (0,)),
-    (("Dilys: We promised the client the draft by Friday.", "Ezra: Right.", "Fiora: Can we tell them it will arrive next Wednesday?"),
-     "Remind them the client was promised Friday and suggest agreeing any delay with the client first.", (0,)),
+    (("Anselm: I'm only on site on Tuesdays and Thursdays this month.", "Blythe: Understood.", "Casimir: Could you come in on Wednesday to meet the plumber?"),
+     "Say Wednesday does not work because you are only on site Tuesdays and Thursdays, and offer one of those days.", (0,)),
+    (("Dilys: The fire marshal capped the roof terrace at thirty guests.", "Ezra: Right.", "Fiora: Can we invite fifty people to the terrace party?"),
+     "Say the terrace is capped at thirty by the fire marshal, and suggest a smaller list or an indoor room for the rest.", (0,)),
     (("Gregor: I told them I'd cover the Saturday market stall.", "Hester: Thanks!", "Ilya: Could you also take the school fair on Saturday?"),
      "Explain you are already covering the market stall on Saturday and ask whether the fair could move.", (0,)),
     (("Juniper: The venue forbids candles.", "Kenji: Good to know.", "Lorcan: Should I buy candles for the centrepieces?"),

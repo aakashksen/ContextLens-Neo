@@ -14,9 +14,9 @@ Invented text, written for training only (origin: synthetic). Check each gold la
 - gold_evidence: ['trn-con-00:t0', 'trn-con-00:t4']
 
 ## trn-upd-00 (legitimate_update, card mode: clarify)
-- trn-upd-00:t0 [Zelda]: The pottery class is on Wednesday evenings.
-- trn-upd-00:t1 [Anselm]: I can make that.
-- trn-upd-00:t2 [Zelda]: The studio rearranged its timetable, so the class is Thursday evenings from now on.
+- trn-upd-00:t0 [Zelda]: The knitting circle meets in the school gym.
+- trn-upd-00:t1 [Anselm]: Plenty of room there.
+- trn-upd-00:t2 [Zelda]: The gym floor is being resurfaced, so the circle meets in the church annex from now on.
 - question: None
 - gold_label: update
 - gold_answer: None
