@@ -34,6 +34,7 @@ class MemoryExtractor:
         if not new_turns:
             return []
         by_id = {t.id: t for t in new_turns}
+        prompt_ids = {escape(t.id): t for t in new_turns}
         have = "\n".join(f"{m.id} | {escape(m.subject)} | {escape(m.statement)}" for m in existing) or "(none)"
         messages = [
             {"role": "system", "content": SYSTEM},
@@ -48,7 +49,11 @@ class MemoryExtractor:
         conv = new_turns[0].conversation_id
         result: list[MemoryItem] = []
         for raw in out.items:
-            cites = [i for i in raw.source_turn_ids if i in by_id]
+            cites = []
+            for i in raw.source_turn_ids:
+                real = prompt_ids.get(i) or by_id.get(i)
+                if real is not None and real.id not in cites:
+                    cites.append(real.id)
             if not cites:
                 continue
             same_subject = {
@@ -56,10 +61,12 @@ class MemoryExtractor:
                 for m in existing
                 if m.conversation_id == conv and m.subject.lower() == raw.subject.lower()
             }
-            supersedes = raw.supersedes if raw.supersedes in same_subject else None
-            if supersedes is None and raw.kind == "correction":
-                same = [m for m in existing if m.id in same_subject]
-                supersedes = same[-1].id if same else None
+            supersedes = None
+            if raw.kind == "correction":
+                supersedes = raw.supersedes if raw.supersedes in same_subject else None
+                if supersedes is None:
+                    same = [m for m in existing if m.id in same_subject]
+                    supersedes = same[-1].id if same else None
             speakers = {effective_speaker(by_id[i]) for i in cites}
             speaker = speakers.pop() if len(speakers) == 1 else "unknown"
             result.append(
