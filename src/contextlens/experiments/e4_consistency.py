@@ -465,7 +465,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
             "selection_data": SELECTION_NOTE,
             "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
-            "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started, "labels_reviewed": False,
+            "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started,
             "failed_systems": failed,
             **({"rerun_note": RERUN_NOTE} if supersedes else {}),
         }

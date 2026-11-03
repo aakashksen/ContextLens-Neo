@@ -51,6 +51,15 @@ def _git(root: Path, *args: str) -> None:
                    capture_output=True)
 
 
+def set_h2(root: Path, status: str) -> None:
+    """Write orchestration/tasks.json with H2 in the given state and commit it."""
+    path = root / "orchestration/tasks.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"tasks": [{"id": "H2", "owner": "human", "status": status}]}), encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", f"H2 {status}")
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     d = tmp_path / "datasets/scenarios"
@@ -62,6 +71,7 @@ def repo(tmp_path: Path) -> Path:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "init")
+    set_h2(tmp_path, "done")  # the person has signed H2; tests of the unsigned state call set_h2(repo, "pending")
     return tmp_path
 
 
@@ -347,3 +357,29 @@ def test_leftover_temp_is_not_a_record_and_not_dirty(repo: Path) -> None:
     (runs / ".E1-20250101T000000000000Z.json.123.tmp").write_text("{", encoding="utf-8")
     assert check("E1", root=repo) == []
     assert not is_dirty(repo)
+
+
+def _reviewed(path: Path) -> bool:
+    return json.loads(path.read_text(encoding="utf-8"))["labels_reviewed"]
+
+
+def test_labels_reviewed_false_before_h2_and_true_after(repo: Path) -> None:
+    set_h2(repo, "pending")
+    assert _reviewed(_run(repo)) is False
+    set_h2(repo, "done")
+    assert _reviewed(_run(repo)) is True
+
+
+def test_labels_reviewed_is_false_without_a_task_file(tmp_path: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    assert labels_reviewed(tmp_path) is False
+
+
+def test_config_cannot_set_labels_reviewed(repo: Path) -> None:
+    set_h2(repo, "pending")
+    assert _reviewed(_run(repo, config={"labels_reviewed": True})) is False
+
+
+def test_labels_from_another_source_stay_unreviewed(repo: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False

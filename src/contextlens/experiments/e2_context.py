@@ -931,7 +931,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
             "(config.judge_review is absent), so they are not claims.",
         ],
         "injection": {n: injection_report(scenarios, p) for n, p in systems.items()},
-        "claude_calls": 0, "labels_reviewed": False, "started_at": started,
+        "claude_calls": 0, "started_at": started,
     }
     models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
     own_local, own_cloud = _split_supersedes(supersedes, root)
@@ -1064,7 +1064,7 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
                         "note": "the run stops at the budget; the cap is the client's, as in docs/DESIGN.md"},
         "health": {f"{winner}_cloud": health}, "cold_start_s": {"judge_cloud": cold["judge_cloud"]},
         "injection": {n: injection_report(sub_scs, p) for n, p in systems.items()},
-        "claude_calls": used, "labels_reviewed": False, "started_at": local_config["started_at"],
+        "claude_calls": used, "started_at": local_config["started_at"],
     }
     attempts = [{"setting": f"{winner}_local", "kind": "local strategy, rows copied from the local record", "ok": True, "error": None},
                 {"setting": f"{winner}_cloud", "kind": "cloud", "ok": True, "error": None, "health": health}]

@@ -101,6 +101,22 @@ def write_scenarios_manifest(root: Path = ROOT) -> Path:
     return path
 
 
+TASKS_REL = Path("orchestration/tasks.json")
+
+
+def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
+    """True only when the person has signed H2 (status done in tasks.json) and the record's labels are the
+    scenario labels H2 reviewed. Labels from another source (QMSum, DECODE, ...) were not in H2's sample, so
+    they stay unreviewed here. This is the only place the flag is set; a runner's config cannot override it."""
+    if scenario_source != "scenarios":
+        return False
+    try:
+        tasks = json.loads((root / TASKS_REL).read_text(encoding="utf-8"))["tasks"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return any(isinstance(t, dict) and t.get("id") == "H2" and t.get("status") == "done" for t in tasks)
+
+
 SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -159,7 +175,7 @@ def write_run(
         **({"subset": subset} if subset is not None else {}),
         "attempts": attempts,
         "claude_calls": config.get("claude_calls", 0),
-        "labels_reviewed": config.get("labels_reviewed", False),
+        "labels_reviewed": labels_reviewed(root, scenario_source),
         "predictions": pred_paths,
         "started_at": config.get("started_at", now.isoformat()),
         "finished_at": now.isoformat(),

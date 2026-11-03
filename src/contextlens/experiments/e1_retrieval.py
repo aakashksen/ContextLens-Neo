@@ -201,7 +201,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
             if other != winner and (c := recompute_comparison(scs, preds[winner], preds[other], "recall@5")):
                 comparisons.append({"a": winner, "b": other, **c})
         config = {"experiment": "E1", "k": K, "pool": POOL, "chunks": CHUNKS, "query_rule": QUERY_RULE,
-                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started, "labels_reviewed": False}
+                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started}
         paths[source] = write_run(
             "E1", SPLIT, config, {"embedder": embedder.model, "reranker": reranker.model_name}, {}, metrics[source],
             intervals, attempts, preds, digest, comparisons=comparisons, scenario_source=source, root=root)
