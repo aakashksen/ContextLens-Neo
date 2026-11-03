@@ -167,6 +167,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 - `test_transcript_block_neutralizes_delimiters`
 - `test_system_prompt_never_contains_transcript_text`
 - `test_prompted_checker_update_case` with `FakeLLM`, checking the deadline pair's prompt holds both turns and maps `update` correctly
+**From phase review:** `render_transcript_block` reuses `src/contextlens/llm/untrusted.py`. `RollingSummary.text` is stored unescaped, so any prompt using it must escape it there.
 **Accept:** `{py} -m pytest tests/test_guard.py tests/test_tools.py -q`.
 
 ### T3.2: Single agent

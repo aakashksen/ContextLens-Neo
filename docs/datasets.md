@@ -124,3 +124,17 @@ URL: https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2 (model card); AP
 License: Apache-2.0 (model card header and API tag `license:apache-2.0`). Not gated.
 Use: local cross-encoder for `Reranker` in `src/contextlens/retrieval/rerank.py`, loaded lazily. Weights were not downloaded in T2.3.
 Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.
+
+## Embedding model: nomic-embed-text
+
+URL: https://ollama.com/library/nomic-embed-text (Ollama tag list; tags `latest`, `v1.5`, `137m-v1.5-fp16`, each 274MB); https://ollama.com/library/nomic-embed-text:v1.5 (license blob `c71d239df917`); primary model card https://huggingface.co/nomic-ai/nomic-embed-text-v1.5 (the Ollama base page links to the `nomic-ai` Hugging Face org).
+License: Apache License 2.0. The Ollama v1.5 page shows "Apache License Version 2.0, January 2004" as the license text, but only the opening lines, so the full text was not read there. The Hugging Face card header says `license: apache-2.0`. No gate or signed agreement appeared on the card. Couldn't confirm: that the Ollama `latest` tag is identical to `v1.5` (only the listed sizes match), and the full Ollama license text.
+Use: the default embedder (`Embedder`, `src/contextlens/llm/client.py`, default `model="nomic-embed-text"`), served locally by Ollama, as named in `docs/PLAN.md`.
+Approved: yes. Reason: Apache 2.0 is a standard license that allows research use, with no signed agreement and no custom terms accepted by use.
+
+## Judge model: gemma4:e4b-it-qat
+
+URL: https://ollama.com/library/gemma4:e4b-it-qat (Ollama tag page, license blob `0d542e0c8804`); primary license text https://ai.google.dev/gemma/docs/gemma_4_license (linked as "Apache 2.0" from the model card); model card https://huggingface.co/google/gemma-4-E4B-it (header `license: apache-2.0`); Google's Gemma Terms of Use https://ai.google.dev/gemma/terms.
+License: Apache License 2.0 for Gemma 4. The Ollama tag page shows "Apache License Version 2.0, January 2004" for this tag, and the Google Gemma 4 license page at the URL above reads as the Apache 2.0 text. The Hugging Face card says `License: apache-2.0`. The older Gemma Terms of Use page (custom, accepted by use) says: "The terms below apply to Gemma models listed in the Appendix" and "For Gemma 4 terms, see the Gemma 4 license." So the custom Gemma terms do not govern Gemma 4 per Google. No signed agreement is required on any of these pages; the Gemma 4 license page mentions none. Couldn't confirm: that the Hugging Face model card covers the exact QAT build that Ollama serves (I did not find a separate QAT card); a secondary site (canirun.ai) lists Gemma 4 under the custom Gemma terms, which conflicts with the primary pages above and was not used.
+Use: the separate local judge where the writer and judge must differ (`docs/TESTING.md`, `docs/model-choice.md`). Served locally by Ollama.
+Approved: yes. Reason: Apache 2.0 for Gemma 4 per the Google license page, the Ollama license blob, and the Hugging Face card. It allows research use, requires no signed agreement, and is not a custom agreement accepted by use. The QAT-build confirmation above is the remaining gap.
