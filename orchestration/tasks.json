@@ -462,6 +462,19 @@
       "status": "pending"
     },
     {
+      "id": "T8.0",
+      "phase": 8,
+      "title": "Client contract and fake server",
+      "owner": "agent",
+      "deps": [
+        "T0.2"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_contract.py -q"
+      ],
+      "status": "pending"
+    },
+    {
       "id": "T8.1",
       "phase": 8,
       "title": "C++ speech service",
@@ -496,7 +509,7 @@
       "title": "Web client",
       "owner": "agent",
       "deps": [
-        "T8.2"
+        "T8.0"
       ],
       "acceptance": [
         "npm --prefix clients/web ci",
@@ -511,27 +524,12 @@
       "title": "Observability and optional vision",
       "owner": "agent",
       "deps": [
-        "T8.2"
+        "T8.0",
+        "T4.1"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_obs.py tests/test_vision.py -q",
         "docker compose config -q"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "T8.5",
-      "phase": 8,
-      "title": "Experiment E7, real-time cost",
-      "owner": "agent",
-      "deps": [
-        "T8.2",
-        "T8.4",
-        "T1.5"
-      ],
-      "acceptance": [
-        "{py} -m pytest tests/test_e7.py -q",
-        "{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev"
       ],
       "status": "pending"
     },
@@ -541,10 +539,42 @@
       "title": "Unity XR client",
       "owner": "agent",
       "deps": [
-        "T8.2"
+        "T8.0"
       ],
       "acceptance": [
         "{py} tools/check_unity_schema.py"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.7",
+      "phase": 8,
+      "title": "Integration",
+      "owner": "agent",
+      "deps": [
+        "T8.2",
+        "T8.3",
+        "T8.4",
+        "T8.6"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_integration.py -q",
+        "{py} tools/check_unity_schema.py"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "T8.5",
+      "phase": 8,
+      "title": "Experiment E7, real-time cost",
+      "owner": "agent",
+      "deps": [
+        "T8.7",
+        "T1.5"
+      ],
+      "acceptance": [
+        "{py} -m pytest tests/test_e7.py -q",
+        "{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev"
       ],
       "status": "pending"
     },
@@ -554,7 +584,7 @@
       "title": "Try the Unity client",
       "owner": "human",
       "deps": [
-        "T8.6"
+        "T8.7"
       ],
       "acceptance": [],
       "status": "pending"

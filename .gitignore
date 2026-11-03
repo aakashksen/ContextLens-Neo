@@ -16,3 +16,5 @@ orchestration/evidence/
 results/claude_calls.json
 orchestration/run_loop.log
 *.egg-info/
+orchestration/.state.lock
+orchestration/.land.lock

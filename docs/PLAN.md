@@ -263,6 +263,12 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 
 ## Phase 8: Real time and clients
 
+### T8.0: Client contract and fake server
+**Files:** `docs/client-contract.md`, `src/contextlens/api/contract.py`, `tools/fake_server.py`, `tests/test_contract.py`.
+**Produces:** The one source of truth for `/ws/{conversation_id}`: incoming `audio`, `press` (a `ButtonRequest`), `pause`, `resume`, `delete`, and outgoing `transcript`, `card`, `status`, as Pydantic models using `schemas.py`, with a generated JSON schema at `docs/client-contract.schema.json`. `tools/fake_server.py` serves the contract with scripted transcripts and every `Card` status, so clients can be built before the backend exists.
+**Tests:** `test_schema_file_matches_models`; `test_fake_server_answers_press_with_valid_card`; `test_fake_server_can_send_answered_partial_and_abstained`.
+**Accept:** `{py} -m pytest tests/test_contract.py -q`.
+
 ### T8.1: C++ speech service
 **Files:** `speech/CMakeLists.txt`, `speech/src/*.cpp`, `speech/proto/speech.proto`, `speech/Dockerfile`, `docker-compose.yml` (add a `speech` service), `tests/test_speech_contract.py`, `speech/tests/`.
 **Produces:** gRPC `Transcribe(stream AudioChunk) returns (stream TranscriptSegment)`; segment fields `text, start_ms, end_ms, is_final`. C++17, whisper.cpp, built in Docker. It uses the GPU if Docker can reach it, or else CPU, reporting which. Add C++ unit tests for the audio ring buffer and voice activity gate. The Docker build runs `ctest` and fails if they fail.
@@ -276,6 +282,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **Accept:** `{py} -m pytest tests/test_api.py -q`.
 
 ### T8.3: Web client
+Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel with the backend.
 **Files:** `clients/web/`, ported from `legacy/OfficialContextLens/context-lens-frontend` (copy, don't edit the original).
 **Do:** A button, a card view that keeps remembered facts and suggestions visually distinct, a source view, recording indicator, pause, delete, and settings for detail, plain wording, and text size. Remove all Gemini and Deepgram code.
 **Tests:** Vitest: `suggestion is labeled and styled apart from recalled facts`; `abstained card says not enough information`; `recording indicator shows while listening`; `delete asks to confirm`. Keyboard works for all controls.
@@ -296,10 +303,17 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
+Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel with the backend.
 **Files:** `clients/unity/` (Unity 6000.3.3f1 project), `docs/unity-setup.md`, `tools/check_unity_schema.py`.
 **Do:** A small scene with a floating card, connected to `/ws/{conversation_id}`, shows the same card schema, with a button press from the XR device simulator or a controller, and webcam input through `WebCamTexture`. C# message types match `schemas.py`.
 **Tests:** a Python script checks the C# fields against the schema. Manual steps go in `docs/unity-setup.md`.
 **Accept:** `{py} tools/check_unity_schema.py`.
+
+### T8.7: Integration
+**Files:** `tests/test_integration.py`, `docs/run-everything.md`, changes wherever integration needs them.
+**Do:** Run the real backend with the real agent team, the speech service, and the web client together, and connect Unity's message types to the real server. The earlier client tasks used the fake server, so this is where any mismatch has to surface and get fixed. Document starting everything with one command.
+**Tests:** `test_real_backend_matches_contract` (fakes for models); real-marked `test_press_end_to_end_returns_a_cited_card`, covering audio → transcript → press → card; `test_fake_server_and_real_backend_send_same_shapes`.
+**Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
 See `docs/HUMAN-GATES.md`.

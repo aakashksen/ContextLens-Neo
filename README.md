@@ -31,7 +31,7 @@ Say yes when Claude Code first asks whether to trust the folder, or its permissi
 ## How a task gets finished
 
 ```
-taskctl next ──> implementer builds it, test first, and commits
+taskctl next ──> up to 3 tracks, each in its own git worktree: implementer builds, test first, and commits
                      │
                      ▼
               taskctl verify      reruns the plan's acceptance commands, keeps a log
@@ -41,7 +41,7 @@ taskctl next ──> implementer builds it, test first, and commits
                      │
          ┌──── FAIL ─┴─ PASS ────┐
          ▼                       ▼
-  back to implementer       taskctl done      refused unless both passed at this exact commit
+  back to implementer       taskctl land      refused unless both passed; merges, retests, then moves the build branch forward
   (3 tries, then blocked)        │
                                  ▼
                         phase ends? reviewer checks the whole phase
