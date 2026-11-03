@@ -9,11 +9,20 @@ from contextlens.memory.store import InMemoryTranscriptStore, TranscriptStore
 from contextlens.schemas import ButtonRequest, Card, ConsistencyLabel, Scenario
 
 
+class DroppedFinding(BaseModel):
+    """A finding a check removed from a card, kept so a wrongful drop can be counted afterwards."""
+
+    reason: str  # citation, instruction or number
+    statement: str
+    turn_ids: list[str]
+
+
 @dataclass
 class Context:
     store: TranscriptStore
     as_of_seq: int
     stage_ms: dict[str, int] = field(default_factory=dict)  # an assistant adds its stage timings here
+    drops: list[DroppedFinding] = field(default_factory=list)  # an assistant adds the findings its checks dropped
 
 
 class Assistant(Protocol):
@@ -30,6 +39,7 @@ class Prediction(BaseModel):
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
     label: ConsistencyLabel | None = None  # a bare consistency verdict, for rows that may hold no text
     probability: float | None = Field(default=None, ge=0, le=1)  # the model's probability for the label it gave
+    drops: list[DroppedFinding] = Field(default_factory=list)  # findings the checks removed, with their text
 
     @model_validator(mode="after")
     def _has_output(self) -> Self:
@@ -62,5 +72,6 @@ def replay(
         ms = int((time.perf_counter() - start) * 1000)
         out.append(Prediction(
             scenario_id=sc.id, card=card, stage_latency_ms={**ctx.stage_ms, "total": ms}, errored=errored,
+            drops=ctx.drops,
         ))
     return out

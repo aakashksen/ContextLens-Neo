@@ -3,7 +3,7 @@ import json
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -11,11 +11,11 @@ from pydantic import BaseModel, model_validator
 
 from contextlens.agents.tools import Tools
 from contextlens.context.budget import Section, fit_context
-from contextlens.guard.citations import guard_card
+from contextlens.guard.citations import check_findings, guard_card
 from contextlens.llm.client import LLMClient, LLMError, LLMResult, stop_retries_when
 from contextlens.llm.untrusted import effective_speaker, escape
 from contextlens.prompts.registry import get_prompt, render_transcript_block
-from contextlens.replay.runner import Context
+from contextlens.replay.runner import Context, DroppedFinding
 from contextlens.retrieval.hybrid import Retriever, ScoredTurn
 from contextlens.retrieval.query import query_for
 from contextlens.schemas import ButtonRequest, Card, Conversation, Finding, Scenario, Turn
@@ -186,14 +186,28 @@ def _runs(text: str) -> set[tuple[str, ...]]:
     return runs
 
 
-def _runs_in(text: str, quotes: list[str]) -> bool:
-    """Every number run in `text` is, as the same whole run, in the quotes. `500` against `five hundred`
-    is not matched: failing closed is the safe direction."""
-    return _runs(text) <= _runs(" ".join(quotes))
+_REF_ID = r"[\w.-]*:t\d+"  # a turn id as the scenarios write it, `<conversation>:t<n>`
+_REF_NUM = rf"(?:#?\d+|{'|'.join(sorted(_NUMBER_WORDS, key=len, reverse=True))})"
+_TURN_REF = re.compile(
+    rf"\b{_REF_ID}\b|\bt\d+\b|\b(?:turns?|messages?)\s+{_REF_NUM}(?:\s*(?:,|and|&|or|to)\s*{_REF_NUM})*\b", re.I)
+
+
+def without_turn_refs(text: str, turn_ids: Sequence[str] = ()) -> str:
+    """`text` with references to turns ("t3", "c1:t3", the given ids, "turns 2 and 4") taken out, so their digits are
+    not read as numbers the quotes must hold."""
+    for tid in sorted(turn_ids, key=len, reverse=True):
+        text = text.replace(tid, " ")
+    return _TURN_REF.sub(" ", text)
+
+
+def _runs_in(text: str, quotes: list[str], turn_ids: Sequence[str] = ()) -> bool:
+    """Every number run in `text` (turn references aside) is, as the same whole run, in the quotes. `500` against
+    `five hundred` is not matched: failing closed is the safe direction."""
+    return _runs(without_turn_refs(text, turn_ids)) <= _runs(" ".join(quotes))
 
 
 def _numbers_supported(f: Finding) -> bool:
-    return _runs_in(f.statement, [e.quote for e in f.evidence])
+    return _runs_in(f.statement, [e.quote for e in f.evidence], [e.turn_id for e in f.evidence])
 
 
 class _Suggestion(BaseModel):
@@ -253,11 +267,22 @@ def _suggest(
 
 
 def verify_card(card: Card, ctx: Context, conv_id: str) -> Card:
-    """Citation guard plus number rule, shared by all systems. Raises on a store error."""
+    """Citation guard, instruction guard and number rule, shared by all systems. Raises on a store error.
+    Every dropped finding is saved with its text in `ctx.drops`; the card's notes carry counts only."""
+    ok, gone = check_findings(card, ctx.store, ctx.as_of_seq, conv_id)
+    for f, why in gone:
+        ctx.drops.append(DroppedFinding(reason=why, statement=f.statement, turn_ids=[e.turn_id for e in f.evidence]))
     guarded = guard_card(card, ctx.store, ctx.as_of_seq, conv_id)
-    kept = [f for f in guarded.findings if _numbers_supported(f)]
-    dropped = len(guarded.findings) - len(kept)
-    note = [f"{dropped} finding(s) dropped: a number in it is not in the cited quotes"] * (dropped > 0)
+    kept = []
+    for f in guarded.findings:
+        if _numbers_supported(f):
+            kept.append(f)
+        else:
+            ctx.drops.append(DroppedFinding(reason="number", statement=f.statement, turn_ids=[e.turn_id for e in f.evidence]))
+    counts = {why: sum(r == why for _, r in gone) for why in ("citation", "instruction")}
+    number = len(guarded.findings) - len(kept)
+    note = [f"{counts['instruction']} finding(s) dropped: it cites a turn that gives orders to the assistant"] * (counts["instruction"] > 0)
+    note += [f"{number} finding(s) dropped: a number in it is not in the cited quotes"] * (number > 0)
     if not kept:
         out = _abstained("no finding passed the checks")
         return out.model_copy(update={"missing": [*out.missing, *note]})
