@@ -56,7 +56,7 @@ def test_a_sum_past_16_bits_is_scaled_not_clipped() -> None:
 def test_sample_rate_and_format_are_checked_not_converted() -> None:
     with pytest.raises(H.Stop, match="8000 Hz"):
         H.rebuild_meeting([utt(0.0, "A", 1, 0.1, rate=8000)])
-    with pytest.raises(H.Stop, match="mono"):
+    with pytest.raises(H.Stop, match="not mono"):
         H.rebuild_meeting([utt(0.0, "A", 1, 0.1, channels=2)])
     samples, _ = H.rebuild_meeting([utt(0.0, "A", 1, 0.1, rate=8000)], rate=8000)
     assert len(samples) == 800
@@ -157,3 +157,21 @@ def test_a_persistent_403_is_reported_not_worked_around(monkeypatch) -> None:
         H._request("https://huggingface.co/x", None, waits.append)
     assert len(calls) == 3 and waits == [50.0, 120.0]  # 30 s raised to the server's 50 s, then 120 s
     assert all(set(c) <= {"Range"} for c in calls)  # no extra headers, no cookies, no changed agent
+
+
+def float_wav(value: float, seconds: float) -> bytes:
+    n = int(seconds * RATE)
+    body = np.full(n, value, dtype="<f4").tobytes()
+    fmt = (3).to_bytes(2, "little") + (1).to_bytes(2, "little") + RATE.to_bytes(4, "little")         + (RATE * 4).to_bytes(4, "little") + (4).to_bytes(2, "little") + (32).to_bytes(2, "little")
+    chunks = b"fmt " + len(fmt).to_bytes(4, "little") + fmt + b"data" + len(body).to_bytes(4, "little") + body
+    return b"RIFF" + (4 + len(chunks)).to_bytes(4, "little") + b"WAVE" + chunks
+
+
+def test_float_wav_utterances_are_converted_and_counted() -> None:
+    samples, info = H.rebuild_meeting([H.Utterance(0.0, "A", float_wav(0.5, 0.1)), utt(1.0, "A", 100, 0.1)])
+    assert (samples[:1600] == round(0.5 * 32767)).all() and (samples[16000:17600] == 100).all()
+    assert info["float_utterances_converted"] == 1
+    with pytest.raises(H.Stop, match="format"):
+        bad = bytearray(wav(1, 0.01))
+        bad[34] = 8  # 8 bits per sample
+        H.decode_wav(bytes(bad))

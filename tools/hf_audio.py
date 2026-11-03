@@ -14,7 +14,8 @@ How the audio is rebuilt (also stated in each manifest and in the E7 record):
 - Tracks are summed in 32 bits. If the sum ever passes the 16-bit range, the whole meeting is scaled by one gain
   (32767 / peak), so nothing is clipped and relative levels are kept; the gain is recorded (1.0 when none was needed).
 - Time between utterances is digital silence. The meeting ends at its last utterance.
-- Every utterance must be mono 16-bit and at the expected sample rate; anything else stops the run (no resampling).
+- Every utterance must be mono and at the expected sample rate (no resampling). 16-bit PCM is used as is; 32-bit float
+  WAV, which part of this data uses, becomes 16-bit by x * 32767 (the count is recorded). Other formats stop the run.
 
 Limits: stops when one fetch would be over 40 GB or free disk would fall under 40 GB. A 403 or 429 is retried 3 times
 (30 s then 120 s, or the server's Retry-After if longer); if it persists the run stops and says so. The request headers
@@ -176,17 +177,44 @@ class Utterance:
     wav: bytes  # a complete WAV file
 
 
+def decode_wav(data: bytes) -> tuple[int, int, np.ndarray, bool]:
+    """(sample rate, channels, int16 samples, was float) of a WAV that holds 16-bit PCM or 32-bit float samples.
+    Float samples become int16 by x * 32767 rounded; one outside -1..1 is clipped to the 16-bit range."""
+    if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise Stop("an utterance is not a WAV file")
+    i, fmt, body = 12, None, None
+    while i + 8 <= len(data):
+        tag, size = data[i : i + 4], int.from_bytes(data[i + 4 : i + 8], "little")
+        if tag == b"fmt ":
+            fmt = data[i + 8 : i + 8 + size]
+        elif tag == b"data":
+            body = data[i + 8 : i + 8 + size]
+            break
+        i += 8 + size + (size & 1)
+    if fmt is None or body is None:
+        raise Stop("an utterance WAV has no fmt or data chunk")
+    tag, channels, rate = (int.from_bytes(fmt[a:b], "little") for a, b in ((0, 2), (2, 4), (4, 8)))
+    bits = int.from_bytes(fmt[14:16], "little")
+    if tag == 1 and bits == 16:
+        return rate, channels, np.frombuffer(body, dtype="<i2"), False
+    if tag == 3 and bits == 32:
+        x = np.frombuffer(body[: len(body) // 4 * 4], dtype="<f4")
+        return rate, channels, np.clip(np.rint(x * 32767), -32768, 32767).astype(np.int16), True
+    raise Stop(f"an utterance WAV is format {tag} at {bits} bits; only 16-bit PCM and 32-bit float are read")
+
+
 def rebuild_meeting(utterances: list[Utterance], rate: int = 16000) -> tuple[np.ndarray, dict[str, Any]]:
     """The meeting's samples (int16) and what was done. See the module docstring for the rules."""
     tracks: dict[str, np.ndarray] = {}
     placed = []
+    floats = 0
     for u in utterances:
-        with wave.open(io.BytesIO(u.wav), "rb") as w:
-            if (w.getnchannels(), w.getsampwidth()) != (1, 2):
-                raise Stop("an utterance is not mono 16-bit")
-            if w.getframerate() != rate:
-                raise Stop(f"an utterance is at {w.getframerate()} Hz, not {rate}")
-            pcm = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+        r, channels, pcm, was_float = decode_wav(u.wav)
+        if channels != 1:
+            raise Stop("an utterance is not mono")
+        if r != rate:
+            raise Stop(f"an utterance is at {r} Hz, not {rate}")
+        floats += was_float
         start = round(u.begin_s * rate)
         if start < 0:
             raise Stop("an utterance begins before 0 s")
@@ -204,7 +232,7 @@ def rebuild_meeting(utterances: list[Utterance], rate: int = 16000) -> tuple[np.
     overlap = np.zeros(length, dtype=np.int8)
     for track in tracks.values():
         overlap += (track != 0)
-    return out, {"utterances": len(placed), "speakers": len(tracks), "samples": length, "duration_s": length / rate,
+    return out, {"utterances": len(placed), "float_utterances_converted": floats, "speakers": len(tracks), "samples": length, "duration_s": length / rate,
                  "peak_before_scaling": peak, "gain": gain, "overlapped_samples": int((overlap > 1).sum())}
 
 
