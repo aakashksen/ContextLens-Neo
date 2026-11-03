@@ -36,21 +36,21 @@ def scripted_turn(conversation_id: str, i: int) -> Turn:
     )
 
 
-def scripted_card(conversation_id: str, n: int) -> Card:
-    """Cycle answered, partial, abstained on successive presses."""
+def scripted_card(turn: Turn, n: int) -> Card:
+    """Cycle answered, partial, abstained on successive presses, citing `turn`."""
     kind = n % 3
     evidence = [
         EvidenceRef(
-            turn_id=f"{conversation_id}-t2",
-            quote=SCRIPT[2][1],
-            speaker=SCRIPT[2][0],
-            start_ms=8000,
+            turn_id=turn.id,
+            quote=turn.text,
+            speaker=turn.speaker,
+            start_ms=turn.start_ms,
         )
     ]
     finding = Finding(
         agent="recall",
         kind="recall",
-        statement="Ana promised to send the budget sheet.",
+        statement=f"{turn.speaker} said: {turn.text}",
         evidence=evidence,
         confidence=0.9,
     )
@@ -84,11 +84,12 @@ def scripted_card(conversation_id: str, n: int) -> Card:
 
 def create_app() -> FastAPI:
     app = FastAPI(title="ContextLens fake server")
+    sent: dict[str, list[Turn]] = {}  # turns sent per conversation; delete clears
 
     @app.websocket("/ws/{conversation_id}")
     async def ws(websocket: WebSocket, conversation_id: str) -> None:
         await websocket.accept()
-        heard = 0
+        turns = sent.setdefault(conversation_id, [])
         presses = 0
         paused = False
 
@@ -106,13 +107,25 @@ def create_app() -> FastAPI:
                     continue
                 if msg.type == "audio":
                     if not paused:
-                        turn = scripted_turn(conversation_id, heard)
-                        heard += 1
+                        turn = scripted_turn(conversation_id, len(turns))
+                        turns.append(turn)
                         await send(TranscriptMessage(turn=turn))
                 elif msg.type == "press":
-                    card = scripted_card(conversation_id, presses)
+                    req = msg.request
+                    if req.conversation_id != conversation_id:
+                        problem = "conversation_id does not match the connection"
+                    elif req.as_of_seq < 0:
+                        problem = "as_of_seq must not be negative"
+                    elif not turns or req.as_of_seq > turns[-1].seq:
+                        problem = "as_of_seq is past the last turn sent"
+                    else:
+                        problem = None
+                    if problem:
+                        await send(StatusMessage(state="error", detail=problem))
+                        continue
+                    cited = [t for t in turns if t.seq <= req.as_of_seq][-1]
+                    await send(CardMessage(card=scripted_card(cited, presses)))
                     presses += 1
-                    await send(CardMessage(card=card))
                 elif msg.type == "pause":
                     paused = True
                     await send(StatusMessage(state="paused"))
@@ -120,6 +133,7 @@ def create_app() -> FastAPI:
                     paused = False
                     await send(StatusMessage(state="recording"))
                 elif msg.type == "delete":
+                    sent.pop(conversation_id, None)
                     await send(StatusMessage(state="deleted"))
                     await websocket.close()
                     return
