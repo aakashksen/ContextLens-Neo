@@ -181,3 +181,12 @@ URL: https://huggingface.co/ggerganov/whisper.cpp (model files, pinned at revisi
 License: MIT. The Hugging Face API for the model repo lists `license: mit` and the repo is not gated; the whisper.cpp LICENSE is MIT ("Copyright (c) 2023-2026 The ggml authors") and the OpenAI Whisper LICENSE is MIT ("Copyright (c) 2022 OpenAI"). Checked 2026-11-02.
 Access: ungated HTTP download, no registration or signed agreement. The Dockerfile downloads it at build time and checks the sha256; the weights are not in git.
 Approved: yes. Reason: MIT, ungated, no signed agreement.
+
+## AMI audio for E7: Hugging Face edinburghcstr/ami
+
+URL: https://huggingface.co/datasets/edinburghcstr/ami (API https://huggingface.co/api/datasets/edinburghcstr/ami).
+License: CC BY 4.0 on the dataset card (`license: cc-by-4.0`), not gated; author edinburghcstr. Pinned to revision 46f28f2503e2ec48f8867a84eef356c70476beab.
+Labels: none used from it; only the audio and the begin time and speaker of each utterance. Questions and transcript still come from the AMI annotations.
+Access: public HTTP range requests; no token. Configs `ihm` (15.2 GB, one headset microphone per speaker) and `sdm` (13.8 GB, one far microphone), parquet shards with an `audio` WAV per utterance.
+Approved: yes, by the person on 2026-11-03, as the replacement audio source for E7 because the AMI mirror and browser access were refused (intermittent 403).
+Use: `tools/hf_audio.py` reads only the row groups that hold the 11 E7 meetings and writes `datasets/raw/ami-audio/<meeting>.wav` (git-ignored) and a manifest. The audio is rebuilt from segmented utterances: gaps between utterances are silence, so latency and diarization error may be easier than on the original recordings. Some utterances are 32-bit float or stereo with identical channels; both are converted as `tools/hf_audio.py` documents. Nothing is committed.

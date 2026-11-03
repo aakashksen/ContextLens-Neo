@@ -7,6 +7,7 @@ is filled in later in the background (`speaker_updates`). Without a backend ever
 
 import os
 import threading
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -50,7 +51,7 @@ class PyannoteBackend:
 
     MODEL = "pyannote/speaker-diarization-3.1"
 
-    def __init__(self) -> None:
+    def __init__(self, device: str = "cpu") -> None:
         import torch
 
         from pyannote.audio import Pipeline
@@ -68,6 +69,14 @@ class PyannoteBackend:
             ) from None
         if self._pipeline is None:
             raise RuntimeError("pyannote could not load its pipeline; check that the model terms were accepted")
+        self.device = "cpu"  # where the pipeline actually is; the default stays on the CPU, as the live backend has run
+        if device != "cpu":
+            try:
+                self._pipeline.to(torch.device(device))
+                self.device = device
+            except (RuntimeError, AssertionError) as exc:  # no such device, or no memory left on it
+                warnings.warn(f"pyannote could not use {device} ({type(exc).__name__}); it runs on the CPU",
+                              RuntimeWarning, stacklevel=2)
 
     def spans(self, pcm: bytes) -> list[tuple[int, int, str]]:
         torch = self._torch

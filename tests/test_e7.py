@@ -101,6 +101,11 @@ class ScriptedStream:
     def send(self, pcm: bytes) -> None:
         self.sent += len(pcm)
 
+    BACKEND: str | None = "gpu:Fake GPU"
+
+    async def compute_backend(self) -> str | None:
+        return self.BACKEND
+
     async def segments(self):
         i = 0
         while True:
@@ -249,15 +254,19 @@ def repo(tmp_path: Path) -> Path:
 SPEEDS: list[float] = []
 
 
+def ALL_CUDA() -> dict:
+    return {"pyannote": "cuda", "embeddings": "cuda", "llm": "cuda"}
+
+
 @pytest.fixture(autouse=True)
 def fast_clock(monkeypatch):
     """Records the speed each replay asks for, then runs it fast so the tests do not wait in real time."""
     real = e7.transcribe
     SPEEDS.clear()
 
-    async def quick(speech, pcm, *, speedup=1.0, settle_s=10.0):
+    async def quick(speech, pcm, *, speedup=1.0, settle_s=10.0, info=None):
         SPEEDS.append(speedup)
-        return await real(speech, pcm, speedup=1000.0, settle_s=0.05)
+        return await real(speech, pcm, speedup=1000.0, settle_s=0.05, info=info)
 
     monkeypatch.setattr(e7, "transcribe", quick)
 
@@ -271,7 +280,7 @@ def run(repo: Path, speedup: float = 1000.0, realtime_meeting: str | None = "m1"
         embedder=NoEmbed(), make_assistant=make_assistant, extractor=FirstTurnExtractor(),
         models={"llm": "qwen3.5:4b-q4_K_M", "speech": "whisper.cpp ggml-tiny.en", "diarizer": "pyannote"},
         prompt_versions={"team": "v1"}, say=lambda m: None, speedup=speedup, realtime_meeting=realtime_meeting,
-        step_ms=10_000, **kw)
+        step_ms=10_000, **({"ran_alone": True, "device_probe": ALL_CUDA} | kw))
 
 
 def test_tiny_fixture_writes_a_valid_record(repo: Path) -> None:
@@ -361,148 +370,6 @@ def test_build_ami_dev_cuts_each_meeting_at_the_question(tmp_path: Path, monkeyp
             e7.build_ami_dev(tmp_path)
 
 
-def sized(sizes: dict, free: int) -> dict:
-    return e7.size_check(list(sizes), head=lambda url: sizes[url.split("/")[-3]], free=lambda: free,
-                         sleep=lambda s: None)
-
-
-def test_size_check_stops_on_the_disk_rule() -> None:
-    ok = sized({"a": 3 * 10**8, "b": 4 * 10**8}, 500 * GB)
-    assert ok["stop"] == [] and ok["total_bytes"] == 7 * 10**8
-    assert any("15 GB" in s for s in sized({"a": 16 * GB}, 900 * GB)["stop"])
-    assert any("under 40 GB" in s for s in sized({"a": 2 * GB}, 41 * GB)["stop"])
-    assert sized({"a": 2 * GB}, 43 * GB)["stop"] == []
-    assert sized({"a": None}, 500 * GB)["stop"] == ["size of a unknown"]
-
-
-def test_download_checks_size_first_and_fetches_only_what_is_missing(tmp_path: Path) -> None:
-    fetched: list[str] = []
-
-    def fetch(url: str, dest: Path) -> None:
-        fetched.append(url)
-        dest.write_bytes(b"x" * 10)
-
-    kw = {"sleep": lambda s: None, "free": lambda: 900 * GB, "fetch": fetch}
-    with pytest.raises(RuntimeError, match="stop"):
-        e7.download(["a"], tmp_path / "audio", head=lambda url: 20 * GB, **kw)
-    assert fetched == [] and not (tmp_path / "audio").exists()
-    (tmp_path / "audio").mkdir()
-    (tmp_path / "audio/a.wav").write_bytes(b"y" * 10)  # complete: the same size as the server gave
-    got = e7.download(["a", "b"], tmp_path / "audio", head=lambda url: 10, **kw)
-    assert got == ["b"] and len(fetched) == 1 and "/b/audio/b.Mix-Headset.wav" in fetched[0]
-    assert (tmp_path / "audio/b.wav").read_bytes() == b"x" * 10
-    assert sorted(p.name for p in (tmp_path / "audio").iterdir()) == ["a.wav", "b.wav"]
-
-
-def test_download_keeps_partial_files_out_of_the_way(tmp_path: Path) -> None:
-    audio = tmp_path / "audio"
-    audio.mkdir()
-    (audio / "a.wav").write_bytes(b"short")  # a partial left under the final name: the wrong size
-    (audio / ".b.wav.tmp").write_bytes(b"stale")  # a crashed fetch's leftover
-
-    def dies(url: str, dest: Path) -> None:
-        dest.write_bytes(b"half")
-        raise ConnectionError("cut off")
-
-    kw = {"sleep": lambda s: None, "free": lambda: 900 * GB, "head": lambda url: 10}
-    with pytest.raises(ConnectionError):
-        e7.download(["b", "a"], audio, fetch=dies, **kw)
-    assert sorted(p.name for p in audio.iterdir()) == ["a.wav"]  # no .wav appeared for b and no .tmp is left
-
-    def short(url: str, dest: Path) -> None:
-        dest.write_bytes(b"1234")  # ends cleanly but is not the size the server gave
-
-    with pytest.raises(OSError, match="server said 10"):
-        e7.download(["b"], audio, fetch=short, **kw)
-    assert not (audio / "b.wav").exists() and not (audio / ".b.wav.tmp").exists()
-
-    def whole(url: str, dest: Path) -> None:
-        dest.write_bytes(b"z" * 10)
-
-    assert e7.download(["a", "b"], audio, fetch=whole, **kw) == ["a", "b"]  # the wrong-size a.wav is fetched again
-    assert (audio / "a.wav").read_bytes() == b"z" * 10
-
-
-def test_requests_go_one_at_a_time_with_pauses_and_retry_after_a_403() -> None:
-    waits: list[float] = []
-    tries: dict[str, int] = {}
-
-    def head(url: str) -> int:
-        m = url.split("/")[-3]
-        tries[m] = tries.get(m, 0) + 1
-        if m == "b" and tries[m] < 3:
-            raise e7.RateLimited()  # 403 twice, then 200
-        if m == "c" and tries[m] == 1:
-            raise e7.RateLimited(retry_after=200)  # the server names its own wait
-        return 5
-
-    report = e7.size_check(["a", "b", "c"], head=head, free=lambda: 900 * GB, sleep=waits.append)
-    assert report["stop"] == [] and report["sizes"] == {"a": 5, "b": 5, "c": 5}
-    assert waits == [2.0, 30.0, 120.0, 2.0, 200.0]  # pause; 30 then 120 for b; pause, then the Retry-After for c
-    assert tries == {"a": 1, "b": 3, "c": 2}
-
-
-def test_a_file_still_refused_after_three_tries_stops_the_download() -> None:
-    waits: list[float] = []
-    calls: list[str] = []
-
-    def head(url: str) -> int:
-        calls.append(url)
-        if "/b/" in url:
-            raise e7.RateLimited()
-        return 5
-
-    report = e7.size_check(["a", "b"], head=head, free=lambda: 900 * GB, sleep=waits.append)
-    assert report["stop"] == ["size of b unknown"] and sum("/b/" in c for c in calls) == 3
-    assert waits == [2.0, 30.0, 120.0]  # no fourth try
-    fetched: list[str] = []
-    with pytest.raises(RuntimeError, match="unknown"):
-        e7.download(["a", "b"], Path("unused-audio-dir"), head=head, free=lambda: 900 * GB, sleep=lambda s: None,
-                    fetch=lambda url, dest: fetched.append(url))
-    assert fetched == []
-
-
-def test_a_refused_fetch_is_retried_then_raised(tmp_path: Path) -> None:
-    waits: list[float] = []
-    n = {"calls": 0}
-
-    def fetch(url: str, dest: Path) -> None:
-        n["calls"] += 1
-        if n["calls"] < 3:
-            raise e7.RateLimited()
-        dest.write_bytes(b"x" * 5)
-
-    kw = {"head": lambda url: 5, "free": lambda: 900 * GB, "sleep": waits.append}
-    assert e7.download(["a"], tmp_path / "audio", fetch=fetch, **kw) == ["a"] and waits == [30.0, 120.0]
-
-    def always(url: str, dest: Path) -> None:
-        raise e7.RateLimited()
-
-    with pytest.raises(e7.RateLimited):
-        e7.download(["z"], tmp_path / "audio", fetch=always, **kw)
-    assert not (tmp_path / "audio/z.wav").exists()
-
-
-def test_head_size_reads_403_429_and_retry_after(monkeypatch) -> None:
-    import io
-    import urllib.error
-
-    def raising(code, headers=None):
-        def urlopen(req, timeout):
-            raise urllib.error.HTTPError(req.full_url, code, "x", headers or {}, io.BytesIO())
-        return urlopen
-
-    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(429, {"Retry-After": "90"}))
-    with pytest.raises(e7.RateLimited) as err:
-        e7.head_size("http://x/y")
-    assert err.value.retry_after == 90
-    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(403))
-    with pytest.raises(e7.RateLimited):
-        e7.head_size("http://x/y")
-    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(404))
-    assert e7.head_size("http://x/y") is None  # only 403 and 429 are retried
-
-
 # -- unloading the models at shutdown ---------------------------------------------------------------------------------
 
 def test_shutdown_unloads_the_models_even_if_the_flush_fails(monkeypatch) -> None:
@@ -553,4 +420,63 @@ def test_a_real_time_run_needs_no_segment_and_a_sped_up_run_cannot_skip_it(repo:
     with pytest.raises(ValueError, match="real time throughout"):
         e7.run_e7(root=repo, speech=ScriptedSpeech([]), backend=TruthBackend(), embedder=NoEmbed(),
                   make_assistant=make_assistant, extractor=None, models={}, prompt_versions={}, speedup=1.0,
-                  realtime_meeting="m1")
+                  realtime_meeting="m1", ran_alone=True, device_probe=ALL_CUDA)
+
+
+# -- where the audio came from, and where each stage ran --------------------------------------------------------------
+
+def test_every_record_says_the_audio_was_rebuilt_from_segmented_utterances(repo: Path) -> None:
+    cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert cfg["audio_source"]["method"] == "rebuilt from segmented utterances" == e7.AUDIO_METHOD
+    assert "silence" in cfg["audio_source"]["note"] and cfg["audio_source"]["revision"] is None  # no manifest here
+    (repo / e7.AUDIO_REL / "manifest.json").write_text(json.dumps({
+        "dataset": "edinburghcstr/ami", "config": "ihm", "revision": "46f28f25", "sample_rate": 16000, "rule": "r"}))
+    again = json.loads(run(repo).read_text(encoding="utf-8"))["config"]["audio_source"]
+    assert again["method"] == e7.AUDIO_METHOD and again["revision"] == "46f28f25" and again["config"] == "ihm"
+    assert not hasattr(e7, "AUDIO_URL") and not hasattr(e7, "download")  # the mirror path is retired
+
+
+def test_the_record_states_each_stage_device_and_every_fallback_is_warned(repo: Path) -> None:
+    cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert set(cfg["devices"]) == {"whisper", "pyannote", "embeddings", "llm"}
+    assert all(d["requested"] == "cuda" and d["actual"] == "cuda" for d in cfg["devices"].values())
+    assert cfg["devices"]["whisper"]["reported"] == "gpu:Fake GPU" and cfg["stages_not_on_cuda"] == []
+    seen: list[str] = []
+    with pytest.warns(RuntimeWarning) as caught:
+        rec = json.loads(run(repo, say=seen.append, device_probe=lambda: {
+            "pyannote": "cpu", "embeddings": None, "llm": "mixed: 60% of the model on the GPU"}).read_text("utf-8"))
+    cfg = rec["config"]
+    assert [d["actual"] for d in cfg["devices"].values()] == ["cuda", "cpu", "unknown", "mixed: 60% of the model on the GPU"]
+    assert cfg["stages_not_on_cuda"] == ["pyannote", "embeddings", "llm"]
+    assert len(caught) == 3 and sum(m.startswith("WARNING") for m in seen) == 3
+
+
+def test_a_speech_service_on_the_cpu_is_recorded_as_cpu(repo: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ScriptedStream, "BACKEND", "cpu")
+    with pytest.warns(RuntimeWarning, match="whisper ran on cpu"):
+        cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert cfg["devices"]["whisper"]["actual"] == "cpu" and cfg["stages_not_on_cuda"] == ["whisper"]
+
+
+def test_a_shared_machine_is_recorded_and_the_cli_makes_the_person_say(repo: Path) -> None:
+    alone = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert alone["ran_alone"] is True and alone["latency_note"] is None
+    shared = json.loads(run(repo, ran_alone=False).read_text(encoding="utf-8"))["config"]
+    assert shared["ran_alone"] is False and "contention" in shared["latency_note"]
+    with pytest.raises(SystemExit):
+        e7.main(["run"])  # --alone or --not-alone is required
+
+
+def test_device_names_and_ollama_placement() -> None:
+    assert [e7.device_kind(x) for x in ("cuda", "cuda:0", "gpu:RTX", "cpu", None, "mixed")] == [
+        "cuda", "cuda", "cuda", "cpu", "unknown", "mixed"]
+
+    def ps(models):
+        return lambda url: {"models": models}
+
+    full = {"name": "qwen3.5:4b-q4_K_M", "size": 100, "size_vram": 100}
+    assert e7.ollama_device("qwen3.5:4b-q4_K_M", ps([full])) == "cuda"
+    assert e7.ollama_device("qwen3.5:4b-q4_K_M", ps([{**full, "size_vram": 0}])) == "cpu"
+    assert e7.ollama_device("qwen3.5:4b-q4_K_M", ps([{**full, "size_vram": 60}])) == "mixed: 60% of the model on the GPU"
+    assert e7.ollama_device("nomic-embed-text", ps([{"name": "nomic-embed-text:latest", "size": 5, "size_vram": 5}])) == "cuda"
+    assert e7.ollama_device("nomic-embed-text", ps([full])) is None  # not loaded

@@ -14,7 +14,8 @@ How the audio is rebuilt (also stated in each manifest and in the E7 record):
 - Tracks are summed in 32 bits. If the sum ever passes the 16-bit range, the whole meeting is scaled by one gain
   (32767 / peak), so nothing is clipped and relative levels are kept; the gain is recorded (1.0 when none was needed).
 - Time between utterances is digital silence. The meeting ends at its last utterance.
-- Every utterance must be mono and at the expected sample rate (no resampling). 16-bit PCM is used as is; 32-bit float
+- Every utterance must be at the expected sample rate (no resampling) and mono, or several identical channels (the
+  data has stereo files repeating one signal), which count as that one signal; channels that differ stop the run. 16-bit PCM is used as is; 32-bit float
   WAV, which part of this data uses, becomes 16-bit by x * 32767 (the count is recorded). Other formats stop the run.
 
 Limits: stops when one fetch would be over 40 GB or free disk would fall under 40 GB. A 403 or 429 is retried 3 times
@@ -177,8 +178,20 @@ class Utterance:
     wav: bytes  # a complete WAV file
 
 
+def _first_channel(samples: np.ndarray, channels: int) -> np.ndarray:
+    """Mono as is. Several channels that are identical (this data has stereo files that repeat one signal) become that
+    one signal; channels that differ stop the run, since choosing or mixing them would be a guess."""
+    if channels == 1:
+        return samples
+    frames = samples.reshape(-1, channels)
+    if not (frames == frames[:, :1]).all():
+        raise Stop("an utterance has channels that differ; only identical channels are collapsed to mono")
+    return frames[:, 0]
+
+
 def decode_wav(data: bytes) -> tuple[int, int, np.ndarray, bool]:
-    """(sample rate, channels, int16 samples, was float) of a WAV that holds 16-bit PCM or 32-bit float samples.
+    """(sample rate, channels in the file, mono int16 samples, was float) of a WAV that holds 16-bit PCM or 32-bit float
+    samples.
     Float samples become int16 by x * 32767 rounded; one outside -1..1 is clipped to the 16-bit range."""
     if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
         raise Stop("an utterance is not a WAV file")
@@ -195,10 +208,13 @@ def decode_wav(data: bytes) -> tuple[int, int, np.ndarray, bool]:
         raise Stop("an utterance WAV has no fmt or data chunk")
     tag, channels, rate = (int.from_bytes(fmt[a:b], "little") for a, b in ((0, 2), (2, 4), (4, 8)))
     bits = int.from_bytes(fmt[14:16], "little")
+    width = max(channels, 1)
     if tag == 1 and bits == 16:
-        return rate, channels, np.frombuffer(body, dtype="<i2"), False
+        raw = np.frombuffer(body[: len(body) // (2 * width) * 2 * width], dtype="<i2")
+        return rate, channels, _first_channel(raw, width), False
     if tag == 3 and bits == 32:
-        x = np.frombuffer(body[: len(body) // 4 * 4], dtype="<f4")
+        x = np.frombuffer(body[: len(body) // (4 * width) * 4 * width], dtype="<f4")
+        x = _first_channel(x, width)
         return rate, channels, np.clip(np.rint(x * 32767), -32768, 32767).astype(np.int16), True
     raise Stop(f"an utterance WAV is format {tag} at {bits} bits; only 16-bit PCM and 32-bit float are read")
 
@@ -210,8 +226,6 @@ def rebuild_meeting(utterances: list[Utterance], rate: int = 16000) -> tuple[np.
     floats = 0
     for u in utterances:
         r, channels, pcm, was_float = decode_wav(u.wav)
-        if channels != 1:
-            raise Stop("an utterance is not mono")
         if r != rate:
             raise Stop(f"an utterance is at {r} Hz, not {rate}")
         floats += was_float

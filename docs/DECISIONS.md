@@ -209,3 +209,10 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Who:** The person.
 - **Chosen:** Commit messages carry no tool or assistant names, no co-author lines and no session lines. Old verdict hashes were stale after the rewrite, finished tasks stayed finished, and the T1.3 to T1.5 gates were rerun.
 - **Reason:** The person's rule. Further reason not recorded.
+
+## 26. E7 audio comes from the Hugging Face copy of AMI, rebuilt from utterances
+- **Date / task:** 2026-11-03, T8.5
+- **Who:** The person chose the source after the coordinator reported the problem.
+- **Chosen:** `edinburghcstr/ami` (public, ungated, CC BY 4.0, pinned to revision 46f28f2503e2ec48f8867a84eef356c70476beab), config `ihm`, rebuilt into one WAV per meeting by `tools/hf_audio.py`. The AMI mirror path (size check, download, URL) was removed from E7.
+- **Reason:** The AMI mirror and browser access refused downloads, a different set of files each time, so it could not be relied on. The Hugging Face copy stores per-utterance audio, so each meeting's audio is rebuilt by placing utterances at their timestamps.
+- **Consequences:** Gaps between utterances are silence, so latency and diarization error may be easier than on the original recordings. Every E7 record says "rebuilt from segmented utterances" (`config.audio_source.method`, set in code). `ihm` (one headset per speaker, summed) is closer to the Mix-Headset E7 was designed on than `sdm`, whose utterances all come from one far microphone and would repeat shared room audio if placed twice. Overlaps from different speakers are summed in 32 bits, and a whole meeting is scaled by one gain only if the sum would pass 16 bits, so nothing is clipped. The questions, their turn ids and the clean transcript do not depend on the audio source and did not change.

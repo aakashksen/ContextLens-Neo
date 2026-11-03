@@ -56,8 +56,8 @@ def test_a_sum_past_16_bits_is_scaled_not_clipped() -> None:
 def test_sample_rate_and_format_are_checked_not_converted() -> None:
     with pytest.raises(H.Stop, match="8000 Hz"):
         H.rebuild_meeting([utt(0.0, "A", 1, 0.1, rate=8000)])
-    with pytest.raises(H.Stop, match="not mono"):
-        H.rebuild_meeting([utt(0.0, "A", 1, 0.1, channels=2)])
+    stereo, info = H.rebuild_meeting([utt(0.0, "A", 7, 0.1, channels=2)])  # identical channels: one signal
+    assert len(stereo) == 1600 and (stereo == 7).all()
     samples, _ = H.rebuild_meeting([utt(0.0, "A", 1, 0.1, rate=8000)], rate=8000)
     assert len(samples) == 800
 
@@ -175,3 +175,15 @@ def test_float_wav_utterances_are_converted_and_counted() -> None:
         bad = bytearray(wav(1, 0.01))
         bad[34] = 8  # 8 bits per sample
         H.decode_wav(bytes(bad))
+
+
+def test_stereo_with_different_channels_stops() -> None:
+    both = np.stack([np.full(100, 1, dtype="<i2"), np.full(100, 2, dtype="<i2")], axis=1).tobytes()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(both)
+    with pytest.raises(H.Stop, match="channels that differ"):
+        H.rebuild_meeting([H.Utterance(0.0, "A", buf.getvalue())])

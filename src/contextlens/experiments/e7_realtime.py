@@ -15,24 +15,28 @@ duration is reported in `pipeline_timing`). A memory item keeps the speaker it w
 Rows cite clean turn ids so `check_run` can check them: each turn the card cites is replaced by the clean turn it
 overlaps most in time (the nearest one when none overlaps). The speaker the card names is kept as it was.
 
-Before any audio is fetched, `size-check` prints each file's size and stops on the disk rule. The questions come
-from `datasets/ami-questions/dev.json` (see `build_ami_dev`).
+The audio is rebuilt from segmented utterances (tools/hf_audio.py, Hugging Face edinburghcstr/ami, config ihm):
+utterances are placed at their timestamps and the gaps between them are silence. Every record says so
+(`config.audio_source.method`), and latency and diarization error may be easier than on the original recordings.
+The questions come from `datasets/ami-questions/dev.json` (see `build_ami_dev`); their turn ids and the clean
+transcript do not depend on the audio source.
+
+Each record also states the device of every stage (whisper, pyannote, embeddings, llm). All are asked to run on CUDA;
+one that did not is recorded as it ran and warned about, never hidden. Latency is only meaningful when the machine ran
+nothing else, so the person says so with --alone or --not-alone and the record keeps the answer.
 
 Run (the person runs these; the real run needs a GPU turn, Ollama, the speech service and HF_TOKEN):
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime size-check
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime download
+  .venv/Scripts/python tools/hf_audio.py plan|build --dataset edinburghcstr/ami --config ihm --revision <sha> --meetings ...
   .venv/Scripts/python -m contextlens.experiments.e7_realtime build-scenarios      # then commit the manifest
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime run
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime run --rerun BASELINE_RUN_ID --change "what changed"
+  .venv/Scripts/python -m contextlens.experiments.e7_realtime run --alone
+  .venv/Scripts/python -m contextlens.experiments.e7_realtime run --alone --rerun BASELINE_RUN_ID --change "what changed"
 """
 import argparse
 import asyncio
 import json
-import shutil
 import sys
 import time
-import urllib.error
-import urllib.request
+import warnings
 import wave
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -57,9 +61,6 @@ from contextlens.speech.diarize import BYTES_PER_MS, SAMPLE_RATE, Diarizer, Wind
 SPLIT, SOURCE = "dev", "ami"
 QUESTIONS_REL = Path("datasets/ami-questions/dev.json")
 AUDIO_REL = Path("datasets/raw/ami-audio")  # <meeting>.wav, git-ignored
-AUDIO_URL = "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{m}/audio/{m}.Mix-Headset.wav"
-MAX_SINGLE_BYTES = 15 * 10**9
-MIN_FREE_BYTES = 40 * 10**9
 STEP_MS = 60_000  # a tick; the speaker model sees two minutes, so each run overlaps the one before
 TAIL_MS = 3_000  # silence after the last cut, so the speech service closes its last utterance
 CHUNK_MS = 100
@@ -117,128 +118,6 @@ def build_ami_dev(root: Path = ROOT, raw_root: Path | None = None) -> int:
     return len(scenarios)
 
 
-# -- the size check and the download -------------------------------------------------------------------------------
-
-class RateLimited(Exception):
-    """The server answered 403 or 429; `retry_after` is its Retry-After in seconds, if it sent one."""
-
-    def __init__(self, retry_after: float | None = None) -> None:
-        super().__init__("403 or 429 from the server")
-        self.retry_after = retry_after
-
-
-BACKOFF_S = (30.0, 120.0)  # waits before the second and third try of a file
-PAUSE_S = 2.0  # between requests; files are fetched one at a time
-
-
-def _rate_limited(exc: urllib.error.HTTPError) -> RateLimited | None:
-    if exc.code not in (403, 429):
-        return None
-    after = exc.headers.get("Retry-After") if exc.headers else None
-    return RateLimited(float(after) if after and after.strip().isdigit() else None)
-
-
-def head_size(url: str) -> int | None:
-    req = urllib.request.Request(url, method="HEAD")
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            length = resp.headers.get("Content-Length")
-    except urllib.error.HTTPError as exc:
-        if limited := _rate_limited(exc):
-            raise limited from None
-        return None
-    except OSError:
-        return None
-    return int(length) if length and length.isdigit() else None
-
-
-def with_retries(call: Callable[[], Any], *, sleep: Callable[[float], None] = time.sleep,
-                 backoff: tuple[float, ...] = BACKOFF_S) -> Any:
-    """Try `call` once and again after each wait in `backoff` while it raises RateLimited, waiting at least the
-    Retry-After the server sent, if any. The last RateLimited is raised when the tries run out."""
-    for wait in (*backoff, None):
-        try:
-            return call()
-        except RateLimited as exc:
-            if wait is None:
-                raise
-            sleep(max(wait, exc.retry_after or 0.0))
-
-
-def size_check(meetings: list[str], *, head: Callable[[str], int | None] = head_size,
-               free: Callable[[], int] | None = None, audio_dir: Path | None = None,
-               sleep: Callable[[float], None] = time.sleep, pause_s: float = PAUSE_S) -> dict[str, Any]:
-    """Size of each meeting's audio file, the free disk, and the reasons to stop: a size that can't be read (after
-    the retries), one file over 15 GB, or less than 40 GB free after the download. Fetches nothing. Requests go one
-    at a time with a pause between them; a 403 or 429 is retried after a backoff and is never worked around."""
-    target = audio_dir or ROOT / AUDIO_REL
-    free_bytes = (free or (lambda: shutil.disk_usage(_existing(target)).free))()
-    sizes: dict[str, int | None] = {}
-    for i, m in enumerate(meetings):
-        if i:
-            sleep(pause_s)
-        try:
-            sizes[m] = with_retries(lambda m=m: head(AUDIO_URL.format(m=m)), sleep=sleep)
-        except RateLimited:
-            sizes[m] = None
-    known = [s for s in sizes.values() if s is not None]
-    total = sum(known)
-    stop = [f"size of {m} unknown" for m, s in sizes.items() if s is None]
-    stop += [f"{m} is {s / 1e9:.1f} GB, over the 15 GB single-download limit" for m, s in sizes.items()
-             if s is not None and s > MAX_SINGLE_BYTES]
-    if free_bytes - total < MIN_FREE_BYTES:
-        stop.append(f"{(free_bytes - total) / 1e9:.1f} GB would be free after the download, under 40 GB")
-    return {"sizes": sizes, "total_bytes": total, "free_bytes": free_bytes, "stop": stop}
-
-
-def _existing(path: Path) -> Path:
-    while not path.exists():
-        path = path.parent
-    return path
-
-
-def _fetch(url: str, dest: Path) -> None:
-    try:
-        with urllib.request.urlopen(url, timeout=60) as resp, open(dest, "wb") as f:
-            shutil.copyfileobj(resp, f)
-    except urllib.error.HTTPError as exc:
-        if limited := _rate_limited(exc):
-            raise limited from None
-        raise
-
-
-def download(meetings: list[str], audio_dir: Path, *, head: Callable[[str], int | None] = head_size,
-             free: Callable[[], int] | None = None, fetch: Callable[[str, Path], None] = _fetch,
-             sleep: Callable[[float], None] = time.sleep, pause_s: float = PAUSE_S) -> list[str]:
-    """Fetch the meetings' audio, after the size check; any stop reason means nothing is fetched and RuntimeError
-    is raised. One file at a time, with a pause between requests and the same retries as the size check. A file is
-    written to a hidden `.tmp` beside its target and renamed only when its size equals the size the server gave, so an
-    interrupted fetch leaves no `.wav`. A file already there is skipped only if its size matches; any other is fetched
-    again."""
-    report = size_check(meetings, head=head, free=free, audio_dir=audio_dir, sleep=sleep, pause_s=pause_s)
-    if report["stop"]:
-        raise RuntimeError("size check says stop: " + "; ".join(report["stop"]))
-    audio_dir.mkdir(parents=True, exist_ok=True)
-    got = []
-    for m in meetings:
-        dest, want = audio_dir / f"{m}.wav", report["sizes"][m]
-        if dest.is_file() and dest.stat().st_size == want:
-            continue
-        if got:
-            sleep(pause_s)
-        tmp = dest.with_name(f".{dest.name}.tmp")
-        tmp.unlink(missing_ok=True)
-        try:
-            with_retries(lambda: fetch(AUDIO_URL.format(m=m), tmp), sleep=sleep)
-            if tmp.stat().st_size != want:
-                raise OSError(f"{m}: got {tmp.stat().st_size} bytes, the server said {want}")
-            tmp.replace(dest)
-        finally:
-            tmp.unlink(missing_ok=True)
-        got.append(m)
-    return got
-
-
 # -- speech ---------------------------------------------------------------------------------------------------------
 
 def read_wav(path: Path) -> bytes:
@@ -249,11 +128,14 @@ def read_wav(path: Path) -> bytes:
         return w.readframes(w.getnframes())
 
 
-async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
-                     settle_s: float = 10.0) -> tuple[list[Segment], list[int], float]:
+async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0, settle_s: float = 10.0,
+                     info: dict[str, Any] | None = None) -> tuple[list[Segment], list[int], float]:
     """Stream the audio at `speedup` times real time. Returns the final segments, how late each arrived after its
     audio was sent (ms), and the wall seconds taken. The service failing before the audio is all sent raises."""
     stream = await speech.open()
+    if info is not None:  # the service says which backend it runs on ("cpu" or "gpu:<name>"), if the stream can tell
+        ask = getattr(stream, "compute_backend", None)
+        info["compute_backend"] = await ask() if ask else None
     segments: list[Segment] = []
     lags: list[int] = []
     t0 = time.perf_counter()
@@ -485,6 +367,64 @@ def before_after(before: dict[str, float | None], after: dict[str, float | None]
 
 # -- the run --------------------------------------------------------------------------------------------------------
 
+AUDIO_METHOD = "rebuilt from segmented utterances"
+STAGES = ("whisper", "pyannote", "embeddings", "llm")
+
+
+def audio_source(audio_dir: Path) -> dict[str, Any]:
+    """What the audio is, for the record. `method` is always present; the rest comes from tools/hf_audio.py's manifest."""
+    manifest = audio_dir / "manifest.json"
+    meta = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else {}
+    return {"method": AUDIO_METHOD,
+            "note": "gaps between utterances are silence, so latency and diarization error may be easier than on the "
+                    "original recordings",
+            **{k: meta.get(k) for k in ("dataset", "config", "revision", "sample_rate", "rule")}}
+
+
+def _one(seen: set[str | None]) -> str | None:
+    """The one backend all streams reported, else a note that they differed or did not say."""
+    seen = {x for x in seen}
+    return next(iter(seen)) if len(seen) == 1 else "mixed: " + ", ".join(sorted(str(x) for x in seen))
+
+
+def device_kind(actual: str | None) -> str:
+    """cuda for "cuda", "cuda:0" or a speech service's "gpu:<name>"; cpu for "cpu"; otherwise the text as given, or
+    "unknown" when nothing was reported."""
+    if not actual:
+        return "unknown"
+    return "cuda" if actual.startswith(("cuda", "gpu")) else "cpu" if actual == "cpu" else actual
+
+
+def stage_devices(actual: dict[str, str | None], say: Callable[[str], None] = print) -> dict[str, dict[str, str | None]]:
+    """Requested and actual device of each stage. Anything other than cuda is warned about, not just recorded."""
+    out = {}
+    for stage in STAGES:
+        raw = actual.get(stage)
+        kind = device_kind(raw)
+        out[stage] = {"requested": "cuda", "actual": kind, "reported": raw}
+        if kind != "cuda":
+            msg = f"{stage} ran on {kind}, not cuda"
+            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+            say("WARNING " + msg)
+    return out
+
+
+def ollama_device(model: str, get_json: Callable[[str], dict[str, Any]], base_url: str = "http://127.0.0.1:11434") -> str | None:
+    """Where Ollama holds `model` now ("cuda", "cpu" or how much of it is on the GPU), from /api/ps; None if it is not loaded."""
+    for m in get_json(f"{base_url}/api/ps").get("models", []):
+        if m.get("name", "").split(":")[0] == model.split(":")[0] and (m.get("name") == model or ":" not in model):
+            size, vram = m.get("size", 0), m.get("size_vram", 0)
+            return "cuda" if size and vram >= size else "cpu" if not vram else f"mixed: {vram / size:.0%} of the model on the GPU"
+    return None
+
+
+def _get_json(url: str) -> dict[str, Any]:
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
 def _load_dev(root: Path) -> tuple[list[Scenario], str]:
     manifest_rel = SCENARIO_SOURCES[SOURCE][0]
     entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
@@ -505,6 +445,7 @@ def run_e7(
     prompt_versions: dict[str, str], telemetry: Telemetry | None = None, audio_dir: Path | None = None,
     rerun_of: str | None = None, changes: list[str] | None = None, speedup: float = 1.0, settle_s: float = 10.0,
     realtime_meeting: str | None = None, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
+    ran_alone: bool, device_probe: Callable[[], dict[str, str | None]],
 ) -> Path:
     """Replay every dev scenario three ways and write one E7 record. A first run is the baseline and names
     its two slowest press stages; a rerun (`rerun_of` a baseline's run id, with the `changes` made) must be on the
@@ -512,7 +453,11 @@ def run_e7(
 
     `speedup` above 1 streams audio faster than real time, which makes speech and speaker timings meaningless as
     real-time figures. Such a run records its speedup and `latency_basis`, leaves its own speech timings out, and must
-    name `realtime_meeting`: that meeting is replayed again at 1.0 and `realtime_segment` holds the real-time latencies."""
+    name `realtime_meeting`: that meeting is replayed again at 1.0 and `realtime_segment` holds the real-time latencies.
+
+    `ran_alone` is the person's statement that nothing else used the machine. `device_probe` is called once the run
+    has finished, while the models are still loaded, and returns the device each of pyannote, embeddings and llm
+    actually ran on; whisper's comes from the speech service itself."""
     manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
     if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
         raise RuntimeError("the AMI manifest must be committed before the run")
@@ -546,12 +491,15 @@ def run_e7(
     rows: dict[str, dict[str, Prediction]] = {n: {} for n in SYSTEMS}
     stats: dict[str, dict[str, Any]] = {}
     asr_lags: list[int] = []
+    whisper_backends: set[str | None] = set()
 
     def play(meeting: str, scs: list[Scenario], speed: float, tele: Telemetry | None):
         pcm = read_wav(audio / f"{meeting}.wav")
         cut = max(cut_ms(s) for s in scs)
         stream_pcm = pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
-        segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s))
+        info: dict[str, Any] = {}
+        segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s, info=info))
+        whisper_backends.add(info.get("compute_backend"))
         got, st = replay_meeting(
             scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
             make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
@@ -591,6 +539,7 @@ def run_e7(
         if c := recompute_comparison(scenarios, preds[a], preds[b], "recall@5"):
             comparisons.append({"a": a, "b": b, **c})
     pipeline = metrics["asr_pipeline"]
+    devices = stage_devices({"whisper": _one(whisper_backends), **device_probe()}, say)
     all_diar = [x for s in stats.values() for x in s["diar_ms"]]
     config: dict[str, Any] = {
         "experiment": "E7", "phase": "rerun" if rerun_of else "baseline", "systems": list(SYSTEMS),
@@ -598,6 +547,10 @@ def run_e7(
         "latency_basis": ("real_time" if speedup == 1.0 else
                           "sped_up: speech and speaker timings here are not real-time; see realtime_segment"),
         "realtime_segment": segment,
+        "audio_source": audio_source(audio),
+        "devices": devices, "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"],
+        "ran_alone": ran_alone,
+        "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
         "pipeline_timing": {
             "asr_lag_ms": _summary(asr_lags), "diarization_run_ms": _summary(all_diar),
             "asr_real_time_factor": sum(s["asr_wall_s"] * speedup for s in stats.values())
@@ -629,9 +582,11 @@ def run_e7(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="e7_realtime")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("size-check", "download", "build-scenarios"):
-        sub.add_parser(name)
+    sub.add_parser("build-scenarios")
     r = sub.add_parser("run")
+    alone = r.add_mutually_exclusive_group(required=True)
+    alone.add_argument("--alone", action="store_true", help="nothing else is using the machine")
+    alone.add_argument("--not-alone", action="store_true", help="the machine is shared; the record says so")
     r.add_argument("--rerun", metavar="BASELINE_RUN_ID")
     r.add_argument("--change", action="append", default=[])
     r.add_argument("--speedup", type=float, default=1.0)
@@ -639,18 +594,6 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "build-scenarios":
         print(build_ami_dev())
-        return 0
-    meetings = meetings_needed()
-    if args.cmd == "size-check":
-        report = size_check(meetings)
-        for m, s in report["sizes"].items():
-            print(f"{m}: {'unknown' if s is None else f'{s / 1e6:.0f} MB'}")
-        print(f"total {report['total_bytes'] / 1e9:.2f} GB, free {report['free_bytes'] / 1e9:.1f} GB")
-        for reason in report["stop"]:
-            print("STOP", reason)
-        return 2 if report["stop"] else 0
-    if args.cmd == "download":
-        print(download(meetings, ROOT / AUDIO_REL))
         return 0
     return _run_real(args)
 
@@ -663,6 +606,8 @@ def _run_real(args: argparse.Namespace) -> int:
     from contextlens.speech.client import GrpcSpeech
     from contextlens.speech.diarize import PyannoteBackend
 
+    backend = PyannoteBackend(device="cuda")  # falls back to the CPU with a warning, and says so in `device`
+
     telemetry = Telemetry()
     production.serve_metrics_if_asked(telemetry)
     embedder = production.local_embedder()
@@ -673,16 +618,19 @@ def _run_real(args: argparse.Namespace) -> int:
 
     try:
         path = run_e7(
-            speech=GrpcSpeech(), backend=PyannoteBackend(), embedder=embedder, make_assistant=make,
+            speech=GrpcSpeech(), backend=backend, embedder=embedder, make_assistant=make,
             extractor=production.MemoryExtractor(llms["memory"]), telemetry=telemetry,
             models={"llm": production.MODEL, "embedder": "nomic-embed-text",
                     "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
             prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
-            speedup=args.speedup, realtime_meeting=args.realtime_meeting)
+            speedup=args.speedup, realtime_meeting=args.realtime_meeting, ran_alone=args.alone,
+            device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
+                                  "llm": ollama_device(production.MODEL, _get_json)})
     finally:
         for model in (production.MODEL, embedder.model):
             unload_ollama(model, production.OLLAMA_URL)
     print(path.as_posix())
+    print("audio:", AUDIO_METHOD)
     return 0
 
 

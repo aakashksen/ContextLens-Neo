@@ -111,6 +111,11 @@ class _GrpcStream:
             raise SpeechUnavailable(f"speech service error: {exc.code().name}") from None
         raise SpeechUnavailable("the speech service closed the stream")
 
+    async def compute_backend(self) -> str | None:
+        """The service's "x-compute-backend" initial metadata: "cpu" or "gpu:<name>"."""
+        metadata = await self._call.initial_metadata()
+        return next((str(v) for k, v in metadata if k == "x-compute-backend"), None)
+
     async def close(self) -> None:
         self._call.cancel()
         await self._channel.close()
