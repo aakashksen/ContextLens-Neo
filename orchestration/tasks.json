@@ -437,9 +437,14 @@
         "{py} -m pytest tests/test_e4.py -q",
         "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
-      "started_at": "2026-11-03T06:47:48+00:00"
+      "status": "done",
+      "started_at": "2026-11-03T06:47:48+00:00",
+      "verified": {
+        "commit": "1353376d5356a479071b879048c5c593b5c0f0f7",
+        "passed": true,
+        "at": "2026-11-03T11:35:01+00:00"
+      },
+      "done_at": "2026-11-03T11:39:00+00:00"
     },
     {
       "id": "T7.1",
@@ -666,9 +671,9 @@
       "worktree": "<local path>",
       "started_at": "2026-11-03T09:15:00+00:00",
       "verified": {
-        "commit": "3cae2fb8b432d499ff3ecd694d902fca3d64cca7",
+        "commit": "000d41e7afdb16c4f9d43b4ef808ec22e835f4c2",
         "passed": true,
-        "at": "2026-11-03T10:00:22+00:00"
+        "at": "2026-11-03T11:01:25+00:00"
       },
       "attempts": 1,
       "reason": "all-real test returns abstained card; run_everything uses system Python and leaves Vite running; compose publishes 5432 and 50051 on all interfaces; no committed browser microphone check"
