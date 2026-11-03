@@ -316,7 +316,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_guard.py tests/test_tools.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:18:02+00:00",
+      "verified": {
+        "commit": "ec813c3fce87f02699568b5e6d06579f6da6cfe4",
+        "passed": true,
+        "at": "2026-11-03T05:30:53+00:00"
+      },
+      "attempts": 1,
+      "reason": "Tools and guard_card take conv_id, unrecorded in docs/PLAN.md; later tasks written from the plan would raise TypeError"
     },
     {
       "id": "T3.2",
@@ -472,16 +481,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_contract.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:05:32+00:00",
       "verified": {
-        "commit": "0c7e17ea60a2e5cc349cacb1b49d7ffb818cd285",
+        "commit": "237814a0438178acbdfca367e72d73693d0ac02b",
         "passed": true,
-        "at": "2026-11-03T05:12:28+00:00"
+        "at": "2026-11-03T05:31:11+00:00"
       },
-      "attempts": 1,
-      "reason": "fake_server.py ignores as_of_seq: press with as_of_seq=0 gets an answered card citing turn c1-t2 the client never received; as_of_seq=99 and -5 accepted"
+      "attempts": 2,
+      "reason": "fake_server.py crashes with KeyError 'text' on a binary frame, doc promises error status and open connection; doc omits that turns survive reconnects and the press cycle resets",
+      "done_at": "2026-11-03T05:35:14+00:00"
     },
     {
       "id": "T8.1",
@@ -498,7 +507,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T05:05:32+00:00"
+      "started_at": "2026-11-03T05:05:32+00:00",
+      "verified": {
+        "commit": "a6fc2cc846bb4a675e1ae84c341c0f2c8ae10c8b",
+        "passed": true,
+        "at": "2026-11-03T05:18:46+00:00"
+      },
+      "attempts": 1,
+      "reason": "GPU path not met: compose has no GPU option, default build CPU-only, Dockerfile GPU recipe mixes a 22.04 CUDA base with 24.04 packages, backend report lists registered devices not the one used"
     },
     {
       "id": "T8.2",

@@ -1,29 +1,26 @@
 {
   "task": "T8.0",
-  "commit": "0c7e17ea60a2e5cc349cacb1b49d7ffb818cd285",
-  "verdict": "FAIL",
+  "commit": "237814a0438178acbdfca367e72d73693d0ac02b",
+  "verdict": "PASS",
   "checks": [
-    {"item": "HEAD equals commit, worktree clean", "result": "pass", "evidence": "git rev-parse HEAD matches; git status --short empty"},
-    {"item": "Evidence log shows acceptance ran at this commit", "result": "pass", "evidence": "orchestration/evidence/T8.0.log: 3 passed, RESULT PASS, same commit"},
-    {"item": "Models, schema file and doc match", "result": "pass", "evidence": "contract.py defines audio/press/pause/resume/delete and transcript/card/status; test_schema_file_matches_models compares file to schema_json(); doc tables list the same fields and states"},
-    {"item": "Fake server over real socket: messages validate against models and schema file", "result": "pass", "evidence": "uvicorn on 127.0.0.1:8000, websockets client; every received frame validated with server_adapter; the 3 card kinds and a transcript also validated with jsonschema 4.24 against the schema file's server_to_client section; server terminated afterward"},
-    {"item": "All three Card statuses served", "result": "pass", "evidence": "presses cycle answered, partial, abstained"},
-    {"item": "Answered card evidence exists in scripted transcript at or before as_of_seq", "result": "fail", "evidence": "scripted_card always cites c1-t2 regardless of as_of_seq or how many turns were sent. Real socket: press as_of_seq=0 with no audio sent returned answered citing c1-t2; as_of_seq=3 with no audio also answered."},
-    {"item": "Press with as_of_seq past the transcript", "result": "fail", "evidence": "as_of_seq=99 (no turns sent) returned a partial card citing c1-t2, which the client never received. as_of_seq=-5 returned an abstained card with no error. as_of_seq is never read by the server."},
-    {"item": "Malformed message", "result": "pass", "evidence": "invalid JSON, {}, unknown type, press without request and press with as_of_seq 'x' each gave status error and the socket stayed open"},
-    {"item": "delete clears the fake's conversation", "result": "pass", "evidence": "delete returned status deleted and closed the socket. A new connection started from turn t0. However the state is local to the connection and nothing is stored, so this is trivial (see notes)."}
+    {"item": "HEAD equals commit; worktree clean", "result": "pass", "evidence": "git rev-parse HEAD = 237814a...; git status --short empty (also after mutation checks, restored)"},
+    {"item": "Evidence log shows acceptance ran at this commit", "result": "pass", "evidence": "orchestration/evidence/T8.0.log: commit 237814a, 12 passed, RESULT PASS; I reran pytest tests/test_contract.py: 12 passed"},
+    {"item": "Plan items: Pydantic models for audio/press/pause/resume/delete and transcript/card/status using schemas.py, generated schema file, fake server with all Card statuses, three named tests", "result": "pass", "evidence": "contract.py, docs/client-contract.schema.json, tools/fake_server.py; test_schema_file_matches_models, test_fake_server_answers_press_with_valid_card, test_fake_server_can_send_answered_partial_and_abstained all exist and pass"},
+    {"item": "Doc read end to end against code over a real uvicorn + websockets server", "result": "pass", "evidence": "Every claim in docs/client-contract.md matched live behavior: connect gives status recording; error statuses with detail and connection stays open; pause then audio ignored while press still answered; resume; reconnect continues seq; cycle restarts per connection; delete answers deleted then closes 1000 and later connection starts at seq 0; cycle 1st answered/2nd partial/3rd abstained, errors don't count"},
+    {"item": "Previous failures retested: press at as_of_seq 0 before audio, 99, -5", "result": "pass", "evidence": "all three returned status error with detail and no card; connection stayed usable"},
+    {"item": "Evidence real id/speaker/quote/start_ms from sent turn <= as_of_seq", "result": "pass", "evidence": "with 3 turns sent, press 1 cited turn_id c1-t1, speaker Ben, quote 'Friday works...', start_ms 4000, matching the scripted turn"},
+    {"item": "Binary frame, normal disconnect, reconnect, press cycle restart, delete reset", "result": "pass", "evidence": "binary -> status error 'messages must be text frames' and still open; clean client close, reconnect: seq continued at 4, press at 0 cited c1-t0 and returned answered (cycle restarted); delete -> deleted + close, new connection press 0 errors and next audio is seq 0. Server stopped (thread joined)"},
+    {"item": "jsonschema validation of live messages against docs/client-contract.schema.json, and rejection of bad messages", "result": "pass", "evidence": "all server messages validated against server_to_client; client messages against client_to_server; {'type':'zzz'} and press missing as_of_seq both rejected by schema"},
+    {"item": "Mutation: schema test", "result": "pass", "evidence": "changing AudioMessage.sample_rate default made test_schema_file_matches_models fail (1 failed, 11 passed); restored"},
+    {"item": "Mutation: binary-frame handling", "result": "pass", "evidence": "removing the error send for binary frames made the binary test hang (never receives the status), so it is detected, though by hang rather than a clean assertion failure. Replacing only the `if raw is None` condition keeps tests passing because validate_json(None) still yields an error status; behavior is equivalent, so not a defect"},
+    {"item": "Diff hygiene", "result": "pass", "evidence": "no legacy/ or .env files touched; no secrets in new files; ruff check clean; pyproject adds fastapi/httpx/uvicorn/jsonschema to dev and a server extra"}
   ],
   "own_tests": [
-    {"input": "real socket: press as_of_seq=0 with no audio", "result": "answered card citing c1-t2, a turn that does not exist yet"},
-    {"input": "real socket: press as_of_seq=99 with no audio", "result": "partial card citing c1-t2, accepted without error"},
-    {"input": "real socket: press as_of_seq=-5", "result": "abstained card, no validation error"},
-    {"input": "five malformed frames", "result": "all got status error; connection stayed open"},
-    {"input": "delete, then reconnect, then audio", "result": "closed cleanly; new session started at c1-t0"},
-    {"input": "pause, audio, resume", "result": "audio while paused produced no transcript; resume gave status recording"}
+    {"input": "Live ws script /orchestration/evidence/tmp-T8.0/live.py: press at 0 pre-audio, 99, -5, 1", "result": "error, error, error, valid answered card citing c1-t1 with correct speaker/quote/start_ms"},
+    {"input": "Non-JSON text, unknown type, binary frame", "result": "each gets status error with detail; connection stays open"},
+    {"input": "Reconnect, delete, other-conversation and mismatched conversation_id", "result": "seq continues, cycle restarts, delete clears and closes, other conversation has no turns, mismatch gives error"},
+    {"input": "jsonschema on bad client messages", "result": "both rejected"}
   ],
-  "failures": [
-    "tools/fake_server.py scripted_card/ws handler: the card ignores request.as_of_seq and the turns actually sent. Evidence is hard-coded to {cid}-t2, so an answered card can cite a turn that is after as_of_seq or was never sent. Reproduce: start tools/fake_server.py, connect to ws://127.0.0.1:8000/ws/c1, send {\"type\":\"press\",\"request\":{\"conversation_id\":\"c1\",\"as_of_seq\":0}} with no audio. It returns an answered card citing c1-t2. This breaks the no-peeking rule in docs/TESTING.md and the task's requirement that evidence exists in the scripted transcript at or before as_of_seq. Clients built on it would learn the wrong contract.",
-    "tools/fake_server.py: a press with as_of_seq past the transcript (99) or negative (-5) is not rejected and returns a normal card (partial or abstained). The server should return a status error or an abstained card with no evidence. The tests do not cover this."
-  ],
-  "notes": "No test checks that card evidence is at or before as_of_seq, or reads the invented evidence against the sent transcript. The press tests all use as_of_seq=3 and pass only because the evidence is hard-coded. The press request's conversation_id is not checked against the URL id. Fake delete keeps no stored state, so clearing is trivial; if the fake should keep a conversation, it does not. Note that the venv lacks jsonschema; I validated the schema file using system python 4.24 with the venv's site-packages on the path. Temporary scripts are in orchestration/evidence/tmp-T8.0/. The fake server process was stopped."
+  "failures": [],
+  "notes": "The doc says audio.data is intended as base64 but the fake accepts any string; the doc states this plainly. The binary-frame test relies on a hang rather than an assertion when the handling is removed; low-priority hardening only."
 }
