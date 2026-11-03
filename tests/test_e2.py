@@ -717,3 +717,27 @@ def test_the_analysis_command_needs_a_local_run_and_no_model(monkeypatch: pytest
     monkeypatch.setattr(e2.shutil, "which", lambda name: pytest.fail("the analysis must not look for claude"))
     assert e2.main(["--analysis-only", "--local-run", "E2-none"]) == 2
     assert "E2 analysis stopped" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- the prompt says what the modes mean
+
+def _systems() -> dict[str, str]:
+    from contextlens.agents.single import RecentTurnsAssistant, SingleAgent, Tools
+
+    store = InMemoryTranscriptStore()
+    tools = Tools(store, Retriever(store, HashEmbedder()), MemoryStore(), 0, "c")
+    return {"single": SingleAgent(FakeLLM([]), tools, "v1").system,
+            "baseline": RecentTurnsAssistant(FakeLLM([]), "v1", n=2).system}
+
+
+@pytest.mark.parametrize("which", ["single", "baseline"])
+def test_the_prompt_defines_every_card_mode_so_the_model_can_choose(which: str) -> None:
+    text = _systems()[which]
+    for mode, meaning in (("recall", "report what was said"), ("clarify", "findings conflict"),
+                          ("respond", "needs a reply to give")):
+        assert f'"{mode}"' in text and meaning in text, (which, mode)
+    assert "mode is" in text
+
+
+def test_the_prompt_tells_the_model_the_reply_is_written_afterward() -> None:
+    assert all("leave suggestion null" in t for t in _systems().values())
