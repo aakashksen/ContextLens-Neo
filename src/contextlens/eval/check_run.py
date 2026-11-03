@@ -284,8 +284,8 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
             problems.append(tag + f"predictions hold {len(preds)} rows but n={rec['n']}")
         if not metrics[name]:
             problems.append(tag + "metrics is empty")
-        if source in IDS_ONLY_SOURCES and any(p.card is not None or p.raw_output is not None for p in preds):
-            problems.append(tag + f"rows of source {source} may hold ids and metrics only, with no card or raw output")
+        if source in IDS_ONLY_SOURCES and any(p.card is not None or p.raw_output is not None or p.drops for p in preds):
+            problems.append(tag + f"rows of source {source} may hold ids and metrics only, with no card, raw output or dropped-finding text")
         if "rerank" in name.lower() and not (isinstance(rec["models"], dict) and rec["models"].get("reranker")):
             problems.append(tag + "a rerank system must record its reranker model in models.reranker")
         if not scenarios:
