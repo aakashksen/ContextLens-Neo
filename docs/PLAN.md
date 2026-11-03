@@ -315,6 +315,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
 **Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
+**Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
@@ -333,6 +334,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** T8.7 owns the pyannote adapter's real run. It needs the person to accept the terms of `pyannote/speaker-diarization-community-1`; until then, turns stay honest `unknown`. Don't patch around that fetch, and don't change the shared venv's torch.
 **From T8.4's verifier:** Wire telemetry and vision into the backend: call `TracedAssistant.flush(timeout)` at shutdown, since its worker thread is non-daemon and an exporter that never returns would block exit; build a fresh `Context` per press; have delete call `SceneStore.delete` and clear queued telemetry jobs for that conversation, which hold cards in memory until the worker runs them; and count dropped presses in a metric, not only a log warning.
 **From T8.2's verifier:** Models are per conversation, and `app.py`'s `conversations` dict never evicts, so each conversation id keeps its own pyannote pipeline until the process exits. Share the model and evict idle conversations.
+**Decision (the coordinator):** Metrics are off by default, opt-in through the `obs` profile, and bound only to Docker's host-side address. Add one real-marked test that brings up the `obs` profile and sees a metric reach Prometheus, and document it in `docs/run-everything.md`.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
