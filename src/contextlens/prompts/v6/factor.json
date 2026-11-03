@@ -1,0 +1,10 @@
+{
+ "version": "v6",
+ "baseline": "v1",
+ "factor": "length_limit",
+ "summary": "At most 3 findings, one short sentence each, short quotes and notes.",
+ "removed": [],
+ "added": [
+  "Keep the card short: at most 3 findings, each statement one sentence of at most 25 words, each quote at most 30 words, and each note in missing one sentence."
+ ]
+}
