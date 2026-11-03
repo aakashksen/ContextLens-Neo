@@ -332,6 +332,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** Add a turn-update message to the contract and the clients, so a speaker assigned after a turn was sent reaches them live. T8.2 sends each turn as `unknown` and relabels it later in the store.
 **Decision (the coordinator):** T8.7 owns the pyannote adapter's real run. It needs the person to accept the terms of `pyannote/speaker-diarization-community-1`; until then, turns stay honest `unknown`. Don't patch around that fetch, and don't change the shared venv's torch.
 **From T8.4's verifier:** Wire telemetry and vision into the backend: call `TracedAssistant.flush(timeout)` at shutdown, since its worker thread is non-daemon and an exporter that never returns would block exit; build a fresh `Context` per press; have delete call `SceneStore.delete` and clear queued telemetry jobs for that conversation, which hold cards in memory until the worker runs them; and count dropped presses in a metric, not only a log warning.
+**From T8.2's verifier:** Models are per conversation, and `app.py`'s `conversations` dict never evicts, so each conversation id keeps its own pyannote pipeline until the process exits. Share the model and evict idle conversations.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
