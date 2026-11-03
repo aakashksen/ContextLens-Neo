@@ -295,8 +295,14 @@
         "{py} -m pytest tests/test_e1.py -q",
         "{py} -m contextlens.eval.check_run E1 --min-n 100 --split dev"
       ],
-      "status": "in_progress",
-      "started_at": "2026-11-03T02:15:29+00:00"
+      "status": "done",
+      "started_at": "2026-11-03T02:15:29+00:00",
+      "verified": {
+        "commit": "a61b3e4664fa43f9662f7aaccfac418c51ea7ef3",
+        "passed": true,
+        "at": "2026-11-03T04:05:40+00:00"
+      },
+      "done_at": "2026-11-03T04:19:35+00:00"
     },
     {
       "id": "T3.1",
