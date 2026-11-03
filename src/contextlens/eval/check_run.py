@@ -8,13 +8,13 @@ from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import series
-from contextlens.eval.records import MANIFEST_REL, ROOT, RUNS_REL, git, split_hash
+from contextlens.eval.records import IDS_ONLY_SOURCES, ROOT, RUNS_REL, SCENARIO_SOURCES, git, split_hash
 from contextlens.eval.series import JUDGED, base_metrics, base_name
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
 
 REQUIRED = (
-    "run_id experiment git_commit dirty dataset_hash split config models prompt_versions n metrics "
+    "run_id experiment git_commit dirty dataset_hash split scenario_source config models prompt_versions n metrics "
     "intervals comparisons attempts claude_calls labels_reviewed predictions started_at finished_at"
 ).split()
 TOLERANCE = 1e-9
@@ -145,6 +145,14 @@ def _row_problems(scenarios: list[Scenario], preds: list[Prediction]) -> list[st
     return out
 
 
+def committed_unchanged(rec: dict[str, Any], root: Path, rel: str) -> bool:
+    """The file is the same at the record's git_commit as on disk, so it was fixed before the run."""
+    path = root / rel
+    shown = git(root, "show", f"{rec['git_commit']}:{rel}")
+    return (path.is_file() and shown.returncode == 0
+            and shown.stdout.replace(CRLF, LF) == path.read_text(encoding="utf-8").replace(CRLF, LF))
+
+
 def subset_problems(rec: dict[str, Any], root: Path, split_ids: list[str]) -> tuple[set[str] | None, list[str]]:
     """The ids of the record's named subset, or None with the problems when the subset can't be trusted.
     The manifest must be the same at the record's git_commit as on disk, so it was fixed before the run."""
@@ -156,8 +164,7 @@ def subset_problems(rec: dict[str, Any], root: Path, split_ids: list[str]) -> tu
     if not path.is_file():
         return None, [f"subset {name} has no manifest at {rel}"]
     text = path.read_text(encoding="utf-8")
-    shown = git(root, "show", f"{rec['git_commit']}:{rel}")
-    if shown.returncode != 0 or shown.stdout.replace(CRLF, LF) != text.replace(CRLF, LF):
+    if not committed_unchanged(rec, root, rel):
         return None, [f"subset {name} manifest was not committed before the run (absent or different at git_commit)"]
     try:
         manifest = json.loads(text)
@@ -195,22 +202,35 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
 
     scenarios: list[Scenario] = []
-    split = rec["split"]
-    manifest_path = root / MANIFEST_REL
+    split, source = rec["split"], rec["scenario_source"]
+    if source not in SCENARIO_SOURCES:
+        return problems + [f"unknown scenario source {source!r}; expected one of {sorted(SCENARIO_SOURCES)}"]
+    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
+    manifest_path = root / manifest_rel
+    local = source != "scenarios"
     entry = None
     if manifest_path.is_file():
-        entry = json.loads(manifest_path.read_text(encoding="utf-8")).get("splits", {}).get(split)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("source", "scenarios") != source:
+            problems.append(f"the manifest at {manifest_rel.as_posix()} is not for scenario source {source}")
+        else:
+            entry = manifest.get("splits", {}).get(split)
+    if local and not committed_unchanged(rec, root, manifest_rel.as_posix()):
+        problems.append(f"the {source} manifest was not committed before the run (absent or different at git_commit)")
     if entry is None:
-        problems.append(f"no manifest entry for split {split}")
-    elif not (root / "datasets/scenarios" / f"{split}.jsonl").is_file():
-        problems.append(f"no scenario file for split {split}")
+        problems.append(f"no manifest entry for split {split} of source {source}")
+    elif not (root / scenario_dir / f"{split}.jsonl").is_file():
+        problems.append(f"no scenario file for split {split} of source {source}")
     else:
         if rec["dataset_hash"] != entry["hash"]:
             problems.append("dataset_hash does not match the split manifest")
-        if split_hash(split, root) != entry["hash"]:
+        if split_hash(split, root, source) != entry["hash"]:
             problems.append("scenario file no longer matches the split manifest")
         else:
-            scenarios = load_scenarios(split, root / "datasets/scenarios")
+            scenarios = load_scenarios(split, root / scenario_dir)
+            if local and [s.id for s in scenarios] != entry.get("ids"):
+                problems.append("scenario ids do not match the manifest's ids")
+                scenarios = []
         expected_n, what = entry["n"], "split"
         if "subset" in rec:
             ids, bad = subset_problems(rec, root, [s.id for s in scenarios])
@@ -251,6 +271,10 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
             problems.append(tag + f"predictions hold {len(preds)} rows but n={rec['n']}")
         if not metrics[name]:
             problems.append(tag + "metrics is empty")
+        if source in IDS_ONLY_SOURCES and any(p.card is not None or p.raw_output is not None for p in preds):
+            problems.append(tag + f"rows of source {source} may hold ids and metrics only, with no card or raw output")
+        if "rerank" in name.lower() and not (isinstance(rec["models"], dict) and rec["models"].get("reranker")):
+            problems.append(tag + "a rerank system must record its reranker model in models.reranker")
         if not scenarios:
             continue
         pred_ids = [p.scenario_id for p in preds]
@@ -283,8 +307,9 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     if isinstance(rec["comparisons"], list):
         problems += _comparison_problems(rec["comparisons"], usable, paths) if scenarios else []
 
-    saved_names = [m for d in metrics.values() for m in d] + [m for d in intervals.values() for m in d]
-    if any(base_name(m) in JUDGED for m in saved_names):
+    # An undefined (None) judged metric makes no claim, so a retrieval-only record needs no judge for it.
+    defined = [m for d in metrics.values() for m, v in d.items() if v is not None] + [m for d in intervals.values() for m in d]
+    if any(base_name(m) in JUDGED for m in defined):
         problems += judge_problems(rec["config"])
     return problems
 

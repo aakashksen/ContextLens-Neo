@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.replay.runner import Prediction
+from contextlens.schemas import Scenario
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNS_REL = Path("results/runs")
@@ -34,12 +35,34 @@ def head_commit(root: Path) -> str:
     return out.stdout.strip()
 
 
-def split_hash(split: str, root: Path = ROOT) -> str:
-    """Hash of the scenario file for a split: the cases a run is scored on."""
-    return hashlib.sha256((root / "datasets/scenarios" / f"{split}.jsonl").read_bytes()).hexdigest()
-
-
 MANIFEST_REL = Path("datasets/splits/scenarios.json")
+# Where each scenario source keeps its cases and the committed manifest that pins them. QMSum text cannot be
+# committed, so its scenario file sits in the git-ignored datasets/raw/ and only its manifest is committed.
+SCENARIO_SOURCES = {
+    "scenarios": (MANIFEST_REL, Path("datasets/scenarios")),
+    "qmsum": (Path("datasets/splits/qmsum-scenarios.json"), Path("datasets/raw/scenarios/qmsum")),
+}
+# Prediction rows of these sources may hold ids and metrics data only: no quotes, cards or raw output.
+IDS_ONLY_SOURCES = {"qmsum"}
+
+
+def split_hash(split: str, root: Path = ROOT, source: str = "scenarios") -> str:
+    """Hash of the scenario file for a split: the cases a run is scored on."""
+    return hashlib.sha256((root / SCENARIO_SOURCES[source][1] / f"{split}.jsonl").read_bytes()).hexdigest()
+
+
+def write_local_manifest(source: str, scenarios: dict[str, list[Scenario]], root: Path = ROOT) -> Path:
+    """Write a source's scenario files (git-ignored) and its manifest of hash, count and ids (committed)."""
+    manifest_rel, directory = SCENARIO_SOURCES[source]
+    (root / directory).mkdir(parents=True, exist_ok=True)
+    splits = {}
+    for split, scs in scenarios.items():
+        (root / directory / f"{split}.jsonl").write_text("".join(s.model_dump_json() + "\n" for s in scs), encoding="utf-8")
+        splits[split] = {"hash": split_hash(split, root, source), "n": len(scs), "ids": [s.id for s in scs]}
+    path = root / manifest_rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"kind": "scenarios", "source": source, "splits": splits}, indent=1) + "\n", encoding="utf-8")
+    return path
 
 
 def write_scenarios_manifest(root: Path = ROOT) -> Path:
@@ -76,9 +99,12 @@ def write_run(
     comparisons: list[dict[str, Any]] | None = None,
     supersedes: list[dict[str, str]] | None = None,
     subset: str | None = None,
+    scenario_source: str = "scenarios",
     root: Path = ROOT,
     allow_dirty: bool = False,
 ) -> Path:
+    if scenario_source not in SCENARIO_SOURCES:
+        raise ValueError(f"unknown scenario source {scenario_source!r}; expected one of {sorted(SCENARIO_SOURCES)}")
     bad = [name for name in predictions if not SYSTEM_NAME.match(name)]
     if not predictions or bad:
         raise ValueError(f"predictions must map system names (letters, digits, _ and -) to rows: {bad}")
@@ -101,6 +127,7 @@ def write_run(
         "dirty": dirty,
         "dataset_hash": dataset_hash,
         "split": split,
+        "scenario_source": scenario_source,
         "config": config,
         "models": models,
         "prompt_versions": prompt_versions,
