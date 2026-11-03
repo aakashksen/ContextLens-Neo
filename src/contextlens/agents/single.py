@@ -295,6 +295,16 @@ def verify_card(card: Card, ctx: Context, conv_id: str) -> Card:
     return guarded
 
 
+_ASKS = re.compile(r"\?|^\W*(?:please|let's|let us)\b", re.I)
+
+
+def asks_user(turns: list[Turn], req: ButtonRequest) -> bool:
+    """A press with no question, on a latest turn that asks something (a question mark) or requests it ("please",
+    "let's"). The request does not say who the user is, so the latest turn's speaker is not told apart from the
+    user, and a question the user asked themselves counts too."""
+    return not (req.question or "").strip() and bool(turns) and bool(_ASKS.search(turns[-1].text))
+
+
 def _finish(
     card: Card, ctx: Context, req: ButtonRequest, start: float, run: "_Run", llm: LLMClient, end: float,
     guard_timeout: float | None = None,
@@ -306,6 +316,12 @@ def _finish(
     statements and the question, writes it. That cannot stop a finding that repeats an injected claim from
     carrying it into the suggestion; a statement that misreads its quote is not checkable without a model."""
     notes: list[str] = []
+    try:
+        turns = _bounded(functools.partial(_recent, ctx, req, 1), MARGIN_S)
+    except Exception:  # the store failing is reported by the checks below
+        turns = []
+    if asks_user(turns, req):
+        card = card.model_copy(update={"mode": "respond"})  # set here, not by the model's guess at a mode
     wants = card.mode == "respond"
     if card.suggestion:
         notes.append("the first step's suggestion was discarded")

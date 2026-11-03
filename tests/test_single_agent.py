@@ -419,7 +419,7 @@ def test_first_step_suggestion_is_discarded_in_every_mode():
         f = with_statement("Ravi set the deadline for Monday")
         llm = FakeLLM([final([f], suggestion="Do this now", mode=mode)])
         agent, ctx, _ = setup(TURNS, llm)
-        card = agent.answer(req(3), ctx)
+        card = agent.answer(req(3, "What was the deadline?"), ctx)
         assert card.status == "answered" and card.suggestion is None and len(llm.calls) == 1
         assert any("discarded" in m for m in card.missing)
 

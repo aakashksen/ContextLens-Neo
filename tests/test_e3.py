@@ -171,3 +171,36 @@ def test_a_number_rule_drop_is_saved_with_its_text():
 def test_a_card_the_model_left_empty_has_no_drops():
     row = run_single(INJ, [card_of(status="abstained")], "Where is the client?")
     assert row.card.status == "abstained" and row.drops == []
+
+
+# ---- respond is set in code ----
+
+ASKED = [turn(0, "I'm at the dentist on Thursday morning.", "Maya"), turn(1, "Noted.", "Dev"),
+         turn(2, "Can you present the demo on Thursday at nine?", "Lena")]
+STATED = [turn(0, "The fee is fifty dollars", "Ravi"), turn(1, "ok", "Ana"), turn(2, "We moved the deadline to Monday.", "Sue")]
+
+
+def test_a_press_with_no_question_on_a_turn_that_asks_something_is_respond_and_gets_a_suggestion():
+    f = fnd("c1:t0", "I'm at the dentist on Thursday morning", "Maya is at the dentist Thursday morning")
+    row = run_single(ASKED, [card_of(f, mode="recall"), {"suggestion": "Decline, I have the dentist"}])
+    assert row.card.mode == "respond" and row.card.suggestion == "Decline, I have the dentist"
+
+
+def test_it_does_not_depend_on_the_mode_the_model_chose():
+    f = fnd("c1:t0", "I'm at the dentist on Thursday morning", "Maya is at the dentist Thursday morning")
+    row = run_single(ASKED, [card_of(f, mode="clarify"), {"suggestion": "Decline"}])
+    assert row.card.mode == "respond" and row.card.suggestion == "Decline"
+
+
+def test_a_press_with_a_question_or_on_a_statement_is_left_as_the_model_chose():
+    f = fnd("c1:t0", "I'm at the dentist on Thursday morning", "Maya is at the dentist Thursday morning")
+    row = run_single(ASKED, [card_of(f, mode="recall")], question="Who is at the dentist?")
+    assert row.card.mode == "recall" and row.card.suggestion is None
+    g = fnd("c1:t2", "We moved the deadline to Monday", "Sue moved the deadline to Monday", "Sue")
+    row = run_single(STATED, [card_of(g, mode="recall")])
+    assert row.card.mode == "recall" and row.card.suggestion is None
+
+
+def test_respond_with_no_verified_finding_has_no_suggestion():
+    row = run_single(ASKED, [card_of(status="abstained")])
+    assert row.card.mode == "respond" and row.card.suggestion is None and row.card.status == "abstained"
