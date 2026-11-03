@@ -144,11 +144,18 @@ class TeamAssistant:
         mine = job.runs["assistance"]
         t0 = time.perf_counter()
         mode, note = "recall", None
+        followup_ms = 0.0  # already counted in that specialist's own time
+
+        def follow_up(agent: str, text: str) -> None:
+            nonlocal followup_ms
+            f0 = time.perf_counter()
+            try:
+                self._specialist(agent, state, text)
+            finally:
+                followup_ms += (time.perf_counter() - f0) * 1000
+
         if job.evidence.all():
-            mode, note = decide(
-                llm, req, job.evidence.all, lambda agent, text: self._specialist(agent, state, text),
-                job.end, mine, self.max_followups,
-            )  # fmt: skip
+            mode, note = decide(llm, req, job.evidence.all, follow_up, job.end, mine, self.max_followups)
         findings = job.evidence.all()
         missing = [*job.notes, *([note] if note else [])]
         if findings:
@@ -162,7 +169,7 @@ class TeamAssistant:
         total.abandoned = sum(r.abandoned for r in job.runs.values())
         spec_n = len(total.results) - len(mine.results)
         card = _finish(card, ctx, req, job.start, total, llm, job.end, MARGIN_S)
-        job.ms["assistance"] = job.ms.get("assistance", 0.0) + (time.perf_counter() - t0) * 1000
+        job.ms["assistance"] = (time.perf_counter() - t0) * 1000 - followup_ms
         job.card = card
         self._record(job, total, spec_n)
         return {}
