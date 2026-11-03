@@ -363,7 +363,8 @@ See `docs/HUMAN-GATES.md`.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
 **From phase review:** E8 reports each public benchmark separately, so it uses the local scenario manifests from T2.5 for sources whose text can't be committed. All of them go in the one test record.
 **Decision (the person), judge check before this task:** Sonnet, through the existing `claude -p` client, grades a random sample of at least 200 answers the local `gemma4` judge already graded, across experiments on dev only, never test. Sources are synthetic and LongMemEval only: QMSum and DECODE text never leaves this machine. Report agreement, Cohen's kappa, which way disagreements lean, and whether the local judge flatters results. Save rows as they arrive, inside the call cap, with a run record and a `docs/DECISIONS.md` entry. If agreement is poor, say so and propose Sonnet as the judge for final numbers. This adds to the person-reviewed sample in `docs/TESTING.md`, and doesn't replace it.
-**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test`.
+**Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
+**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test --all`.
 
 ### T9.2: User study kit
 **Files:** `docs/study/` (consent form, tasks, script, anonymous results template), `src/contextlens/experiments/e9_study.py`, `tests/test_e9.py`.
