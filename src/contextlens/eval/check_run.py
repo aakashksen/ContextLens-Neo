@@ -7,11 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
-from contextlens.eval import metrics as M
 from contextlens.eval import series
 from contextlens.eval.records import MANIFEST_REL, ROOT, RUNS_REL, git, split_hash
-from contextlens.eval.series import JUDGED, base_name, grounded_per_card, label_of, schema_valid
-from contextlens.eval.stats import percentile
+from contextlens.eval.series import JUDGED, base_metrics, base_name
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
 
@@ -20,89 +18,23 @@ REQUIRED = (
     "intervals comparisons attempts claude_calls labels_reviewed predictions started_at finished_at"
 ).split()
 TOLERANCE = 1e-9
-Metrics = dict[str, float | None]
 K_DEFAULT = (1, 3, 5, 10)
 FAKE = re.compile(r"fake|stub", re.I)
 TIMESTAMP = re.compile(r"\d{8}T\d{12}Z")
 
 
-def _complete(present: list[bool]) -> bool | None:
-    """True when every row has the field, None when no row has it, False when only some do."""
-    if all(present):
-        return True
-    return None if not any(present) else False
-
-
-def _base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int]) -> Metrics:
-    """A metric whose source field is on only some rows is left out, so it cannot be saved."""
-    carded = [(s, p, p.card) for s, p in rows if p.card is not None]
-    labelled = [(s.gold_label, label_of(c)) for s, _, c in carded if s.gold_label]
-    gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
-    out: Metrics = {
-        "macro_f1": M.macro_f1(gold, pred),
-        "false_alert_rate": M.false_alert_rate(gold, pred),
-        **M.abstention_accuracy(
-            [c.status == "abstained" for _, _, c in carded],
-            [s.gold_label == "insufficient" for s, _, _ in carded],
-        ),
-        "tokens_per_card": M.mean([float(c.tokens) for _, _, c in carded]),
-        "cost_usd_per_card": M.mean([c.cost_usd for _, _, c in carded]),
-    }
-
-    pred_sp: list[str] = []
-    gold_sp: list[str] = []
-    for s, _, c in carded:
-        speaker_of = {t.id: t.speaker for t in s.conversation.turns}
-        for ev in (e for f in c.findings for e in f.evidence):
-            if ev.turn_id in speaker_of:
-                pred_sp.append(ev.speaker)
-                gold_sp.append(speaker_of[ev.turn_id])
-    out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
-
-    # "supports the claim" is a saved rubric judgement; without one per finding the metric is omitted
-    flags = grounded_per_card(rows)
-    if flags is not None:
-        flat = [x for fl in flags for x in fl]
-        out["grounded_rate"] = sum(flat) / len(flat) if flat else None
-        out["unsupported_claim_rate"] = M.unsupported_claim_rate(flags)
-
-    raws = _complete([p.raw_output is not None for _, p in rows])
-    if raws is not False:
-        out["schema_valid_rate"] = M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output]) \
-            if raws else None
-
-    need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
-    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need])
-    if has_ranks is not False:
-        ranked = [(s, p.ranked_turn_ids or []) for s, p in need] if has_ranks else []
-        out["mrr"] = M.mrr([M.first_gold_rank(r, s.gold_evidence_turn_ids) for s, r in ranked])
-        for k in ks:
-            out[f"recall@{k}"] = M.mean(
-                [v for s, r in ranked if (v := M.recall_at_k(r, s.gold_evidence_turn_ids, k)) is not None])
-
-    stage_names = {name for _, p in rows for name in p.stage_latency_ms}
-    for name in sorted(stage_names | {"total"}):
-        if name in stage_names and not all(name in p.stage_latency_ms for _, p in rows):
-            continue
-        suffix = "" if name == "total" else f"[stage={name}]"
-        vals = [float(p.stage_latency_ms[name]) for _, p in rows if name in p.stage_latency_ms]
-        out[f"latency_p50_ms{suffix}"] = percentile(vals, 50) if vals else None
-        out[f"latency_p95_ms{suffix}"] = percentile(vals, 95) if vals else None
-    return out
-
-
 def recompute_metrics(
     scenarios: list[Scenario], predictions: list[Prediction], ks: Iterable[int] = K_DEFAULT
-) -> Metrics:
+) -> dict[str, float | None]:
     """Every metric an experiment may save, recomputed from the saved rows with the functions in
     metrics.py. Also gives each metric restricted to one scenario category or origin as
     `name[category=x]` / `name[origin=y]`."""
     ks = tuple(ks)
     rows = _rows(scenarios, predictions)
-    out = _base_metrics(rows, ks)
+    out = base_metrics(rows, ks)
     for key in ("category", "origin"):
         for value in sorted({getattr(s, key) for s, _ in rows}):
-            sub = _base_metrics([(s, p) for s, p in rows if getattr(s, key) == value], ks)
+            sub = base_metrics([(s, p) for s, p in rows if getattr(s, key) == value], ks)
             out.update({f"{name}[{key}={value}]": v for name, v in sub.items()})
     return out
 
