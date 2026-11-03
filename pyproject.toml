@@ -10,7 +10,8 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "scikit-learn"]
+dev = ["pytest", "ruff", "scikit-learn", "fastapi", "httpx", "uvicorn", "jsonschema"]
+server = ["fastapi", "uvicorn", "websockets"]
 postgres = ["psycopg[binary]", "pgvector"]
 rerank = ["sentence-transformers"]
 speech = ["grpcio", "grpcio-tools"]

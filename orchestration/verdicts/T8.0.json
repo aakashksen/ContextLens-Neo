@@ -1,0 +1,26 @@
+{
+  "task": "T8.0",
+  "commit": "237814a0438178acbdfca367e72d73693d0ac02b",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; worktree clean", "result": "pass", "evidence": "git rev-parse HEAD = 237814a...; git status --short empty (also after mutation checks, restored)"},
+    {"item": "Evidence log shows acceptance ran at this commit", "result": "pass", "evidence": "orchestration/evidence/T8.0.log: commit 237814a, 12 passed, RESULT PASS; I reran pytest tests/test_contract.py: 12 passed"},
+    {"item": "Plan items: Pydantic models for audio/press/pause/resume/delete and transcript/card/status using schemas.py, generated schema file, fake server with all Card statuses, three named tests", "result": "pass", "evidence": "contract.py, docs/client-contract.schema.json, tools/fake_server.py; test_schema_file_matches_models, test_fake_server_answers_press_with_valid_card, test_fake_server_can_send_answered_partial_and_abstained all exist and pass"},
+    {"item": "Doc read end to end against code over a real uvicorn + websockets server", "result": "pass", "evidence": "Every claim in docs/client-contract.md matched live behavior: connect gives status recording; error statuses with detail and connection stays open; pause then audio ignored while press still answered; resume; reconnect continues seq; cycle restarts per connection; delete answers deleted then closes 1000 and later connection starts at seq 0; cycle 1st answered/2nd partial/3rd abstained, errors don't count"},
+    {"item": "Previous failures retested: press at as_of_seq 0 before audio, 99, -5", "result": "pass", "evidence": "all three returned status error with detail and no card; connection stayed usable"},
+    {"item": "Evidence real id/speaker/quote/start_ms from sent turn <= as_of_seq", "result": "pass", "evidence": "with 3 turns sent, press 1 cited turn_id c1-t1, speaker Ben, quote 'Friday works...', start_ms 4000, matching the scripted turn"},
+    {"item": "Binary frame, normal disconnect, reconnect, press cycle restart, delete reset", "result": "pass", "evidence": "binary -> status error 'messages must be text frames' and still open; clean client close, reconnect: seq continued at 4, press at 0 cited c1-t0 and returned answered (cycle restarted); delete -> deleted + close, new connection press 0 errors and next audio is seq 0. Server stopped (thread joined)"},
+    {"item": "jsonschema validation of live messages against docs/client-contract.schema.json, and rejection of bad messages", "result": "pass", "evidence": "all server messages validated against server_to_client; client messages against client_to_server; {'type':'zzz'} and press missing as_of_seq both rejected by schema"},
+    {"item": "Mutation: schema test", "result": "pass", "evidence": "changing AudioMessage.sample_rate default made test_schema_file_matches_models fail (1 failed, 11 passed); restored"},
+    {"item": "Mutation: binary-frame handling", "result": "pass", "evidence": "removing the error send for binary frames made the binary test hang (never receives the status), so it is detected, though by hang rather than a clean assertion failure. Replacing only the `if raw is None` condition keeps tests passing because validate_json(None) still yields an error status; behavior is equivalent, so not a defect"},
+    {"item": "Diff hygiene", "result": "pass", "evidence": "no legacy/ or .env files touched; no secrets in new files; ruff check clean; pyproject adds fastapi/httpx/uvicorn/jsonschema to dev and a server extra"}
+  ],
+  "own_tests": [
+    {"input": "Live ws script /orchestration/evidence/tmp-T8.0/live.py: press at 0 pre-audio, 99, -5, 1", "result": "error, error, error, valid answered card citing c1-t1 with correct speaker/quote/start_ms"},
+    {"input": "Non-JSON text, unknown type, binary frame", "result": "each gets status error with detail; connection stays open"},
+    {"input": "Reconnect, delete, other-conversation and mismatched conversation_id", "result": "seq continues, cycle restarts, delete clears and closes, other conversation has no turns, mismatch gives error"},
+    {"input": "jsonschema on bad client messages", "result": "both rejected"}
+  ],
+  "failures": [],
+  "notes": "The doc says audio.data is intended as base64 but the fake accepts any string; the doc states this plainly. The binary-frame test relies on a hang rather than an assertion when the handling is removed; low-priority hardening only."
+}
