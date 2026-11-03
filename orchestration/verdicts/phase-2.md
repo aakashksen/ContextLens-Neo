@@ -1,45 +1,40 @@
 VERDICT: DEFECTS
 
-Phase 2 review over HEAD 59d9b05 (tree clean). Method: stub embedder, `FakeLLM`, probes in the scratchpad (`...\scratchpad\p2\probe.py`, `leak.py`, `mem.py`). No GPU, Ollama, E1 rerun, or write to `results/runs/`. No QMSum text was copied anywhere.
+Phase 2 re-review at HEAD 7c96836 (tree clean). The four earlier defects are fixed. Two new, minor defects are below, and neither can put a false number on record. Method: stub data, `FakeLLM`, and probes in the session scratchpad (`...\scratchpad\mem2.py`, `leak2.py`, `cfg.py`). No GPU, no Ollama, no E1 rerun, no write to the real `results/runs/` (config regeneration ran on a temp copy of the records), and no QMSum text was copied anywhere. `tests/test_memory.py` and `tests/test_e1.py` pass (35 tests). `tests/test_no_raw_text.py` passes with 10 tests, and the real-corpus test ran and was not skipped, because `datasets/raw/qmsum` is present.
 
-Checked and fine (no defect):
-- `as_of_seq` holds end to end for what exists: `Retriever.search` filters through `store.turns(..., as_of_seq)` in all three modes; `MemoryStore.lookup` filters on `as_of_seq` and computes "superseded" only from items visible at that seq (probe: seq 0 gives m0, seq 1 gives m1, include_superseded gives both). E1 windows take the seq of their last turn, and last-turn queries search only up to `as_of_seq - 1`.
-- `Retriever`, `ScoredTurn`, and the `Turn` copy with `speaker="unknown"` line up with what T3.1 (`Tools`, `guard_card`) expects. The Postgres `SELECT` column order matches `Turn.model_fields`.
-- Reranker fallback is reported and E1 fails on it. No skipped or weakened tests, apart from the one in defect 3.
-- Honesty: README, `docs/*.md`, `docs/RESUME-TARGETS.md`, and `results/claims.json` (empty) say nothing about E1 results. No doc claims more than the records show.
+## Earlier defects, retested
+
+1. Memory ids: fixed.
+   - In the real flow, extract then add, then extract with `existing=store.items(conv, big)`, then add, the ids come out `c1-m1-0` and `c1-m2-0`. The correction's `supersedes` is `c1-m1-0`, and `lookup` returns only "Meet on Wednesday".
+   - A third update over the same newest seq gets `c1-m2-1`, with no collision.
+   - `MemoryStore.items(conv, as_of_seq)` filters by conversation and seq, includes superseded items, and sorts by seq.
+   - `add` is all-or-nothing and raises `ValueError` on a duplicate id.
+   - Nothing raises in an ordinary flow. The one way to make it raise: pass `existing` filtered to an older seq (for example `items(conv, 1)`) when the store already holds items with the same newest seq. The two updates then both mint `c1-m2-0`, and `add` raises. That is a misuse that fails loudly, not a silent wrong answer. T3.1 and T3.2 should feed `existing` from the store at the current seq.
+2. `unescape`: exact and fixed. `unescape(escape(x)) == x` for the probes, and `unescape("&amp;lt;") == "&lt;"`. In `_from_model` the speaker's literal `&lt;b&gt; tags & <b>` survives. The summary is escaped again by `escape(self.text)` on its only reuse, so no route puts an unescaped delimiter into a prompt. A model echo of a raw `</transcript>` stays in `self.text`, which is only a Python attribute, and is escaped on reuse. T3.1 must keep passing it through `escape` and never interpolate `RollingSummary.text` raw. Defect A below is a remaining fidelity gap.
+3. Leak test: deterministic and fixed. The 8 `PYTHONHASHSEED` variants pass, because the hash is now `blake2b` over every window. It scans JSON and JSONL strings recursively, and unparseable JSON lines fall back to the raw line. In my probe a 9-word copy inside a nested JSON string, a `.jsonl` line, an ASCII-escaped JSON string and a plain `.txt` was caught every time. The file list is `git ls-files --cached --others --exclude-standard`. The committed `results/` files, `configs/` and `datasets/scenarios` are included, and `datasets/raw/` is git-ignored. Defect B below is a remaining gap.
+4. `configs/retrieval.json`: fixed.
+   - The change was purely additive. Every old key has the same value, and `winner` is still `hybrid_t1` with the same scores. The new keys are `labels_reviewed` (false), `not_measurably_better_than_statement`, `saturated_sources` (["scenarios"]) and `saturation_note`.
+   - `regenerate_config(tmp_root)` reproduces the committed file byte for byte from the records. It reads only records and changes nothing in them.
+   - The statement matches the record intervals. On qmsum, `hybrid_t1` against `dense_t1` is [-0.005, 0.077] and against `hybrid_rerank_t1` is [-0.024, 0.053], both including 0.
+
+`query_for` move: no change to E1's behavior. The body is identical, `e1.query_for is query.query_for` holds, and its only caller is still E1 at `e1_retrieval.py:118`. T3.2 can now import it from `contextlens.retrieval.query`.
 
 ## Defects
 
-### 1. `MemoryStore` has no way to list a conversation's items, so `MemoryExtractor.update(new_turns, existing)` cannot be fed, and item ids then collide
-- Files: `src/contextlens/memory/extract.py`, `MemoryStore` (only `add` and `lookup`), and id assignment `f"{conv}-m{len(existing) + len(result)}"`.
-- Repro (`...\scratchpad\p2\mem.py`): `dir(MemoryStore)` shows only `add` and `lookup`. Two `update` calls with `existing=[]` (all a caller has without private access to `_items`) both return id `c-m0`. A later correction with `supersedes="c-m0"` then hides both items, because `lookup` builds `replaced` from ids.
-- Impact: T3.2's "retrieval + memory" strategy and T4.1's memory agent have to either reach into `_items` or pass a partial list. Either way, ids collide or supersession chains break silently. The wrong "current value" would flow into E2 and E8 grounded and contradiction numbers.
-- First task that needs the fix: T3.1 (`Tools.lookup_memory`, which needs a conversation-wide read, and a unique-id scheme). It must be settled before T3.2.
-- False number with no later owner: plausible. No later task checks memory id uniqueness, and a wrong-but-valid card would still pass the guard. Memory-strategy numbers in E2 could be affected.
-
-### 2. `unescape(escape(x)) != x`, so `RollingSummary.text` is not faithful
-- File: `src/contextlens/llm/untrusted.py`, `unescape` (fixed-point loop); used in `src/contextlens/memory/summary.py`.
-- Repro: `unescape(escape("use &lt;b&gt; tags & <b>"))` returns `'use <b> tags & <b>'`. The literal `&lt;b&gt;` the speaker said is turned into `<b>`.
-- Impact: low. The summary is a helper and never evidence, and the stored summary is re-escaped on use. Any text that talks about HTML or XML entities is distorted. T3.1's `render_transcript_block` has to reuse `escape` only and must not call `unescape` on anything that could be quoted as evidence.
-- First task: T3.1. A false number is unlikely; the effect is bounded to summary wording.
-
-### 3. `tests/test_no_raw_text.py` is probabilistic and can miss copied QMSum/DECODE text
-- File: `tests/test_no_raw_text.py:14-15, 46-50`. It uses an 8-word window, keeps one window in four by `hash()`, and Python's string hash is randomized per process.
-- Repro (`...\scratchpad\p2\leak.py`): a 14-word passage copied into a tracked file, with `PYTHONHASHSEED=1..12`. It is detected in 10 runs and missed in 2. A shorter quote (8 to 10 words, only 1 to 3 windows) is missed far more often. The plan, T2.5 item 4, says the test "fails if any tracked file holds text" from the raw sources.
-- Impact: the guard for the "QMSum and DECODE text never committed" rule can pass while a quote is committed, and its result varies between runs. This is a licensing and data issue, not a number.
-- First task that needs the fix: T3.3 (the next task that writes committed output from these sources). Use every window, or a stable hash such as `hashlib`. Cost is small.
+### A. `_from_model` loses a literal `&amp;...` the speaker said
+- File: `src/contextlens/memory/summary.py:11-14`, the regex `&amp;(?:amp;)+` that collapses over-escaping.
+- Repro: for a speaker's literal text `AT&amp;T`, the prompt holds `AT&amp;amp;T`. If the model echoes that, `_from_model` returns `AT&T`, not `AT&amp;T`. A literal `&amp;lt;` comes back as `&lt;` (the original has no `<`), and a literal `&amp;amp;` comes back as `&`. Probe: `_from_model(escape(lit)) == lit` is False for those three and True for `&lt;b&gt;` and `</transcript>`.
+- Impact: low. Only text that talks about HTML entities is distorted, in a summary that is never evidence. The docstring claims only that a literal `&lt;` survives. The gap is that an echo of an escaped `&amp;amp;` cannot be told from over-escaping. No delimiter is created.
+- First task that needs the fix: none required. If T3.1 or T4.1 ever shows the summary to a user, it must not be treated as a verbatim quote.
 - False number: no.
 
-### 4. `configs/retrieval.json` carries no provisional marker for T3.2 to inherit
-- File: `configs/retrieval.json` (written by `_config` in `src/contextlens/experiments/e1_retrieval.py`).
-- Evidence: it has `winner: "hybrid_t1"` and `scores`, but no `labels_reviewed` (both E1 records have `false`), no flag that the scenarios source is saturated (`dense_t1`, `hybrid_t1`, `dense_w3`, `hybrid_w3` all have recall@5 = 1.0), and no confidence intervals. Only `no_measurable_difference_from` hints at it. On the only source that separates systems, QMSum, `hybrid_t1` 0.768 vs `dense_t1` 0.732 and vs `hybrid_rerank_t1` 0.754 have intervals including 0, so the choice of hybrid is a rule-based pick, not a demonstrated lead. The "mean over sources" rule gives the saturated source half the weight.
-- Impact: T3.2 and T3.3 will read `winner`, `mode`, and `rerank: false` as established. A later E2 or README sentence such as "hybrid retrieval chosen by E1" would overstate. Nothing in the repo says this today, so this is a gap and not a false statement.
-- First task: T3.2 (it consumes the file). Copy `labels_reviewed` and a `provisional` or `saturated_sources` field into the config, or have the record's `labels_reviewed` re-checked when E2 cites it.
-- False number: no number is currently wrong. The risk is a later claim, and `claims.py` would catch only a number, not the word "best".
-
-## Decision on the 6-word overlap note
-Not a real concern. The note's overlap is 6-word generic phrasing (a boilerplate "I don't have any personal ..." refusal style) in files we wrote ourselves (`datasets/scenarios/dev.jsonl`, `docs/DESIGN.md`). Such phrases are common in English and in any meeting transcript. The repo's copied-text threshold is 8 words, and 6 is below the length at which overlap indicates copying. Neither the scenario generation nor E1 trains on QMSum, so there is no contamination path. I found nothing to fix there. The real weakness in this area is defect 3: the detector itself is not deterministic.
+### B. The leak detector misses hard-wrapped quotes and quotes in JSON keys
+- File: `tests/test_no_raw_text.py`, `_texts` (lines 29-41). Markdown and other text files are scanned one line at a time, and only JSON string values are scanned, not keys.
+- Repro (`...\scratchpad\leak2.py`): a 10-word passage from a raw file, wrapped over two 5-word lines in a `.md`, is missed. A quote of 9 words split across two JSON fields is missed (expected, since it is not contiguous), and a quote used as a JSON dict key is missed. Quotes on one line, in JSON/JSONL strings, in `.txt`, and ASCII-escaped JSON are caught.
+- Impact: a short quote of up to about 14 words, wrapped at the line width, would pass the guard that backs the "QMSum and DECODE text never committed" rule. It is unlikely, because the repo's docs are mostly one paragraph per line. This is a licensing and data issue, not a number.
+- First task that needs the fix: T3.3, the first task that writes committed prose or output derived from these sources. Join the lines of non-JSON files into one word stream, and scan dict keys too.
+- False number: no. No later task owns this, but its effect is bounded to the guard.
 
 ## Other observations (not defects)
-- `fit_context` returns more than `max_tokens` when evidence alone exceeds it. That matches "never drop evidence", but T3.2 should check the length and not assume the budget was met.
-- `query_for` (the rule for building a query from a press) lives only in the E1 module. T3.2's `RetrievalAssistant` has to reuse or restate it, or E2 will not match E1's setup.
+- `fit_context` can return more than `max_tokens` when evidence alone exceeds the budget, so T3.2 should check the length. This carries over from the first review.
+- The `update` prompt writes `existing` item ids and `conversation_id` unescaped (`extract.py` `have`). Ids are minted by our own code from dataset conversation ids, so there is no current route for untrusted text. T3.1 should use `escape` if conversation ids ever come from user input.

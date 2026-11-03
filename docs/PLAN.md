@@ -180,7 +180,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/experiments/e2_context.py`, `tests/test_e2.py`.
 **Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Also run the best strategy on `ClaudeCodeClient` over at most 100 synthetic or benchmark cases, as the cloud comparison. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
-**From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run.
+**From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run. `tests/test_no_raw_text.py` misses a quote hard-wrapped across lines in a non-JSON file, and one used as a JSON dict key; close both before this task writes committed output from restricted sources.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
 
 ---

@@ -87,9 +87,9 @@
       "status": "done",
       "started_at": "2026-11-02T22:15:25+00:00",
       "verified": {
-        "commit": "5a690379d898ba3ee1535c7cf15c5a8260ef0cb7",
+        "commit": "f152104ed0ce231ed6f4107e728cc1c6a75a3a64",
         "passed": true,
-        "at": "2026-11-02T22:19:57+00:00"
+        "at": "2026-11-03T05:17:28+00:00"
       },
       "done_at": "2026-11-02T22:22:02+00:00"
     },
@@ -272,9 +272,9 @@
       "status": "done",
       "started_at": "2026-11-03T01:56:44+00:00",
       "verified": {
-        "commit": "1bb796d43a77f7db749b1bb18261133d53f2e7ff",
+        "commit": "0bf5e94f11919c6079292b873598b86b04112794",
         "passed": true,
-        "at": "2026-11-03T02:09:42+00:00"
+        "at": "2026-11-03T04:56:05+00:00"
       },
       "attempts": 2,
       "reason": "extract.py honors explicit supersedes on any kind: a same-subject question claiming supersedes hides the original decision from lookup",
@@ -298,9 +298,9 @@
       "status": "done",
       "started_at": "2026-11-03T02:15:29+00:00",
       "verified": {
-        "commit": "a61b3e4664fa43f9662f7aaccfac418c51ea7ef3",
+        "commit": "0bf5e94f11919c6079292b873598b86b04112794",
         "passed": true,
-        "at": "2026-11-03T04:05:40+00:00"
+        "at": "2026-11-03T05:06:14+00:00"
       },
       "done_at": "2026-11-03T04:19:35+00:00"
     },
@@ -472,7 +472,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_contract.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:05:32+00:00",
+      "verified": {
+        "commit": "0c7e17ea60a2e5cc349cacb1b49d7ffb818cd285",
+        "passed": true,
+        "at": "2026-11-03T05:12:28+00:00"
+      },
+      "attempts": 1,
+      "reason": "fake_server.py ignores as_of_seq: press with as_of_seq=0 gets an answered card citing turn c1-t2 the client never received; as_of_seq=99 and -5 accepted"
     },
     {
       "id": "T8.1",
@@ -487,7 +496,9 @@
         "docker compose up -d speech",
         "{py} -m pytest tests/test_speech_contract.py -q -m real"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:05:32+00:00"
     },
     {
       "id": "T8.2",
