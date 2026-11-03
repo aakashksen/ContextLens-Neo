@@ -604,8 +604,7 @@
       "acceptance": [
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T06:00:09+00:00",
       "verified": {
         "commit": "f4b243aed5dff77942db5aaf21ca3250a1739cf7",
@@ -613,7 +612,8 @@
         "at": "2026-11-03T06:40:55+00:00"
       },
       "attempts": 1,
-      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
+      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply",
+      "done_at": "2026-11-03T06:51:32+00:00"
     },
     {
       "id": "T8.7",
