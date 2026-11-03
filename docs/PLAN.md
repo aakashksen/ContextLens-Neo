@@ -319,6 +319,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
 **Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
 **Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
+**From T8.7's verifier:** The backend sends `keep_alive` 30m and never unloads on shutdown: unload at shutdown, or whoever holds the GPU turn must unload before releasing. Measure press-to-card time, since the team's margin against the 8 s deadline looks thin and would be worse if Ollama serves the specialists one at a time. Real pyannote on the live path and the production backend started by `run_everything.py` with Ollama haven't run yet: run both here.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
