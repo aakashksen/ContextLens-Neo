@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from contextlens.eval.check_run import check_record, review_problems, superseded_by
+from contextlens.eval.check_run import _test_once_problems, check_record, review_problems, superseded_by
 from contextlens.eval.records import ROOT, RUNS_REL
 from contextlens.eval.series import JUDGED, base_name
 
@@ -52,6 +52,7 @@ def check_claims(root: Path = ROOT) -> list[str]:
     if not isinstance(claims, list):
         return ["claims.json must have a 'claims' key holding a list"]
     problems: list[str] = []
+    repeated: list[str] | None = None
     for c in claims:
         cid = c.get("id", "?")
         path = root / RUNS_REL / f"{c.get('run_id')}.json"
@@ -73,6 +74,9 @@ def check_claims(root: Path = ROOT) -> list[str]:
         if c.get("run_id") in superseded_by(rec.get("experiment", ""), root):
             problems.append(f"claim {cid}: run {c.get('run_id')} is superseded by a later record")
         problems += [f"claim {cid}: run: {m}" for m in check_record(rec, root)]
+        if rec.get("split") == "test":
+            repeated = _test_once_problems(root) if repeated is None else repeated
+            problems += [f"claim {cid}: run: {m}" for m in repeated if m.startswith(f"{c.get('run_id')}:")]
     return problems
 
 
