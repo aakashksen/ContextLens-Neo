@@ -69,7 +69,7 @@ class PostgresTranscriptStore:
             (conv_id, start_seq, as_of_seq),
         ).fetchall()
         keys = list(Turn.model_fields)
-        return [Turn(**dict(zip(keys, r))) for r in rows]
+        return [Turn(**dict(zip(keys, r, strict=True))) for r in rows]
 
     def vectors(self, conv_id: str, ids: list[str]) -> dict[str, list[float]]:
         rows = self._conn.execute(
