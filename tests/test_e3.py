@@ -204,3 +204,106 @@ def test_a_press_with_a_question_or_on_a_statement_is_left_as_the_model_chose():
 def test_respond_with_no_verified_finding_has_no_suggestion():
     row = run_single(ASKED, [card_of(status="abstained")])
     assert row.card.mode == "respond" and row.card.suggestion is None and row.card.status == "abstained"
+
+
+# ---- E3 cards: reports, and a tiny run that writes a valid record ----
+
+import json  # noqa: E402
+import re  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from contextlens.data.scenarios import load_scenarios  # noqa: E402
+from contextlens.eval.check_run import check  # noqa: E402
+from contextlens.experiments import e3_team as e3  # noqa: E402
+from contextlens.llm.client import LLMResult  # noqa: E402
+from contextlens.llm.ollama_ctl import OllamaCtl  # noqa: E402
+from contextlens.replay.runner import DroppedFinding, Prediction  # noqa: E402
+from tests.test_e1 import HashEmbedder  # noqa: E402
+from tests.test_e2 import NAMES, RETRIEVAL, Scripted, Wire, _cases, repo  # noqa: E402, F401
+
+REAL_DEV = Path(__file__).resolve().parents[1] / "datasets/scenarios"
+
+
+class AgentScripted(Scripted):
+    """Scripted, plus the tool-loop and planning schemas of the single agent and the team."""
+
+    def reply(self, name, user):
+        if name == "_Plan":
+            return {"mode": "recall", "followup": None}
+        if name == "_Step":
+            card = Scripted.reply(self, "Card", user)
+            if card["status"] == "abstained":
+                return {"tool": "final", "card": card, "findings": []}
+            return {"tool": "final", "card": card, "findings": card["findings"]}
+        return super().reply(name, user)
+
+
+def test_the_instruction_guard_catches_the_dev_injecting_turns_and_reports_its_false_drops():
+    scs = load_scenarios("dev", REAL_DEV)
+    r = e3.guard_report(scs)
+    assert r["injecting_turns"] == 16 and r["injecting_turns_flagged"] == r["injecting_turns"]
+    assert r["other_turns_flagged"] == len(r["other_turns_flagged_ids"]) and r["other_turns"] > 300
+    assert 0 <= r["false_drop_rate_on_lookalikes"] <= 1
+
+
+def test_the_respond_set_on_the_dev_respond_cases_is_reported():
+    scs = [s for s in load_scenarios("dev", REAL_DEV) if s.category == "respond_with_suggestion"]
+    assert len(scs) == 16
+    from contextlens.agents.single import asks_user
+
+    def last(s):
+        return [t for t in s.conversation.turns if t.seq <= s.request.as_of_seq]
+
+    moved = sum(asks_user(last(s), s.request) for s in scs)
+    assert moved >= 13  # the rule is a question mark or please / let's; three cases are statements
+
+
+def test_model_abstentions_and_guard_drops_are_counted_apart():
+    scs = [scenario([turn(0, "x"), turn(1, "y")], sid="a"), scenario([turn(0, "x"), turn(1, "y")], sid="b"),
+           scenario([turn(0, "x"), turn(1, "y")], sid="c")]
+    empty = Card(mode="recall", status="abstained", findings=[])
+    rows = [Prediction(scenario_id="a", card=empty),
+            Prediction(scenario_id="b", card=empty, drops=[DroppedFinding(reason="number", statement="s", turn_ids=["c1:t0"])]),
+            Prediction(scenario_id="c", card=empty, drops=[DroppedFinding(reason="instruction", statement="s", turn_ids=[])])]
+    r = e3.drop_report(scs, rows)
+    assert r["abstained_by_the_model"] == 1 and r["abstained_after_a_check_dropped_every_finding"] == 2
+    assert r["findings_dropped_by_reason"] == {"instruction": 1, "number": 1} and r["answerable_cases_lost_to_a_check"] == 2
+
+
+def test_selection_uses_the_lower_abstention_side_and_needs_every_part():
+    m = {"recent": {"grounded_rate": 0.9, "answer_when_answerable": 0.3, "abstain_when_insufficient": 1.0},
+         "retrieval_memory": {"grounded_rate": 0.8, "answer_when_answerable": 0.7, "abstain_when_insufficient": 0.6}}
+    assert e3.pick_best(m) == "retrieval_memory"  # 0.8 and 0.6 beat 0.9 and 0.3
+    m["retrieval_memory"]["grounded_rate"] = None
+    assert e3.pick_best(m) == "recent"
+
+
+def comparison(metric, diff, lo, hi, p=None):
+    return {"a": "team", "b": "single", "metric": metric, "diff": diff, "ci": [lo, hi], "mcnemar_p": p}
+
+
+def test_the_finding_says_so_when_the_team_loses():
+    metrics = {"team": {"grounded_rate": 0.6}, "single": {"grounded_rate": 0.8}}
+    text = e3.plain_finding(metrics, [comparison("grounded_rate", -0.2, -0.3, -0.1, 0.01)])
+    assert "loses to the single agent on grounded_rate" in text and "does not clearly beat" in text
+    text = e3.plain_finding(metrics, [comparison("grounded_rate", 0.2, 0.1, 0.3), comparison("latency_p50_ms", 500, 100, 900)])
+    assert "beats the single agent on grounded_rate" in text and "loses to the single agent on latency_p50_ms" in text
+
+
+def test_the_public_slice_is_called_small():
+    assert e3.public_slice(load_scenarios("dev", REAL_DEV))["small"] is True
+
+
+def test_a_tiny_run_writes_one_valid_record_with_all_four_systems_and_their_comparison(repo):  # noqa: F811
+    path = e3.run_cards(root=repo, writer=AgentScripted(), judge_llm=Scripted("test-judge:1"), embedder=HashEmbedder(),
+                        ctl=OllamaCtl(request=Wire()), names=NAMES, retrieval_config=RETRIEVAL, say=lambda t: None)
+    assert check("E3", root=repo, min_n=len(_cases()), split="dev") == []
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    assert set(rec["predictions"]) == set(e3.CARD_SYSTEMS)
+    pairs = {(c["a"], c["b"], c["metric"]) for c in rec["comparisons"]}
+    assert ("team", "single", "grounded_rate") in pairs and ("team", "single", "latency_p50_ms") in pairs
+    cfg = rec["config"]
+    assert cfg["notes"][0].startswith("The team ") and "dev" in cfg["choice_note"] and cfg["selection_rule"]
+    assert cfg["memory_build"]["failed_ids"] == [] and cfg["public_slice"]["small"] is True
+    assert set(cfg["drops"]) == set(e3.CARD_SYSTEMS) and cfg["instruction_guard"]["injecting_turns"] == 2
+    assert cfg["respond"]["team"]["respond_cases"] == 2 and "injection_findings_and_suggestions" in cfg
