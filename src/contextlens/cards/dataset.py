@@ -25,6 +25,7 @@ holds no turn of its gold span, and no copy of one, anywhere in its input."""
 import hashlib
 import json
 import random
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -52,8 +53,8 @@ N_DISTRACTORS = 2
 N_RECENT = 3
 ABSTAIN_EVERY = 5  # about one recall example in five has its gold evidence removed
 VAL_EVERY = 5  # about one conversation in five goes to val
-MIN_WORDS_FOR_OVERLAP = 6
-OVERLAP_REFUSE = 0.5
+WINDOW = 3
+CONV_MATCH_REFUSE = 0.5  # share of a training conversation's 3-word windows found in one dev/test conversation
 
 
 class Example(BaseModel):
@@ -196,19 +197,22 @@ def _final_stats(train: list[Example], stats: Counter) -> None:
     stats["train_synthetic_share"] = synthetic / len(train) if train else 0
 
 
-def _norm(text: str) -> str:
-    return " ".join(text.lower().split())
-
-
-def _long_turns(s: Scenario) -> set[str]:
-    return {n for t in s.conversation.turns if len((n := _norm(t.text)).split()) >= MIN_WORDS_FOR_OVERLAP}
+def _windows(texts: list[str]) -> set[tuple[str, ...]]:
+    """Word 3-grams inside each text, normalized as in tests/test_no_raw_text.py (lower case, runs of word characters),
+    so case and punctuation are ignored. A turn under three words gives none."""
+    out: set[tuple[str, ...]] = set()
+    for t in texts:
+        w = re.findall(r"\w+", t.lower())
+        out.update(tuple(w[i:i + WINDOW]) for i in range(len(w) - WINDOW + 1))
+    return out
 
 
 def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> None:
-    """Refuse the whole set if any scenario could leak dev or test."""
+    """Refuse the whole set if any scenario could leak dev or test: a marked split, a non-synthetic origin, a shared
+    id, or CONV_MATCH_REFUSE or more of its 3-word windows (over the whole conversation) found in one held-out
+    conversation. The message names the two scenario ids only."""
     held_ids = {x for h in held_out for x in (h.id, h.conversation.id)}
-    held_turns = [_long_turns(h) for h in held_out]
-    held_text = {_norm(" ".join(t.text for t in h.conversation.turns)) for h in held_out}
+    held = [(h.id, _windows([t.text for t in h.conversation.turns])) for h in held_out]
     for s in scs:
         if s.conversation.split in ("dev", "test"):
             raise ValueError(f"scenario {s.id} is marked {s.conversation.split}")
@@ -216,10 +220,11 @@ def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> Non
             raise ValueError(f"scenario {s.id} has origin {s.origin!r}; only synthetic scenarios are allowed")
         if s.id in held_ids or s.conversation.id in held_ids:
             raise ValueError(f"scenario {s.id} has an id used by a dev or test scenario")
-        mine = _long_turns(s)
-        if _norm(" ".join(t.text for t in s.conversation.turns)) in held_text or any(
-                mine and len(mine & h) / len(mine) >= OVERLAP_REFUSE for h in held_turns):
-            raise ValueError(f"scenario {s.id} has conversation text that matches a dev or test scenario")
+        mine = _windows([t.text for t in s.conversation.turns])
+        for hid, theirs in held:
+            if mine and len(mine & theirs) / len(mine) >= CONV_MATCH_REFUSE:
+                raise ValueError(f"scenario {s.id} shares {CONV_MATCH_REFUSE:.0%} or more of its 3-word windows "
+                                 f"with held-out scenario {hid}")
 
 
 def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Path("datasets/splits"),

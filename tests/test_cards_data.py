@@ -232,7 +232,7 @@ def _scn(cid: str, lines: list[str], *, split="train", origin="synthetic", label
 
 
 def _lines(tag: str, n: int = 8) -> list[str]:
-    return [f"P{i % 2}: {tag} remark number {i} regarding the zebra harvest schedule" for i in range(n)]
+    return [f"P{i % 2}: {tag} item{i} wants {tag}{i} review before {tag}x{i} ships" for i in range(n)]
 
 
 def _write(root: Path, split: str, scs: list[Scenario]) -> None:
@@ -382,3 +382,131 @@ def test_build_cap_applies_to_train_only_and_records_stats(data, tmp_path):
     assert st["train_source_qmsum"] == len(train) and st["train_synthetic_share"] == 0
     assert n_abs * 3 <= len(train) - n_abs
     assert st["train_abstained_dropped_by_cap"] == base["train"] - counts["train"] > 0
+
+
+# ---- the held-out guard: light edits of dev or test conversations are refused -------------------------------------
+
+COMMITTED = Path(__file__).resolve().parents[1] / "datasets" / "scenarios"
+
+
+def _committed_held() -> dict[str, list[Scenario]]:
+    return {sp: load_scenarios(sp, COMMITTED) for sp in ("dev", "test")}
+
+
+def _edit(kind: str, words: list[str]) -> list[str]:
+    w = list(words)
+    if kind == "letter" and len(w) >= 3:
+        w[1] += "x"  # one letter added to a word
+    elif kind == "two_words" and len(w) >= 6:
+        w[1] += "x"
+        w[-2] += "y"
+    elif kind == "swap_middle" and len(w) >= 3:
+        w[len(w) // 2] = "thing"
+    elif kind == "prefix":
+        w = ["Well,", *w]
+    return w
+
+
+def _edited_copy(base: Scenario, kind: str, cid: str = "syn-copy-0") -> Scenario:
+    d = base.model_dump(mode="json")
+    d["id"] = d["conversation"]["id"] = d["request"]["conversation_id"] = cid
+    d["conversation"]["split"], d["origin"] = "train", "synthetic"
+    ids = {t["id"]: f"{cid}:t{i}" for i, t in enumerate(d["conversation"]["turns"])}
+    for t in d["conversation"]["turns"]:
+        t["id"], t["conversation_id"] = ids[t["id"]], cid
+        t["text"] = " ".join(_edit(kind, t["text"].split()))
+    d["gold_evidence_turn_ids"] = [ids[g] for g in base.gold_evidence_turn_ids]
+    return Scenario.model_validate(d)
+
+
+@pytest.mark.parametrize("kind", ["letter", "two_words", "swap_middle", "prefix"])
+@pytest.mark.parametrize("split", ["dev", "test"])
+def test_light_edit_of_a_committed_dev_or_test_conversation_is_refused(kind, split):
+    from contextlens.cards.dataset import _check_train_scenarios
+    held = _committed_held()
+    base = next(s for s in held[split] if len(s.conversation.turns) >= 8)
+    copy = _edited_copy(base, kind)
+    with pytest.raises(ValueError) as err:
+        _check_train_scenarios([copy], [*held["dev"], *held["test"]])
+    msg = str(err.value)
+    assert copy.id in msg and base.id in msg
+    assert not any(t.text[:30] in msg for t in base.conversation.turns)  # no transcript text in the message
+
+
+def test_edited_copy_is_refused_and_new_invented_set_passes_against_committed_files():
+    from contextlens.cards.dataset import _check_train_scenarios
+    held = _committed_held()
+    every = [*held["dev"], *held["test"]]
+    _check_train_scenarios([_scn("syn-new-0", _lines("brand"), question="Q?", answer="A.")], every)
+    with pytest.raises(ValueError, match="syn-copy-0"):
+        _check_train_scenarios([_edited_copy(held["dev"][0], "letter")], every)
+
+
+def _chat(cid: str, topic: str, n: int = 8) -> Scenario:
+    return _scn(cid, [f"P{i % 2}: {topic} number {i}: sounds good, makes sense" if i % 2 else
+                      f"P{i % 2}: Sounds good" for i in range(n)], question="Q?", answer="A.", gold=(1,))
+
+
+def test_one_word_edit_of_an_invented_copy_is_refused():
+    from contextlens.cards.dataset import _check_train_scenarios
+    held = _scn("syn-dev-9", _lines("origin", 8), split="dev")
+    copy = _scn("syn-copy-9", [ln.replace("wants", "wantz") for ln in _lines("origin", 8)])
+    with pytest.raises(ValueError, match="syn-copy-9.*syn-dev-9"):
+        _check_train_scenarios([copy], [held])
+
+
+def test_new_conversation_with_same_topic_and_common_phrase_passes():
+    from contextlens.cards.dataset import _check_train_scenarios
+    held = _chat("syn-dev-8", "the zebra harvest schedule")
+    new = _scn("syn-new-8", ["A: Sounds good", "B: Sounds good", "A: The zebra harvest schedule slips by a week",
+                             "B: makes sense, so move the crew to the east field",
+                             "A: Sounds good", "B: I will tell the foreman tomorrow morning"],
+               question="Who tells the foreman?", answer="B will.", gold=(5,))
+    _check_train_scenarios([new], [held])
+    short = _scn("syn-new-7", ["A: Sounds good", "B: ok", "A: Sounds good"])
+    _check_train_scenarios([short], [_scn("syn-dev-7", ["A: Sounds good", "B: ok", "A: Sounds good"], split="dev")])
+
+
+def test_error_names_ids_only_even_when_threshold_is_just_met():
+    from contextlens.cards.dataset import CONV_MATCH_REFUSE, _check_train_scenarios
+    assert CONV_MATCH_REFUSE == 0.5
+    held = _scn("syn-dev-6", _lines("half", 8), split="dev")
+    half = _scn("syn-half-6", _lines("half", 4) + _lines("other", 4))
+    with pytest.raises(ValueError, match="syn-half-6.*syn-dev-6") as err:
+        _check_train_scenarios([half], [held])
+    assert "half item" not in str(err.value)
+
+
+def test_abstained_input_excludes_turns_that_copy_a_gold_turn(tmp_path):
+    # the same sentence repeats in a non-gold turn of an abstained example; it must not appear in the input
+    turns = [{"speaker": "A", "content": f"filler{i} words here"} for i in range(30)]
+    turns[10]["content"] = turns[12]["content"] = turns[20]["content"] = "GOLDCOPY decision text"
+    q = {"query": "What?", "answer": "That.", "relevant_text_span": [["10", "10"]]}
+    metas = [{"meeting_transcripts": turns, "general_query_list": [], "specific_query_list": [q]} for _ in range(60)]
+    raw, splits = tmp_path / "raw", tmp_path / "splits"
+    (raw / "qmsum").mkdir(parents=True)
+    splits.mkdir()
+    (raw / "qmsum" / "all.jsonl").write_text(chr(10).join(json.dumps(m) for m in metas) + chr(10), encoding="utf-8")
+    ids = [f"qmsum-all-{k}" for k in range(60)]
+    (splits / "qmsum.json").write_text(json.dumps({"splits": {"train": ids, "dev": [], "test": []}}), encoding="utf-8")
+    build_examples(raw, splits, tmp_path / "cards")
+    exs = [e for s in ("train", "val") for e in _load(tmp_path / "cards", s)]
+    abstained = [e for e in exs if Card.model_validate_json(e.completion).status == "abstained"]
+    assert abstained and all("GOLDCOPY" not in e.messages[-1]["content"] for e in abstained)
+
+
+def test_recent_window_stops_before_the_first_gold_turn(data, tmp_path):
+    exs, _ = _build(data, tmp_path)
+    answered = [e for e in exs["train"] if Card.model_validate_json(e.completion).status == "answered"]
+    assert answered
+    for e in answered:
+        recent = re.findall(r":t(\d+)\]", e.messages[-1]["content"].split("Retrieved evidence:")[0])
+        first_gold = min(int(r.turn_id.rsplit(":t", 1)[1])
+                         for f in Card.model_validate_json(e.completion).findings for r in f.evidence)
+        assert 1 <= len(recent) <= 3 and max(map(int, recent)) == first_gold - 1
+
+
+def test_requests_connection_error_is_not_an_architecture_error():
+    import requests
+    assert not any(is_architecture_error(e) for e in (
+        requests.exceptions.ConnectionError("down"), requests.exceptions.Timeout(), requests.exceptions.HTTPError()))

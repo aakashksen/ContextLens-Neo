@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import requests
 import torch
 
 from contextlens.cards.dataset import CARDS_DIR, Example, load_examples
@@ -54,6 +55,8 @@ def check_vram(limit_gb: float = VRAM_LIMIT_GB) -> float:
 def is_architecture_error(e: BaseException) -> bool:
     """True for failures a model class PEFT or the loader cannot handle. Out-of-memory, a missing package, a network
     or permission problem, or a full disk are not architecture problems, so they are never answered by switching model."""
+    if isinstance(e, requests.exceptions.RequestException):  # a requests error is an OSError, but a network one
+        return False
     if isinstance(e, OSError):
         return not isinstance(e, (ConnectionError, TimeoutError, PermissionError)) and e.errno != errno.ENOSPC
     return isinstance(e, (ValueError, KeyError, TypeError, AttributeError))
