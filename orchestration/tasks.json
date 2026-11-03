@@ -339,12 +339,17 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "pending",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:41:55+00:00",
-      "attempts": 0,
-      "reason": "number rule keeps wrong numbers against spelled-out compounds: '5 dollars' vs 'five hundred dollars', '20 dollars' vs 'twenty-five dollars'; number words in statements unchecked",
-      "note": "one more attempt, decided by the coordinator: simple token-run number rule"
+      "attempts": 1,
+      "reason": "finding dropped by the number rule leaves no note on the card: card.missing stays empty in 12 of 13 should-drop cases (single.py _finish lines 275-281)",
+      "note": "one more attempt, decided by the coordinator: simple token-run number rule",
+      "verified": {
+        "commit": "2706b61afe3a7ae023bb338f5258cc9b405734d0",
+        "passed": true,
+        "at": "2026-11-03T07:02:41+00:00"
+      },
+      "done_at": "2026-11-03T07:05:49+00:00"
     },
     {
       "id": "T3.3",
