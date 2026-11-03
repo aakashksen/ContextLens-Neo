@@ -1,0 +1,464 @@
+{
+  "client_to_server": {
+    "$defs": {
+      "AudioMessage": {
+        "properties": {
+          "data": {
+            "title": "Data",
+            "type": "string"
+          },
+          "sample_rate": {
+            "default": 16000,
+            "title": "Sample Rate",
+            "type": "integer"
+          },
+          "type": {
+            "const": "audio",
+            "default": "audio",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "AudioMessage",
+        "type": "object"
+      },
+      "ButtonRequest": {
+        "properties": {
+          "as_of_seq": {
+            "title": "As Of Seq",
+            "type": "integer"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "detail": {
+            "default": "standard",
+            "enum": [
+              "brief",
+              "standard",
+              "detailed"
+            ],
+            "title": "Detail",
+            "type": "string"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Question"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "as_of_seq"
+        ],
+        "title": "ButtonRequest",
+        "type": "object"
+      },
+      "DeleteMessage": {
+        "properties": {
+          "type": {
+            "const": "delete",
+            "default": "delete",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "DeleteMessage",
+        "type": "object"
+      },
+      "PauseMessage": {
+        "properties": {
+          "type": {
+            "const": "pause",
+            "default": "pause",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "PauseMessage",
+        "type": "object"
+      },
+      "PressMessage": {
+        "properties": {
+          "request": {
+            "$ref": "#/$defs/ButtonRequest"
+          },
+          "type": {
+            "const": "press",
+            "default": "press",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "PressMessage",
+        "type": "object"
+      },
+      "ResumeMessage": {
+        "properties": {
+          "type": {
+            "const": "resume",
+            "default": "resume",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "ResumeMessage",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "audio": "#/$defs/AudioMessage",
+        "delete": "#/$defs/DeleteMessage",
+        "pause": "#/$defs/PauseMessage",
+        "press": "#/$defs/PressMessage",
+        "resume": "#/$defs/ResumeMessage"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/AudioMessage"
+      },
+      {
+        "$ref": "#/$defs/PressMessage"
+      },
+      {
+        "$ref": "#/$defs/PauseMessage"
+      },
+      {
+        "$ref": "#/$defs/ResumeMessage"
+      },
+      {
+        "$ref": "#/$defs/DeleteMessage"
+      }
+    ]
+  },
+  "server_to_client": {
+    "$defs": {
+      "Card": {
+        "properties": {
+          "cost_usd": {
+            "default": 0.0,
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/$defs/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "latency_ms": {
+            "default": 0,
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "missing": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "mode": {
+            "enum": [
+              "recall",
+              "clarify",
+              "respond"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "partial",
+              "abstained"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Suggestion"
+          },
+          "tokens": {
+            "default": 0,
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode",
+          "status",
+          "findings"
+        ],
+        "title": "Card",
+        "type": "object"
+      },
+      "CardMessage": {
+        "properties": {
+          "card": {
+            "$ref": "#/$defs/Card"
+          },
+          "type": {
+            "const": "card",
+            "default": "card",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card"
+        ],
+        "title": "CardMessage",
+        "type": "object"
+      },
+      "EvidenceRef": {
+        "properties": {
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "speaker": {
+            "title": "Speaker",
+            "type": "string"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "quote",
+          "speaker",
+          "start_ms"
+        ],
+        "title": "EvidenceRef",
+        "type": "object"
+      },
+      "Finding": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/$defs/EvidenceRef"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "recall",
+              "consistency",
+              "context"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "consistent",
+                  "update",
+                  "contradiction",
+                  "insufficient"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "kind",
+          "statement",
+          "evidence",
+          "confidence"
+        ],
+        "title": "Finding",
+        "type": "object"
+      },
+      "StatusMessage": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "state": {
+            "enum": [
+              "recording",
+              "paused",
+              "deleted",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "type": {
+            "const": "status",
+            "default": "status",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "StatusMessage",
+        "type": "object"
+      },
+      "TranscriptMessage": {
+        "properties": {
+          "turn": {
+            "$ref": "#/$defs/Turn"
+          },
+          "type": {
+            "const": "transcript",
+            "default": "transcript",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn"
+        ],
+        "title": "TranscriptMessage",
+        "type": "object"
+      },
+      "Turn": {
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "end_ms": {
+            "title": "End Ms",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "dataset",
+              "synthetic",
+              "asr"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "speaker": {
+            "title": "Speaker",
+            "type": "string"
+          },
+          "speaker_confidence": {
+            "default": 1.0,
+            "title": "Speaker Confidence",
+            "type": "number"
+          },
+          "start_ms": {
+            "title": "Start Ms",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "conversation_id",
+          "seq",
+          "speaker",
+          "text",
+          "start_ms",
+          "end_ms",
+          "source"
+        ],
+        "title": "Turn",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "card": "#/$defs/CardMessage",
+        "status": "#/$defs/StatusMessage",
+        "transcript": "#/$defs/TranscriptMessage"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/TranscriptMessage"
+      },
+      {
+        "$ref": "#/$defs/CardMessage"
+      },
+      {
+        "$ref": "#/$defs/StatusMessage"
+      }
+    ]
+  },
+  "title": "ContextLens /ws/{conversation_id}"
+}
