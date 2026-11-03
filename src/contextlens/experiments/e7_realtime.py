@@ -445,7 +445,7 @@ def run_e7(
     prompt_versions: dict[str, str], telemetry: Telemetry | None = None, audio_dir: Path | None = None,
     rerun_of: str | None = None, changes: list[str] | None = None, speedup: float = 1.0, settle_s: float = 10.0,
     realtime_meeting: str | None = None, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
-    ran_alone: bool, device_probe: Callable[[], dict[str, str | None]],
+    ran_alone: bool, device_probe: Callable[[], dict[str, str | None]], only_meeting: str | None = None,
 ) -> Path:
     """Replay every dev scenario three ways and write one E7 record. A first run is the baseline and names
     its two slowest press stages; a rerun (`rerun_of` a baseline's run id, with the `changes` made) must be on the
@@ -457,11 +457,20 @@ def run_e7(
 
     `ran_alone` is the person's statement that nothing else used the machine. `device_probe` is called once the run
     has finished, while the models are still loaded, and returns the device each of pyannote, embeddings and llm
-    actually ran on; whisper's comes from the speech service itself."""
+    actually ran on; whisper's comes from the speech service itself.
+
+    `only_meeting` is a short check of the whole pipeline on one meeting's questions. It writes no run record (the
+    record must cover the whole split): the summary goes to the git-ignored results/local/ and its path is returned."""
     manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
     if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
         raise RuntimeError("the AMI manifest must be committed before the run")
     scenarios, digest = _load_dev(root)
+    if only_meeting:
+        scenarios = [s for s in scenarios if s.conversation.id == only_meeting]
+        if not scenarios:
+            raise ValueError(f"no scenarios for {only_meeting}")
+        if rerun_of or changes or realtime_meeting or speedup != 1.0:
+            raise ValueError("a one-meeting check runs in real time and is not a baseline or a rerun")
     baseline = None
     if rerun_of:
         if not [c for c in (changes or []) if c.strip()]:
@@ -574,6 +583,12 @@ def run_e7(
         named = baseline["config"]["bottlenecks"]
         config.update(baseline_run_id=rerun_of, bottlenecks=named, changes=changes)
         config["before_after"] = before_after(baseline["metrics"]["asr_pipeline"], pipeline, [b["stage"] for b in named])
+    if only_meeting:
+        out = root / "results/local" / f"e7-check-{only_meeting}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"not_a_record": True, "meeting": only_meeting, "n": len(scenarios), "config": config,
+                                   "metrics": metrics}, indent=1) + "\n", encoding="utf-8")
+        return out
     attempts = [{"setting": n, "ok": True, "errored_presses": sum(p.errored for p in preds[n])} for n in SYSTEMS]
     return write_run("E7", SPLIT, config, models, prompt_versions, metrics, intervals, attempts, preds, digest,
                      comparisons=comparisons, scenario_source=SOURCE, root=root)
@@ -584,6 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("build-scenarios")
     r = sub.add_parser("run")
+    r.add_argument("--only-meeting", help="a short check on one meeting; writes no run record")
     alone = r.add_mutually_exclusive_group(required=True)
     alone.add_argument("--alone", action="store_true", help="nothing else is using the machine")
     alone.add_argument("--not-alone", action="store_true", help="the machine is shared; the record says so")
@@ -624,6 +640,7 @@ def _run_real(args: argparse.Namespace) -> int:
                     "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
             prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
             speedup=args.speedup, realtime_meeting=args.realtime_meeting, ran_alone=args.alone,
+            only_meeting=args.only_meeting,
             device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
                                   "llm": ollama_device(production.MODEL, _get_json)})
     finally:

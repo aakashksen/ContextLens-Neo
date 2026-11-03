@@ -480,3 +480,18 @@ def test_device_names_and_ollama_placement() -> None:
     assert e7.ollama_device("qwen3.5:4b-q4_K_M", ps([{**full, "size_vram": 60}])) == "mixed: 60% of the model on the GPU"
     assert e7.ollama_device("nomic-embed-text", ps([{"name": "nomic-embed-text:latest", "size": 5, "size_vram": 5}])) == "cuda"
     assert e7.ollama_device("nomic-embed-text", ps([full])) is None  # not loaded
+
+
+def test_a_one_meeting_check_writes_no_run_record(repo: Path) -> None:
+    scripts = [aligned_script("m1")]
+    out = e7.run_e7(
+        root=repo, speech=ScriptedSpeech(scripts), backend=TruthBackend(), embedder=NoEmbed(),
+        make_assistant=make_assistant, extractor=None, models={}, prompt_versions={}, say=lambda m: None,
+        step_ms=10_000, ran_alone=True, device_probe=ALL_CUDA, only_meeting="m1")
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["not_a_record"] is True and doc["n"] == 2 and "wer" in doc["metrics"]["asr_pipeline"]
+    assert doc["config"]["audio_source"]["method"] == e7.AUDIO_METHOD and out.parent == repo / "results/local"
+    assert not (repo / "results/runs").exists()  # nothing check_run could pick up
+    for bad in ({"only_meeting": "nope"}, {"only_meeting": "m1", "speedup": 5.0}, {"only_meeting": "m1", "rerun_of": "x"}):
+        with pytest.raises(ValueError):
+            run(repo, **bad)
