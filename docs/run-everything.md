@@ -25,7 +25,8 @@ A port that already answers is left alone, so a service you started yourself is 
   starts, but turns cannot be stored (embedding) and presses return `status` `error`.
 - **Speaker labels** need `HF_TOKEN` (environment or `.env`) from an account that accepted the terms of
   `pyannote/speaker-diarization-community-1` (see `docs/datasets.md`). Without it every turn stays `unknown`;
-  nothing else changes. The speaker model is loaded once, on the CPU, and shared by all conversations.
+  nothing else changes. The speaker model is loaded once, on the CPU, and shared by all conversations; speech heard
+  before it has loaded stays `unknown`.
 
 Settings, all optional: `DATABASE_URL` (default is the compose database), `SPEECH_ADDR` (default
 `localhost:50051`). Models are local only: the live path never calls Claude.

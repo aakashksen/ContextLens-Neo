@@ -40,7 +40,7 @@ def main() -> int:
     try:
         urllib.request.urlopen(OLLAMA, timeout=3).close()
     except OSError:
-        print("Warning: Ollama does not answer on 127.0.0.1:11434; transcripts and cards need it.")
+        print("Warning: Ollama does not answer on 127.0.0.1:11434; transcripts and cards need it.", flush=True)
     started_compose = [name for name, port in SERVICES.items() if not listening(port)]
     if started_compose:
         subprocess.run(["docker", "compose", "up", "-d", *started_compose], cwd=ROOT, check=True)
@@ -53,7 +53,7 @@ def main() -> int:
     ]
     try:
         wait_for(8000, "the backend", 300)
-        print("\nReady: open http://127.0.0.1:5173/?server=ws://127.0.0.1:8000  (Ctrl-C to stop)\n")
+        print("\nReady: open http://127.0.0.1:5173/?server=ws://127.0.0.1:8000  (Ctrl-C to stop)\n", flush=True)
         while all(p.poll() is None for p in procs):
             time.sleep(1)
         print("A process exited; stopping.")

@@ -410,7 +410,11 @@ class Frames:
     def wait(self, pred, timeout):
         end = time.monotonic() + timeout
         while True:
-            m = self.q.get(timeout=max(0.01, end - time.monotonic()))
+            try:
+                m = self.q.get(timeout=max(0.01, end - time.monotonic()))
+            except queue.Empty:
+                seen = [(m["type"], m.get("state")) for m in self.log]
+                raise AssertionError(f"timed out after {timeout} s; frames seen so far: {seen}") from None
             self.log.append(m)
             if pred(m):
                 return m
@@ -441,17 +445,20 @@ def test_audio_reaches_a_transcript_through_real_speech_postgres_and_pyannote():
 
     conv = f"it-{uuid.uuid4().hex[:8]}"
     store = PostgresTranscriptStore(production.database_url(), hashed_embedder())
+    shared = SharedSpeakerModel(PyannoteBackend)
+    shared()  # load now: audio heard before a conversation has its speaker model is not diarized
     mem = {"tool": "final", "findings": []}
     llms = {"memory": FakeLLM([mem]), "consistency": FakeLLM([mem]), "assistance": FakeLLM([{"mode": "recall"}])}
     prod = production.build_services(
         store=store, embedder=hashed_embedder(), llms=llms, background_llm=None,
         speech=GrpcSpeech(os.environ.get("SPEECH_ADDR", "localhost:50051")),
-        make_backend=SharedSpeakerModel(PyannoteBackend), telemetry=Telemetry(registry=CollectorRegistry()),
+        make_backend=shared, telemetry=Telemetry(registry=CollectorRegistry()),
     )  # fmt: skip
     try:
         with TestClient(create_app(prod.services)) as client, client.websocket_connect(f"/ws/{conv}") as raw:
             fr = Frames(raw)
             assert fr.wait(is_type("status"), 10)["state"] == "recording"
+            assert wait_for(lambda: client.app.state.conversations[conv].diarizer.backend is not None, 30)
             speak(raw)
             fr.wait(lambda m: m["type"] == "transcript" and "thursday" in m["turn"]["text"].lower(), 90)
             sent = [m["turn"] for m in fr.log if m["type"] == "transcript"]
