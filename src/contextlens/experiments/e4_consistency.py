@@ -155,7 +155,7 @@ def training_data(raw_root: Path, root: Path, dev_scenarios: list[Scenario]) -> 
     pairs = decode + own * SCENARIO_REPEAT
     examples = cm.examples_from_pairs(decode) + cm.examples_from_scenarios(mine, "scenarios_train") * SCENARIO_REPEAT
     labels = [e.label for e in examples]
-    weights = dict(zip(cm.LABELS, ct.class_weights(labels)))
+    weights = dict(zip(cm.LABELS, ct.class_weights(labels), strict=True))
     positive = [w for w in weights.values() if w > 0]
     balance = {"distinct_cases_per_label": {x: sum(s.gold_label == x for s in mine) for x in cm.LABELS},
                "repeats": SCENARIO_REPEAT, "class_weights": weights, "weight_ratio": max(positive) / min(positive),
@@ -382,6 +382,50 @@ def _source_of(root: Path, run_id: str) -> str | None:
     return json.loads(path.read_text(encoding="utf-8")).get("scenario_source") if path.is_file() else None
 
 
+def _score_systems(
+    scenarios: dict[str, list[Scenario]], train: Any, ckpt: Path, device: str,
+    make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker], say: Callable[[str], None],
+) -> tuple[dict[str, dict[str, list[Prediction]]], dict[str, str]]:
+    """Predictions of every system on every source, and the reason each system that errored was left out."""
+    systems: dict[str, dict[str, list[Prediction]]] = {}
+    failed: dict[str, str] = {}
+
+    def score(name: str, make: Callable[[], ConsistencyChecker], warm: bool = False) -> None:
+        say(f"scoring {name}")
+        try:
+            checker = make()
+            if warm:
+                warm_up(checker, scenarios["scenarios"][0])
+            systems[name] = evaluate_system(checker, scenarios)
+        except Exception as exc:
+            failed[name] = f"{type(exc).__name__}: {exc}"
+            say(f"  {name} failed: {failed[name]}")
+        finally:
+            _free()
+
+    score("trained", lambda: cm.TrainedChecker.from_checkpoint(ckpt, device=device))
+    score("tfidf", lambda: TfidfChecker().fit(train.pairs))
+    score("zeroshot", make_zeroshot)
+    score("prompted", make_prompted, warm=True)
+    return systems, failed
+
+
+def _intervals_and_comparisons(
+    scs: list[Scenario], preds: dict[str, list[Prediction]], metrics: dict[str, Any], names: list[str]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    intervals = {}
+    for n, p in preds.items():
+        got = {m: iv for m, iv in recompute_intervals(scs, p, [m for m in names if metrics[n].get(m) is not None]).items() if iv}
+        if got:
+            intervals[n] = got
+    comparisons = []
+    for other in preds:
+        for m in [x for x in names if x != "ece"]:
+            if other != "trained" and (c := recompute_comparison(scs, preds["trained"], preds[other], m)):
+                comparisons.append({"a": "trained", "b": other, **c})
+    return intervals, comparisons
+
+
 def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cpu",
            grid=GRID, make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker],
            prompted_model: str = PROMPTED_MODEL, say=_say, num_workers: int = 0,
@@ -410,27 +454,8 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
     if lowered:
         say(f"WARNING: {lowered} ran at a lower batch size than {BATCH_SIZE}, so the settings are not trained alike")
 
-    systems: dict[str, dict[str, list[Prediction]]] = {}
-    failed: dict[str, str] = {}
-
-    def score(name: str, make: Callable[[], ConsistencyChecker], warm: bool = False) -> None:
-        say(f"scoring {name}")
-        try:
-            checker = make()
-            if warm:
-                warm_up(checker, scenarios["scenarios"][0])
-            systems[name] = evaluate_system(checker, scenarios)
-        except Exception as exc:
-            failed[name] = f"{type(exc).__name__}: {exc}"
-            say(f"  {name} failed: {failed[name]}")
-        finally:
-            _free()
-
     ckpt = root / CHECKPOINTS / winner["setting"]
-    score("trained", lambda: cm.TrainedChecker.from_checkpoint(ckpt, device=device))
-    score("tfidf", lambda: TfidfChecker().fit(train.pairs))
-    score("zeroshot", make_zeroshot)
-    score("prompted", make_prompted, warm=True)
+    systems, failed = _score_systems(scenarios, train, ckpt, device, make_zeroshot, make_prompted, say)
     if "trained" not in systems:
         raise RuntimeError(f"the winning model could not be scored: {failed['trained']}")
 
@@ -442,16 +467,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
         preds = {n: systems[n][src] for n in SYSTEMS if n in systems}
         metrics = {n: _saved(recompute_metrics(scs, p), src) for n, p in preds.items()}
         names = ["macro_f1", "label_accuracy", "ece"] if src == "scenarios" else ["label_accuracy", "false_alert_rate"]
-        intervals = {}
-        for n, p in preds.items():
-            got = {m: iv for m, iv in recompute_intervals(scs, p, [m for m in names if metrics[n].get(m) is not None]).items() if iv}
-            if got:
-                intervals[n] = got
-        comparisons = []
-        for other in preds:
-            for m in [x for x in names if x != "ece"]:
-                if other != "trained" and (c := recompute_comparison(scs, preds["trained"], preds[other], m)):
-                    comparisons.append({"a": "trained", "b": other, **c})
+        intervals, comparisons = _intervals_and_comparisons(scs, preds, metrics, names)
         attempt_rows = [{**a, "kind": "training"} for a in attempts] + [
             {"setting": n, "kind": "system", "ok": n in systems, "error": failed.get(n)} for n in SYSTEMS if n != "trained"]
         own_supersedes = [e for e in supersedes or [] if _source_of(root, e["run_id"]) == src]

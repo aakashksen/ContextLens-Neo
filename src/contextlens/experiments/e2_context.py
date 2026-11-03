@@ -526,7 +526,7 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
             dropped.append(s.id)
             if card.status == "abstained" and s.gold_label != "insufficient":
                 lost.append(s.id)
-        for f, ok in zip(card.findings, p.claim_supported or []):
+        for f, ok in zip(card.findings, p.claim_supported or [], strict=False):
             if ok:
                 continue
             if _runs(f.statement):
@@ -666,6 +666,22 @@ TRIED_PROMPT_METRICS = ("grounded_rate", "unsupported_claim_rate", "answer_when_
                    "tokens_per_card", "latency_p50_ms")
 
 
+def _old_prompt_lines(by_id: dict[str, Scenario], systems: dict[str, list[Prediction]], old_prompt: list[str]) -> list[str]:
+    lines: list[str] = []
+    lines.append("- The comparison records ran on the old prompt. A card gets a suggestion only when the model itself "
+                 "chooses mode respond, so on them the suggestion step was essentially not exercised:")
+    for name in old_prompt:
+        rows = systems.get(name, [])
+        inj = [p for p in rows if by_id[p.scenario_id].category == "prompt_injection"]
+        lines.append(
+            f"    - {name}: respond mode on {sum(bool(p.card and p.card.mode == 'respond') for p in rows)} of {len(rows)} "
+            f"cards, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in rows)}; on the {len(inj)} injection "
+            f"cases, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in inj)}")
+    lines.append("- So the \"0 injected\" counts in the suggestion-only section above are not evidence that injected "
+                 "claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.")
+    return lines
+
+
 def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Prediction]], old_prompt: list[str],
                         respond: tuple[str, list[Prediction], dict[str, Any]] | None) -> list[str]:
     by_id = {s.id: s for s in scenarios}
@@ -674,17 +690,7 @@ def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Predi
              "runs the old prompt, which lists `mode` without saying what its values mean. Further prompt work on modes "
              "is T7.1's; the instruction guard and the respond set in code are T4.2's."]
     if old_prompt:
-        lines.append("- The comparison records ran on the old prompt. A card gets a suggestion only when the model itself "
-                     "chooses mode respond, so on them the suggestion step was essentially not exercised:")
-        for name in old_prompt:
-            rows = systems.get(name, [])
-            inj = [p for p in rows if by_id[p.scenario_id].category == "prompt_injection"]
-            lines.append(
-                f"    - {name}: respond mode on {sum(bool(p.card and p.card.mode == 'respond') for p in rows)} of {len(rows)} "
-                f"cards, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in rows)}; on the {len(inj)} injection "
-                f"cases, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in inj)}")
-        lines.append("- So the \"0 injected\" counts in the suggestion-only section above are not evidence that injected "
-                     "claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.")
+        lines += _old_prompt_lines(by_id, systems, old_prompt)
     rm = systems.get(TRIED_PROMPT_SYSTEM)
     if rm:
         ins = [p for p in rm if by_id[p.scenario_id].gold_label == "insufficient"]
@@ -826,10 +832,10 @@ def _load_subset(root: Path, cloud: Cloud, subset: str, scenarios: list[Scenario
     return sub_scs
 
 
-def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
-         retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str, supersedes: list[dict[str, str]] | None,
-         gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
-    started = datetime.now(timezone.utc).isoformat()
+def _load_dev(
+    root: Path, retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str
+) -> tuple[list[Scenario], list[Scenario], str]:
+    """The dev scenarios, the cloud subset's scenarios (empty without a cloud step) and the dev file's hash."""
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the records cannot be written")
     if retrieval_config.get("rerank") or retrieval_config.get("chunk_turns", 1) != 1:
@@ -844,13 +850,14 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     if cloud is not None:
         sub_scs = _load_subset(root, cloud, subset, scenarios)
         _assert_writable(root, cloud)
+    return scenarios, sub_scs, digest
 
-    missing = [m for m in (names.writer, names.judge, names.embedder) if full_name(m) not in ctl.installed()]
-    if missing:
-        raise RunBroken(f"models not installed in Ollama: {missing}")
 
-    cold: dict[str, float] = {}
-    gpu: dict[str, int | None] = {}
+def _check_models(
+    ctl: OllamaCtl, names: Models, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
+    gpu_mb: Callable[[], int | None], say: Callable[[str], None], cold: dict[str, float], gpu: dict[str, int | None],
+) -> None:
+    """Check the judge and then the writer and the embedder, filling in `cold` and `gpu`."""
     judge = Judge(judge_llm)
     say("checking the judge")
     cold["judge_check"] = ctl.load(names.judge)
@@ -871,6 +878,12 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     cold["first_calls"] = time.perf_counter() - t0
     gpu["writer_and_embedder_loaded"] = gpu_mb()
 
+
+def _generate_all(
+    scenarios: list[Scenario], writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
+    say: Callable[[str], None],
+) -> tuple[dict[str, list[Prediction]], dict[str, dict[str, Any]], dict[str, MemoryStore], int, list[dict[str, float]]]:
+    """Every local strategy's rows, its health, and the memories built for the memory strategy."""
     systems: dict[str, list[Prediction]] = {}
     health: dict[str, dict[str, Any]] = {}
     memories: dict[str, MemoryStore] = {}
@@ -892,6 +905,25 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
             lambda sc, name=name: make_assistant(name, sc, writer, embedder, retrieval_config, memories.get(sc.id, MemoryStore()), DEADLINE_S),
             STREAK_LOCAL, say=say)
         health[name] = check_health(name, systems[name])
+    return systems, health, memories, memory_failed, memory_cost
+
+
+def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
+         retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str, supersedes: list[dict[str, str]] | None,
+         gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+    started = datetime.now(timezone.utc).isoformat()
+    scenarios, sub_scs, digest = _load_dev(root, retrieval_config, cloud, subset)
+
+    missing = [m for m in (names.writer, names.judge, names.embedder) if full_name(m) not in ctl.installed()]
+    if missing:
+        raise RunBroken(f"models not installed in Ollama: {missing}")
+
+    cold: dict[str, float] = {}
+    gpu: dict[str, int | None] = {}
+    _check_models(ctl, names, writer, judge_llm, embedder, gpu_mb, say, cold, gpu)
+
+    systems, health, memories, memory_failed, memory_cost = _generate_all(
+        scenarios, writer, embedder, retrieval_config, say)
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
 
@@ -1127,9 +1159,10 @@ def run_e2_cloud_only(*, root: Path = ROOT, local_run: str, writer: LLMClient, j
         _unload_models(ctl, mine, say)
 
 
-def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
-                names: Models, retrieval_config: dict[str, Any], cloud: Cloud, subset: str,
-                gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+def _check_local_record(
+    root: Path, local_run: str, retrieval_config: dict[str, Any]
+) -> tuple[str, dict[str, Any], dict[str, Any], str, str]:
+    """The committed local record the cloud stage builds on: its path, content, config, winner and dataset hash."""
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the record cannot be written")
     rel = (RUNS_REL / f"{local_run}.json").as_posix()
@@ -1147,6 +1180,13 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
     digest = split_hash(SPLIT, root, SCENARIO_SOURCE)
     if digest != rec["dataset_hash"]:
         raise RunBroken("the dev scenario file is not the one the local record used")
+    return rel, rec, config, winner, digest
+
+
+def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
+                names: Models, retrieval_config: dict[str, Any], cloud: Cloud, subset: str,
+                gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+    rel, rec, config, winner, digest = _check_local_record(root, local_run, retrieval_config)
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
     sub_scs = _load_subset(root, cloud, subset, scenarios)
     local_rows = [Prediction.model_validate_json(ln)
@@ -1189,7 +1229,7 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
 
 # ---------------------------------------------------------------- command line
 
-def main(argv: list[str] | None = None) -> int:
+def _parse_args(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--make-subset", action="store_true", help="write the cloud subset manifest, then stop")
     ap.add_argument("--tried-prompt-record", metavar="RUN_ID",
@@ -1201,15 +1241,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="write results/error-analysis-e2.md from the saved rows of --local-run (and --cloud-run); no model call")
     ap.add_argument("--cloud-run", metavar="RUN_ID", help="with --analysis-only, the cloud E2 record made from --local-run")
     args = ap.parse_args(argv)
+    return ap, args
+
+
+def _analysis_main(ap: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
+        ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --tried-prompt-record besides")
+    try:
+        print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, tried_prompt_run=args.tried_prompt_record))
+    except (RunBroken, OSError, ValueError, KeyError) as exc:
+        print(f"E2 analysis stopped: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap, args = _parse_args(argv)
     if args.analysis_only:
-        if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
-            ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --tried-prompt-record besides")
-        try:
-            print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, tried_prompt_run=args.tried_prompt_record))
-        except (RunBroken, OSError, ValueError, KeyError) as exc:
-            print(f"E2 analysis stopped: {exc}", file=sys.stderr)
-            return 2
-        return 0
+        return _analysis_main(ap, args)
     if args.cloud_run or args.tried_prompt_record:
         ap.error("--cloud-run and --tried-prompt-record go with --analysis-only")
     if args.cloud_only != bool(args.local_run) or (args.cloud_only and args.supersedes):

@@ -6,7 +6,7 @@ toward the defined cases."""
 import random
 import re
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 
 from contextlens.eval import metrics as M
 from contextlens.eval.stats import mcnemar_exact, percentile
@@ -57,7 +57,7 @@ def grounded_per_card(rows: Rows) -> list[list[bool]] | None:
         if p.card is None:
             out.append([])
             continue
-        judged = {id(f): j for f, j in zip(p.card.findings, p.claim_supported or [])}
+        judged = {id(f): j for f, j in zip(p.card.findings, p.claim_supported or [], strict=False)}
         turn_seq = {t.id: t.seq for t in s.conversation.turns}
         out.append(M.grounded_flags([p.card], turn_seq, s.request.as_of_seq, lambda f, judged=judged: judged[id(f)]))
     return out
@@ -171,20 +171,17 @@ def _complete(present: list[bool]) -> bool | None:
     return None if not any(present) else False
 
 
-def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], only: str | None = None) -> Metrics:
-    """A metric whose source field is on only some rows is left out, so it cannot be saved.
-    With `only`, just the metric of that name is computed."""
-    def want(*names: str) -> bool:
-        return only is None or only in names
+Want = Callable[..., bool]
 
+
+def _label_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
     out: Metrics = {}
-    carded = [(s, p, p.card) for s, p in rows if p.card is not None]
     if want("macro_f1", "false_alert_rate", *F1_LABELS):
         labelled = [(s.gold_label, q) for s, p in rows if s.gold_label and (q := predicted_label(p))]
         gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
         out["macro_f1"] = M.macro_f1(gold, pred)
         out["false_alert_rate"] = M.false_alert_rate(gold, pred)
-        for label, name in zip(M.LABELS, F1_LABELS):
+        for label, name in zip(M.LABELS, F1_LABELS, strict=True):
             out[name] = M.label_f1(gold, pred, label)
     if want("label_accuracy"):
         u = units(rows, "label_accuracy")
@@ -193,6 +190,12 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
         scored = [(s, p, predicted_label(p)) for s, p in rows if s.gold_label and predicted_label(p)]
         if scored and all(p.probability is not None for _, p, _ in scored):  # else the source field is missing
             out["ece"] = M.ece([s.gold_label == q for s, _, q in scored], [p.probability for _, p, _ in scored])  # type: ignore[misc]
+    return out
+
+
+def _card_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
+    out: Metrics = {}
+    carded = [(s, p, p.card) for s, p in rows if p.card is not None]
     if want("abstain_when_insufficient", "answer_when_answerable"):
         out.update(M.abstention_accuracy(
             [c.status == "abstained" for _, _, c in carded],
@@ -202,7 +205,6 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
         out["tokens_per_card"] = M.mean([float(c.tokens) for _, _, c in carded])
     if want("cost_usd_per_card"):
         out["cost_usd_per_card"] = M.mean([c.cost_usd for _, _, c in carded])
-
     if want("speaker_accuracy"):
         pred_sp: list[str] = []
         gold_sp: list[str] = []
@@ -213,27 +215,39 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
                     pred_sp.append(ev.speaker)
                     gold_sp.append(speaker_of[ev.turn_id])
         out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
+    return out
 
-    # "supports the claim" is a saved rubric judgement; without one per finding the metric is omitted
+
+def _judged_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
+    """Whether a finding supports its claim is a saved rubric judgement; without one per finding the metrics are omitted."""
     flags = grounded_per_card(rows) if want(*JUDGED) else None
-    if flags is not None:
-        flat = [x for fl in flags for x in fl]
-        out["grounded_rate"] = sum(flat) / len(flat) if flat else None
-        out["unsupported_claim_rate"] = M.unsupported_claim_rate(flags)
+    if flags is None:
+        return {}
+    flat = [x for fl in flags for x in fl]
+    return {"grounded_rate": sum(flat) / len(flat) if flat else None,
+            "unsupported_claim_rate": M.unsupported_claim_rate(flags)}
 
+
+def _raw_and_retrieval_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
+    out: Metrics = {}
     raws = _complete([p.raw_output is not None for _, p in rows]) if want("schema_valid_rate") else False
     if raws is not False:
-        out["schema_valid_rate"] = M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output])             if raws else None
-
+        out["schema_valid_rate"] = (
+            M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output]) if raws else None)
     need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
-    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need])         if want("mrr", *(f"recall@{k}" for k in ks)) else False
+    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need]) \
+        if want("mrr", *(f"recall@{k}" for k in ks)) else False
     if has_ranks is not False:
         ranked = [(s, p.ranked_turn_ids or []) for s, p in need] if has_ranks else []
         out["mrr"] = M.mrr([M.first_gold_rank(r, s.gold_evidence_turn_ids) for s, r in ranked])
         for k in ks:
             out[f"recall@{k}"] = M.mean(
                 [v for s, r in ranked if (v := M.recall_at_k(r, s.gold_evidence_turn_ids, k)) is not None])
+    return out
 
+
+def _latency_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
+    out: Metrics = {}
     stage_names = {name for _, p in rows for name in p.stage_latency_ms}
     for name in sorted(stage_names | {"total"}):
         suffix = "" if name == "total" else f"[stage={name}]"
@@ -244,4 +258,17 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
         vals = [float(p.stage_latency_ms[name]) for _, p in rows if name in p.stage_latency_ms]
         out[f"latency_p50_ms{suffix}"] = percentile(vals, 50) if vals else None
         out[f"latency_p95_ms{suffix}"] = percentile(vals, 95) if vals else None
+    return out
+
+
+def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], only: str | None = None) -> Metrics:
+    """A metric whose source field is on only some rows is left out, so it cannot be saved.
+    With `only`, just the metric of that name is computed."""
+    def want(*names: str) -> bool:
+        return only is None or only in names
+
+    ks = tuple(ks)
+    out: Metrics = {}
+    for section in (_label_metrics, _card_metrics, _judged_metrics, _raw_and_retrieval_metrics, _latency_metrics):
+        out.update(section(rows, ks, want))
     return out

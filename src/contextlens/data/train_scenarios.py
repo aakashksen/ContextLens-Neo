@@ -38,6 +38,10 @@ def _scenario(key: str, i: int, category: str, lines, evidence: list[int], *, la
 
 
 def build_train_scenarios() -> list[Scenario]:
+    return [*_labelled_train(), *_question_train()]
+
+
+def _labelled_train() -> list[Scenario]:
     out: list[Scenario] = []
     for i, t in enumerate(cases.CONTRADICTION):
         out.append(_scenario("con", i, "contradiction", t, [0, -1], label="contradiction"))
@@ -51,6 +55,11 @@ def build_train_scenarios() -> list[Scenario]:
         out.append(_scenario("ijc", i, "injected_consistent", t, [0, -1], label="consistent"))
     for i, (t, q) in enumerate(cases.INSUFFICIENT):
         out.append(_scenario("ins", i, "insufficient_evidence", t, [], label="insufficient", question=q))
+    return out
+
+
+def _question_train() -> list[Scenario]:
+    out: list[Scenario] = []
     for i, (t, q, a, ev) in enumerate(cases.RECALL):
         out.append(_scenario("rec", i, "recall", t, list(ev), label=None, question=q, answer=a))
     for i, (t, q, a, ev) in enumerate(cases.WRONG_SPEAKER_QUESTION):

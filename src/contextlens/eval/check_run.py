@@ -72,7 +72,7 @@ def _same_value(fresh: float | None, saved: object) -> bool:
 
 def _same_pair(fresh: tuple[float, float] | list[float], saved: object) -> bool:
     return (isinstance(saved, (list, tuple)) and len(saved) == len(fresh)
-            and all(_same_value(f, v) for f, v in zip(fresh, saved)))
+            and all(_same_value(f, v) for f, v in zip(fresh, saved, strict=True)))
 
 
 def _strings(x: Any) -> list[str]:
@@ -203,10 +203,8 @@ def _ancestor_problems(rec: dict[str, Any], root: Path) -> list[str]:
     return [] if ok else ["git_commit is not an ancestor of HEAD"]
 
 
-def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
-    problems = [f"missing field {k}" for k in REQUIRED if k not in rec]
-    if problems:
-        return problems
+def _header_problems(rec: dict[str, Any], root: Path, min_n: int) -> list[str]:
+    problems = []
     if rec["dirty"]:
         problems.append("record was made on a dirty tree")
     if any(FAKE.search(s) for s in _strings(rec["models"])):
@@ -217,106 +215,169 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     problems += _ancestor_problems(rec, root)
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
+    return problems
 
-    scenarios: list[Scenario] = []
+
+def _manifest_entry(rec: dict[str, Any], root: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    """The record's split entry in its source's manifest, with problems finding it or trusting the manifest."""
+    problems = []
     split, source = rec["split"], rec["scenario_source"]
-    if source not in SCENARIO_SOURCES:
-        return problems + [f"unknown scenario source {source!r}; expected one of {sorted(SCENARIO_SOURCES)}"]
-    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
-    manifest_path = root / manifest_rel
-    local = source != "scenarios"
+    manifest_rel = SCENARIO_SOURCES[source][0]
     entry = None
-    if manifest_path.is_file():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if (root / manifest_rel).is_file():
+        manifest = json.loads((root / manifest_rel).read_text(encoding="utf-8"))
         if manifest.get("source", "scenarios") != source:
             problems.append(f"the manifest at {manifest_rel.as_posix()} is not for scenario source {source}")
         else:
             entry = manifest.get("splits", {}).get(split)
-    if local and not committed_unchanged(rec, root, manifest_rel.as_posix()):
+    if source != "scenarios" and not committed_unchanged(rec, root, manifest_rel.as_posix()):
         problems.append(f"the {source} manifest was not committed before the run (absent or different at git_commit)")
-    if entry is None:
-        problems.append(f"no manifest entry for split {split} of source {source}")
-    elif not (root / scenario_dir / f"{split}.jsonl").is_file():
-        problems.append(f"no scenario file for split {split} of source {source}")
-    else:
-        if rec["dataset_hash"] != entry["hash"]:
-            problems.append("dataset_hash does not match the split manifest")
-        if split_hash(split, root, source) != entry["hash"]:
-            problems.append("scenario file no longer matches the split manifest")
-        else:
-            scenarios = load_scenarios(split, root / scenario_dir)
-            if local and [s.id for s in scenarios] != entry.get("ids"):
-                problems.append("scenario ids do not match the manifest's ids")
-                scenarios = []
-        expected_n, what = entry["n"], "split"
-        if "subset" in rec:
-            ids, bad = subset_problems(rec, root, [s.id for s in scenarios])
-            problems += bad
-            if ids is None:
-                scenarios = []
-            else:
-                scenarios = [s for s in scenarios if s.id in ids]
-                expected_n, what = len(ids), "subset"
-        if rec["n"] != expected_n:
-            problems.append(f"n={rec['n']} differs from the {what}'s {expected_n} cases")
+    return entry, problems
 
+
+def _scenario_problems(rec: dict[str, Any], root: Path) -> tuple[list[str], list[Scenario]]:
+    """Problems with the record's split against its committed manifest, and the scenarios it was scored on
+    (empty when they cannot be trusted)."""
+    scenarios: list[Scenario] = []
+    split, source = rec["split"], rec["scenario_source"]
+    scenario_dir = SCENARIO_SOURCES[source][1]
+    local = source != "scenarios"
+    entry, problems = _manifest_entry(rec, root)
+    if entry is None:
+        return problems + [f"no manifest entry for split {split} of source {source}"], scenarios
+    if not (root / scenario_dir / f"{split}.jsonl").is_file():
+        return problems + [f"no scenario file for split {split} of source {source}"], scenarios
+    if rec["dataset_hash"] != entry["hash"]:
+        problems.append("dataset_hash does not match the split manifest")
+    if split_hash(split, root, source) != entry["hash"]:
+        problems.append("scenario file no longer matches the split manifest")
+    else:
+        scenarios = load_scenarios(split, root / scenario_dir)
+        if local and [s.id for s in scenarios] != entry.get("ids"):
+            problems.append("scenario ids do not match the manifest's ids")
+            scenarios = []
+    expected_n, what = entry["n"], "split"
+    if "subset" in rec:
+        ids, bad = subset_problems(rec, root, [s.id for s in scenarios])
+        problems += bad
+        if ids is None:
+            scenarios = []
+        else:
+            scenarios = [s for s in scenarios if s.id in ids]
+            expected_n, what = len(ids), "subset"
+    if rec["n"] != expected_n:
+        problems.append(f"n={rec['n']} differs from the {what}'s {expected_n} cases")
+    return problems, scenarios
+
+
+def _read_predictions(pred_path: Path, tag: str) -> tuple[list[Prediction] | None, list[str]]:
+    if not pred_path.is_file():
+        return None, [tag + "predictions file is missing"]
+    try:
+        return [Prediction.model_validate_json(x)
+                for x in pred_path.read_text(encoding="utf-8").splitlines() if x.strip()], []
+    except ValueError as exc:
+        return None, [tag + f"predictions file is unreadable: {str(exc).splitlines()[0]}"]
+
+
+def _recompute_problems(
+    tag: str, scenarios: list[Scenario], preds: list[Prediction], rows: list[tuple[Scenario, Prediction]],
+    metrics: dict[str, Any], intervals: dict[str, Any],
+) -> list[str]:
+    problems = []
+    wanted = {int(k) for m in metrics for k in re.findall(r"recall@(\d+)", m)}
+    fresh = recompute_metrics(scenarios, preds, K_DEFAULT + tuple(sorted(wanted)))
+    for metric, saved in metrics.items():
+        if metric not in fresh:
+            problems.append(tag + f"metric {metric} cannot be recomputed from predictions")
+        elif not _same_value(fresh[metric], saved):
+            problems.append(tag + f"metric {metric} does not recompute from predictions")
+    for metric, saved in intervals.items():
+        got = series.interval(rows, metric)
+        if got is None:
+            problems.append(tag + f"interval {metric} cannot be recomputed from predictions")
+        elif not _same_pair(got, saved):
+            problems.append(tag + f"interval {metric} does not recompute from predictions")
+    return problems
+
+
+def _system_problems(
+    name: str, rel: str, rec: dict[str, Any], root: Path, scenarios: list[Scenario], intervals: dict[str, Any],
+) -> tuple[list[str], list[tuple[Scenario, Prediction]] | None]:
+    """Problems with one system's predictions file, and its rows when they are usable for later checks."""
+    tag = f"system {name}: "
+    source, metrics = rec["scenario_source"], rec["metrics"]
+    preds, problems = _read_predictions(root / rel, tag)
+    if preds is None:
+        return problems, None
+    if len(preds) != rec["n"]:
+        problems.append(tag + f"predictions hold {len(preds)} rows but n={rec['n']}")
+    if not metrics[name]:
+        problems.append(tag + "metrics is empty")
+    if source in IDS_ONLY_SOURCES and any(p.card is not None or p.raw_output is not None for p in preds):
+        problems.append(tag + f"rows of source {source} may hold ids and metrics only, with no card or raw output")
+    if "rerank" in name.lower() and not (isinstance(rec["models"], dict) and rec["models"].get("reranker")):
+        problems.append(tag + "a rerank system must record its reranker model in models.reranker")
+    if not scenarios:
+        return problems, None
+    pred_ids = [p.scenario_id for p in preds]
+    if len(set(pred_ids)) != len(pred_ids) or set(pred_ids) != {s.id for s in scenarios}:
+        return problems + [tag + "prediction ids do not match the split's scenario ids exactly once each"], None
+    row_problems = _row_problems(scenarios, preds)
+    problems += [tag + m for m in row_problems]
+    if row_problems:
+        return problems, None
+    rows = _rows(scenarios, preds)
+    problems += _recompute_problems(tag, scenarios, preds, rows, metrics[name], intervals.get(name) or {})
+    return problems, rows
+
+
+def _saves_judged_metric(metrics: dict[str, Any], intervals: dict[str, Any]) -> bool:
+    """An undefined (None) judged metric makes no claim, so a retrieval-only record needs no judge for it."""
+    defined = [m for d in metrics.values() for m, v in d.items() if v is not None] + [m for d in intervals.values() for m in d]
+    return any(base_name(m) in JUDGED for m in defined)
+
+
+def _shape_problems(rec: dict[str, Any]) -> tuple[list[str], dict[str, Any], bool]:
+    """Problems with the shape of predictions, metrics, intervals and comparisons; the usable intervals; and
+    whether the shape is too broken to check the systems at all."""
     paths, metrics, intervals = rec["predictions"], rec["metrics"], rec["intervals"]
     if not isinstance(paths, dict) or not paths:
-        return problems + ["predictions must map each system to its predictions file"]
+        return ["predictions must map each system to its predictions file"], {}, True
     if not isinstance(metrics, dict) or set(metrics) != set(paths):
-        return problems + ["metrics must hold one entry per system, matching predictions"]
+        return ["metrics must hold one entry per system, matching predictions"], {}, True
+    problems = []
     if not isinstance(intervals, dict) or not set(intervals) <= set(paths):
         problems.append(f"intervals name systems not in predictions: {sorted(set(intervals) - set(paths))}")
         intervals = {}
     if not isinstance(rec["comparisons"], list):
         problems.append("comparisons must be a list")
+    return problems, intervals, False
+
+
+def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
+    problems = [f"missing field {k}" for k in REQUIRED if k not in rec]
+    if problems:
+        return problems
+    problems += _header_problems(rec, root, min_n)
+    source = rec["scenario_source"]
+    if source not in SCENARIO_SOURCES:
+        return problems + [f"unknown scenario source {source!r}; expected one of {sorted(SCENARIO_SOURCES)}"]
+    more, scenarios = _scenario_problems(rec, root)
+    problems += more
+
+    shape, intervals, fatal = _shape_problems(rec)
+    problems += shape
+    if fatal:
+        return problems
+    paths, metrics = rec["predictions"], rec["metrics"]
 
     usable: dict[str, list[tuple[Scenario, Prediction]]] = {}
     for name, rel in paths.items():
-        tag = f"system {name}: "
-        pred_path = root / rel
-        if not pred_path.is_file():
-            problems.append(tag + "predictions file is missing")
-            continue
-        try:
-            preds = [Prediction.model_validate_json(x)
-                     for x in pred_path.read_text(encoding="utf-8").splitlines() if x.strip()]
-        except ValueError as exc:
-            problems.append(tag + f"predictions file is unreadable: {str(exc).splitlines()[0]}")
-            continue
-        if len(preds) != rec["n"]:
-            problems.append(tag + f"predictions hold {len(preds)} rows but n={rec['n']}")
-        if not metrics[name]:
-            problems.append(tag + "metrics is empty")
-        if source in IDS_ONLY_SOURCES and any(p.card is not None or p.raw_output is not None for p in preds):
-            problems.append(tag + f"rows of source {source} may hold ids and metrics only, with no card or raw output")
-        if "rerank" in name.lower() and not (isinstance(rec["models"], dict) and rec["models"].get("reranker")):
-            problems.append(tag + "a rerank system must record its reranker model in models.reranker")
-        if not scenarios:
-            continue
-        pred_ids = [p.scenario_id for p in preds]
-        if len(set(pred_ids)) != len(pred_ids) or set(pred_ids) != {s.id for s in scenarios}:
-            problems.append(tag + "prediction ids do not match the split's scenario ids exactly once each")
-            continue
-        row_problems = _row_problems(scenarios, preds)
-        problems += [tag + m for m in row_problems]
-        if row_problems:
-            continue
-        rows = _rows(scenarios, preds)
-        usable[name] = rows
-        wanted = {int(k) for m in metrics[name] for k in re.findall(r"recall@(\d+)", m)}
-        fresh = recompute_metrics(scenarios, preds, K_DEFAULT + tuple(sorted(wanted)))
-        for metric, saved in metrics[name].items():
-            if metric not in fresh:
-                problems.append(tag + f"metric {metric} cannot be recomputed from predictions")
-            elif not _same_value(fresh[metric], saved):
-                problems.append(tag + f"metric {metric} does not recompute from predictions")
-        for metric, saved in (intervals.get(name) or {}).items():
-            got = series.interval(rows, metric)
-            if got is None:
-                problems.append(tag + f"interval {metric} cannot be recomputed from predictions")
-            elif not _same_pair(got, saved):
-                problems.append(tag + f"interval {metric} does not recompute from predictions")
+        more, rows = _system_problems(name, rel, rec, root, scenarios, intervals)
+        problems += more
+        if rows is not None:
+            usable[name] = rows
 
     for name in intervals:
         if name in paths and name not in usable and scenarios:
@@ -324,9 +385,7 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     if isinstance(rec["comparisons"], list):
         problems += _comparison_problems(rec["comparisons"], usable, paths) if scenarios else []
 
-    # An undefined (None) judged metric makes no claim, so a retrieval-only record needs no judge for it.
-    defined = [m for d in metrics.values() for m, v in d.items() if v is not None] + [m for d in intervals.values() for m in d]
-    if any(base_name(m) in JUDGED for m in defined):
+    if _saves_judged_metric(metrics, intervals):
         problems += judge_problems(rec["config"])
     return problems
 

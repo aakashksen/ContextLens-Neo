@@ -1,3 +1,4 @@
+# ruff: noqa: F811  (the imported `repo` fixture is redefined by each test's parameter)
 """check_run remembers passes, and only trusts one when nothing it depended on has changed."""
 import json
 from pathlib import Path
@@ -7,7 +8,7 @@ import pytest
 from contextlens.eval import check_cache, check_run
 from contextlens.eval.check_cache import PassCache, code_hash, code_modules
 from contextlens.eval.check_run import check
-from tests.test_records import _edit, _run, repo  # noqa: F401
+from tests.test_records import _edit, _run, repo  # noqa: F401, F811
 
 CODE = "code-v1"
 
