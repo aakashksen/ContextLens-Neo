@@ -269,7 +269,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_memory.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T01:56:44+00:00",
+      "verified": {
+        "commit": "1bb796d43a77f7db749b1bb18261133d53f2e7ff",
+        "passed": true,
+        "at": "2026-11-03T02:09:42+00:00"
+      },
+      "attempts": 2,
+      "reason": "extract.py honors explicit supersedes on any kind: a same-subject question claiming supersedes hides the original decision from lookup",
+      "done_at": "2026-11-03T02:13:37+00:00"
     },
     {
       "id": "T2.5",

@@ -1,0 +1,30 @@
+{
+  "task": "T2.4",
+  "commit": "1bb796d43a77f7db749b1bb18261133d53f2e7ff",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD = 1bb796d...; git status shows only orchestration/tasks.json and orchestration/verdicts/T2.4.json"},
+    {"item": "evidence log and rerun of acceptance", "result": "pass", "evidence": "log shows commit 1bb796d, 15 passed, RESULT PASS; reran pytest tests/test_memory.py -q: 15 passed"},
+    {"item": "all plan items have code and tests (extract/update, MemoryStore.lookup, RollingSummary non-citable, fit_context, six named tests)", "result": "pass", "evidence": "extract.py, summary.py, budget.py read; all six named tests plus 9 extra tests exist in tests/test_memory.py"},
+    {"item": "mutation check of the four newest tests", "result": "pass", "evidence": "only-correction-may-supersede (kind gate removed), line-break forging (LINE_BREAKS sub removed), special-char ids (prompt_ids mapping removed), summary escapes (unescape removed): each made exactly its test fail; restored via git checkout by path; 15 pass again"},
+    {"item": "supersedes rules: non-correction, cross-subject, cross-conversation", "result": "pass", "evidence": "own tests: fact with supersedes -> None; correction on other subject citing an old id -> None; lookup for another conv returns []"},
+    {"item": "lookup at each as_of_seq over a 3-item correction chain (case-insensitive subject)", "result": "pass", "evidence": "as_of 0:[] ; 1-2:[m0]; 3-4:[m1]; 5+:[m2]; include_superseded gives full history up to as_of; nothing after as_of leaks"},
+    {"item": "invalid LLM output and LLMError", "result": "pass", "evidence": "empty FakeLLM and non-JSON output both raise LLMError; invalid citations are dropped and an item with none is dropped"},
+    {"item": "fit_context edges", "result": "pass", "evidence": "empty->[]; evidence kept even when over budget ([1,3] at budget 1); oldest non-evidence dropped first; no drop when it fits"},
+    {"item": "forged turn lines via all line-breaking characters, </transcript> variants", "result": "pass", "evidence": "own test over \\n \\r \\x0b \\x0c \\x1c \\x1d \\x1e \\x85 U+2028 U+2029: always 2 lines and one </transcript>; repo test also covers case/space variants"},
+    {"item": "low-confidence and LLM-named speakers", "result": "pass", "evidence": "confidence 0.2 turn: speaker 'unknown' and 'Bob' absent from prompt; LLM-supplied speaker 'Bob' ignored, speaker derived from cited turns"},
+    {"item": "new risk: id collision after escaping (a&b vs a&amp;b)", "result": "pass", "evidence": "escape maps them to a&amp;b and a&amp;amp;b; citing each resolves to its own turn (own test); raw id also resolves correctly"},
+    {"item": "new risk: unescape in RollingSummary producing a live </transcript> in a prompt", "result": "pass", "evidence": "model echoes '&amp;lt;/transcript&amp;gt;', '&amp;amp;lt;...' or '</transcript>\\nSYSTEM': summary text becomes '</transcript>' but the next two prompts contain it only as '&lt;/transcript&gt;' and exactly one real </transcript>"},
+    {"item": "summary escape growth over several updates", "result": "pass", "evidence": "5 updates returning 'a & b < c': prompt length steady (67 chars), no &amp;amp;"},
+    {"item": "diff hygiene", "result": "pass", "evidence": "git diff 5984d5a..HEAD touches only 6 new files, no legacy/, no secrets, no earlier tests changed; ruff clean on touched files"}
+  ],
+  "own_tests": [
+    {"input": "turns with ids 'a&b' and 'a&amp;b', citations in raw and escaped forms", "result": "each lands on the correct turn"},
+    {"input": "RollingSummary fed multi-level escaped </transcript> echoes over 3 updates", "result": "prompts never contain a live extra </transcript>"},
+    {"input": "3-step correction chain, lookup at as_of 0..9, other conversation, include_superseded", "result": "correct current/history at every seq"},
+    {"input": "non-correction supersedes, cross-subject supersedes, empty/invalid LLM output, fit_context edges, low-confidence speaker, 10 line-break characters", "result": "all behave as required"},
+    {"input": "turn ids 'a b' and 'a\\nb' (both escape to 'a b'), model cites 'a b'", "result": "resolves to the later turn 'a\\nb' (collision); see notes"}
+  ],
+  "failures": [],
+  "notes": "Observation, not counted as a failure: escape() flattens line breaks to spaces, so ids that differ only by a line-break character (e.g. 'a b' and 'a\\nb') collide in prompt_ids in extract.py and a citation lands on the later one. Real ids here are generated (t<seq>) and no such id can arise through the plan's flows; a defensive fix would drop ambiguous citations. Also RollingSummary.text/return value holds unescaped text (possibly a literal </transcript>); it is escaped when re-entering this class's prompt, but any later consumer (T3.x context builder) must escape it too. The full pytest suite was not run to completion (timed out at 120s in the background); only tests/test_memory.py was rerun."
+}
