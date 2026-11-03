@@ -468,7 +468,9 @@
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:23:49+00:00"
     },
     {
       "id": "T6.2",
