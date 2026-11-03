@@ -311,6 +311,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Do:** Replay AMI audio through speech and diarization, then run the same questions as on the clean transcript. Report word error rate, diarization error, how much transcription and speaker errors change quality, button-to-card p50 and p95 by stage, and tokens per card. Optimize the top two bottlenecks, then rerun and report before and after.
 **Tests:** tiny fixture writes a valid record; `test_wer_on_known_strings`.
 **From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
+**Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
@@ -325,6 +326,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Do:** Run the real backend with the real agent team, the speech service, and the web client together, and connect Unity's message types to the real server. The earlier client tasks used the fake server, so this is where any mismatch has to surface and get fixed. Document starting everything with one command.
 **Tests:** `test_real_backend_matches_contract` (fakes for models); real-marked `test_press_end_to_end_returns_a_cited_card`, covering audio → transcript → press → card; `test_fake_server_and_real_backend_send_same_shapes`.
 **From T8.3's verifier:** In the web client, a server `error` status while recording leaves the microphone live and sending while the indicator reads "Error", so stop capture on it; and `Session` still accepts transcript and card messages after `deleted`, so reject them, and check the real backend can't send a late transcript. Run the real browser microphone, `AudioContext`, and WebSocket path here, since nothing has yet.
+**Decision (the coordinator):** Add a turn-update message to the contract and the clients, so a speaker assigned after a turn was sent reaches them live. T8.2 sends each turn as `unknown` and relabels it later in the store.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
