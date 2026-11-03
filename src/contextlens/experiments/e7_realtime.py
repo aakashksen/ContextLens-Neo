@@ -444,11 +444,15 @@ def run_e7(
     make_assistant: MakeAssistant, extractor: Extractor | None, models: dict[str, str],
     prompt_versions: dict[str, str], telemetry: Telemetry | None = None, audio_dir: Path | None = None,
     rerun_of: str | None = None, changes: list[str] | None = None, speedup: float = 1.0, settle_s: float = 10.0,
-    step_ms: int = STEP_MS, say: Callable[[str], None] = print,
+    realtime_meeting: str | None = None, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
 ) -> Path:
     """Replay every dev scenario three ways and write one E7 record. A first run is the baseline and names
     its two slowest press stages; a rerun (`rerun_of` a baseline's run id, with the `changes` made) must be on the
-    same scenarios and records the same stages before and after. Nothing is written if anything fails."""
+    same scenarios and records the same stages before and after. Nothing is written if anything fails.
+
+    `speedup` above 1 streams audio faster than real time, which makes speech and speaker timings meaningless as
+    real-time figures. Such a run records its speedup and `latency_basis`, leaves its own speech timings out, and must
+    name `realtime_meeting`: that meeting is replayed again at 1.0 and `realtime_segment` holds the real-time latencies."""
     manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
     if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
         raise RuntimeError("the AMI manifest must be committed before the run")
@@ -468,6 +472,12 @@ def run_e7(
     by_meeting: dict[str, list[Scenario]] = {}
     for sc in scenarios:
         by_meeting.setdefault(sc.conversation.id, []).append(sc)
+    if speedup <= 0:
+        raise ValueError("speedup must be positive")
+    if speedup != 1.0 and realtime_meeting not in by_meeting:
+        raise ValueError("a run at a speedup other than 1.0 must name a realtime_meeting of this split")
+    if speedup == 1.0 and realtime_meeting:
+        raise ValueError("realtime_meeting belongs to a sped-up run; a run at 1.0 is real time throughout")
     missing = [m for m in by_meeting if not (audio / f"{m}.wav").is_file()]
     if missing:
         raise FileNotFoundError(f"no audio for {missing}; run download")
@@ -476,19 +486,34 @@ def run_e7(
     rows: dict[str, dict[str, Prediction]] = {n: {} for n in SYSTEMS}
     stats: dict[str, dict[str, Any]] = {}
     asr_lags: list[int] = []
-    for n, (meeting, scs) in enumerate(by_meeting.items(), 1):
-        say(f"{meeting}: {len(scs)} questions ({n}/{len(by_meeting)})")
+
+    def play(meeting: str, scs: list[Scenario], speed: float, tele: Telemetry | None):
         pcm = read_wav(audio / f"{meeting}.wav")
         cut = max(cut_ms(s) for s in scs)
         stream_pcm = pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
-        segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speedup, settle_s=settle_s))
-        asr_lags += lags
-        got, stats[meeting] = replay_meeting(
+        segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s))
+        got, st = replay_meeting(
             scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
-            make_assistant=make_assistant, extractor=extractor, telemetry=telemetry, step_ms=step_ms, say=say)
-        stats[meeting].update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
+            make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
+        st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
+        return got, st, lags
+
+    for n, (meeting, scs) in enumerate(by_meeting.items(), 1):
+        say(f"{meeting}: {len(scs)} questions ({n}/{len(by_meeting)})")
+        got, stats[meeting], lags = play(meeting, scs, speedup, telemetry)
+        asr_lags += lags
         for name in SYSTEMS:
             rows[name].update(got[name])
+    segment = None
+    if realtime_meeting:
+        say(f"real-time segment: {realtime_meeting} at 1.0")
+        scs = by_meeting[realtime_meeting]
+        got, st, lags = play(realtime_meeting, scs, 1.0, None)  # not in Prometheus: it would count these presses twice
+        seg_metrics = recompute_metrics(scs, [got["asr_pipeline"][s.id] for s in scs], KS)
+        segment = {"meeting": realtime_meeting, "speedup": 1.0, "audio_s": st["audio_s"],
+                   "asr_lag_ms": _summary(lags), "diarization_run_ms": _summary(st["diar_ms"]),
+                   "asr_real_time_factor": st["asr_wall_s"] / max(1e-9, st["audio_s"]),
+                   "press_latency_ms": {k: v for k, v in seg_metrics.items() if k.startswith("latency_p")}}
     preds = {name: [rows[name][s.id] for s in scenarios] for name in SYSTEMS}
     # The speaker model names speakers speaker_1, speaker_2, ..., so comparing its names with AMI's says nothing;
     # `der` (which matches the names first) is its measure.
@@ -510,11 +535,14 @@ def run_e7(
     config: dict[str, Any] = {
         "experiment": "E7", "phase": "rerun" if rerun_of else "baseline", "systems": list(SYSTEMS),
         "step_ms": step_ms, "speedup": speedup, "mapping_rule": MAPPING_RULE, "obs_profile": telemetry is not None,
+        "latency_basis": ("real_time" if speedup == 1.0 else
+                          "sped_up: speech and speaker timings here are not real-time; see realtime_segment"),
+        "realtime_segment": segment,
         "pipeline_timing": {
             "asr_lag_ms": _summary(asr_lags), "diarization_run_ms": _summary(all_diar),
             "asr_real_time_factor": sum(s["asr_wall_s"] * speedup for s in stats.values())
             / max(1e-9, sum(s["audio_s"] for s in stats.values())),
-        },
+        } if speedup == 1.0 else None,
         "error_analysis": {
             "memory_items_extracted_while_unknown_now_stale": sum(s["stale_unknown_items"] for s in stats.values()),
             "memory_items": sum(s["memory_items"] for s in stats.values()),
@@ -547,6 +575,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--rerun", metavar="BASELINE_RUN_ID")
     r.add_argument("--change", action="append", default=[])
     r.add_argument("--speedup", type=float, default=1.0)
+    r.add_argument("--realtime-meeting", help="required with a speedup other than 1.0: replayed again at 1.0")
     args = ap.parse_args(argv)
     if args.cmd == "build-scenarios":
         print(build_ami_dev())
@@ -589,7 +618,7 @@ def _run_real(args: argparse.Namespace) -> int:
             models={"llm": production.MODEL, "embedder": "nomic-embed-text",
                     "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
             prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
-            speedup=args.speedup)
+            speedup=args.speedup, realtime_meeting=args.realtime_meeting)
     finally:
         for model in (production.MODEL, embedder.model):
             unload_ollama(model, production.OLLAMA_URL)

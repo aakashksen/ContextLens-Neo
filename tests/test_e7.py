@@ -175,9 +175,6 @@ def write_silence(path: Path, seconds: float) -> None:
         w.writeframes(bytes(int(seconds * SAMPLE_RATE) * 2))
 
 
-FAST = {"speedup": 1000.0, "settle_s": 0.05, "step_ms": 10_000}
-
-
 # -- speech and one meeting ------------------------------------------------------------------------------------------
 
 def test_transcribe_collects_segments_and_lags():
@@ -249,12 +246,32 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def run(repo: Path, **kw) -> Path:
+SPEEDS: list[float] = []
+
+
+@pytest.fixture(autouse=True)
+def fast_clock(monkeypatch):
+    """Records the speed each replay asks for, then runs it fast so the tests do not wait in real time."""
+    real = e7.transcribe
+    SPEEDS.clear()
+
+    async def quick(speech, pcm, *, speedup=1.0, settle_s=10.0):
+        SPEEDS.append(speedup)
+        return await real(speech, pcm, speedup=1000.0, settle_s=0.05)
+
+    monkeypatch.setattr(e7, "transcribe", quick)
+
+
+def run(repo: Path, speedup: float = 1000.0, realtime_meeting: str | None = "m1", **kw) -> Path:
+    if speedup == 1.0:
+        realtime_meeting = None
+    scripts = [aligned_script("m1"), merged_script("m2")] + ([aligned_script("m1")] if realtime_meeting else [])
     return e7.run_e7(
-        root=repo, speech=ScriptedSpeech([aligned_script("m1"), merged_script("m2")]), backend=TruthBackend(),
+        root=repo, speech=ScriptedSpeech(scripts), backend=TruthBackend(),
         embedder=NoEmbed(), make_assistant=make_assistant, extractor=FirstTurnExtractor(),
         models={"llm": "qwen3.5:4b-q4_K_M", "speech": "whisper.cpp ggml-tiny.en", "diarizer": "pyannote"},
-        prompt_versions={"team": "v1"}, say=lambda m: None, **FAST, **kw)
+        prompt_versions={"team": "v1"}, say=lambda m: None, speedup=speedup, realtime_meeting=realtime_meeting,
+        step_ms=10_000, **kw)
 
 
 def test_tiny_fixture_writes_a_valid_record(repo: Path) -> None:
@@ -397,3 +414,31 @@ def test_unload_local_models_asks_ollama_to_drop_both(monkeypatch) -> None:
     monkeypatch.setattr(production, "unload_ollama", lambda model, url: calls.append((model, url)) or True)
     production.unload_local_models()
     assert calls == [("qwen3.5:4b-q4_K_M", "http://127.0.0.1:11434"), ("nomic-embed-text", "http://127.0.0.1:11434")]
+
+
+def test_a_sped_up_run_states_its_speedup_and_takes_latency_from_a_real_time_segment(repo: Path) -> None:
+    rec = json.loads(run(repo).read_text(encoding="utf-8"))
+    cfg = rec["config"]
+    assert cfg["speedup"] == 1000.0 and cfg["latency_basis"].startswith("sped_up")
+    assert cfg["pipeline_timing"] is None  # speech and speaker timings of a sped-up replay are not reported
+    seg = cfg["realtime_segment"]
+    assert seg["meeting"] == "m1" and seg["speedup"] == 1.0 and seg["asr_lag_ms"]["n"] == 8
+    assert "latency_p95_ms" in seg["press_latency_ms"] and seg["asr_real_time_factor"] > 0
+    assert SPEEDS == [1000.0, 1000.0, 1.0]  # the two meetings sped up, then the segment at real time
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+
+
+def test_a_real_time_run_needs_no_segment_and_a_sped_up_run_cannot_skip_it(repo: Path) -> None:
+    cfg = json.loads(run(repo, speedup=1.0).read_text(encoding="utf-8"))["config"]
+    assert cfg["speedup"] == 1.0 and cfg["latency_basis"] == "real_time" and cfg["realtime_segment"] is None
+    assert cfg["pipeline_timing"]["asr_lag_ms"]["n"] == 12 and SPEEDS == [1.0, 1.0]
+    with pytest.raises(ValueError, match="realtime_meeting"):
+        run(repo, realtime_meeting=None)
+    with pytest.raises(ValueError, match="realtime_meeting"):
+        run(repo, realtime_meeting="nope")
+    with pytest.raises(ValueError, match="positive"):
+        run(repo, speedup=0.0)
+    with pytest.raises(ValueError, match="real time throughout"):
+        e7.run_e7(root=repo, speech=ScriptedSpeech([]), backend=TruthBackend(), embedder=NoEmbed(),
+                  make_assistant=make_assistant, extractor=None, models={}, prompt_versions={}, speedup=1.0,
+                  realtime_meeting="m1")
