@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from contextlens.llm.untrusted import transcript_block
 from contextlens.schemas import Turn
 
 _DIR = Path(__file__).parent
+_PLAIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 
 class Prompt(BaseModel):
@@ -15,6 +17,9 @@ class Prompt(BaseModel):
 
 
 def get_prompt(name: str, version: str = "v1") -> Prompt:
+    for label, value in (("name", name), ("version", version)):
+        if not _PLAIN.fullmatch(value):
+            raise ValueError(f"prompt {label} must be a plain word, got {value!r}")
     path = (_DIR / version / f"{name}.md").resolve()
     if path.parent.parent != _DIR.resolve() or not path.is_file():
         raise KeyError(f"no prompt {name!r} at version {version!r}")

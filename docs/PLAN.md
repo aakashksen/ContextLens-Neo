@@ -156,7 +156,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ### T3.1: Prompts, tools, and guards
 **Files:** `src/contextlens/prompts/registry.py`, `src/contextlens/prompts/v1/*.md`, `src/contextlens/agents/tools.py`, `src/contextlens/guard/citations.py`, `src/contextlens/agents/consistency_check.py`, `tests/test_guard.py`, `tests/test_tools.py`.
-**Produces:** `get_prompt(name, version) -> Prompt` (version recorded in run records); `render_transcript_block(turns) -> str`, which puts turns in a delimited data block and neutralizes delimiter text inside them; `Tools(store, retriever, memory, as_of_seq)` with `search_transcript`, `get_turns`, `lookup_memory`, `check_consistency`; `class ConsistencyChecker(Protocol): def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]`, with `PromptedChecker` as the first implementation; `guard_card(card, store, as_of_seq) -> Card`.
+**Produces:** `get_prompt(name, version) -> Prompt` (version recorded in run records); `render_transcript_block(turns) -> str`, which puts turns in a delimited data block and neutralizes delimiter text inside them; `Tools(store, retriever, memory, as_of_seq, conv_id, checker=None)` with `search_transcript`, `get_turns`, `lookup_memory`, `check_consistency(statement_turn_id, earlier_turn_ids)`; `class ConsistencyChecker(Protocol): def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]`, with `PromptedChecker` as the first implementation; `guard_card(card, store, as_of_seq, conv_id) -> Card`.
 **Tests:**
 - `test_guard_drops_finding_with_unknown_turn`
 - `test_guard_drops_finding_citing_future_turn`
@@ -174,6 +174,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/agents/single.py`, `tests/test_single_agent.py`.
 **Produces:** `SingleAgent(llm, tools, prompt_version, max_steps=4, deadline_s=8.0)` implementing `Assistant`, using a tool-calling loop with structured output, then `guard_card`. Also `RecentTurnsAssistant`, `FullTranscriptAssistant`, and `RetrievalAssistant` as the simple baselines for E2.
 **Tests:** `test_empty_conversation_abstains`; `test_one_short_turn_abstains_or_answers_only_from_it`; `test_stops_after_max_steps`; `test_deadline_returns_partial`; `test_llm_error_returns_abstained`; `test_injection_turn_does_not_change_card` (`FakeLLM` scripted to obey would be stopped by the guard; check the invented claim is dropped); `test_default_press_uses_latest_exchange`.
+**From phase review:** Tool results sent back to a model must go through the shared escaping in `src/contextlens/llm/untrusted.py`, since `Tools` returns raw objects. `guard_card` lets a store error out, so the agent must catch it and abstain. A card's `suggestion` is not verified by the guard.
 **Accept:** `{py} -m pytest tests/test_single_agent.py -q`.
 
 ### T3.3: Experiment E2, context strategies
@@ -200,6 +201,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 - `test_injection_turn_cannot_trigger_followups_or_change_findings`
 - `test_suggestion_only_comes_from_assistance_agent`
 - `test_agents_do_not_share_private_context`
+**From phase review:** Tool results sent to a model go through the shared escaping in `untrusted.py`, since `Tools` returns raw objects. Each agent must catch a store error from `guard_card` and abstain. A card's `suggestion` is not verified by the guard.
 **Accept:** `{py} -m pytest tests/test_team.py -q`.
 
 ### T4.2: Experiment E3, team vs single agent

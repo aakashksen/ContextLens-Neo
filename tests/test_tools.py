@@ -1,3 +1,5 @@
+import pytest
+
 from contextlens.agents.consistency_check import PromptedChecker
 from contextlens.agents.tools import Tools
 from contextlens.llm.client import FakeLLM
@@ -73,3 +75,13 @@ def test_prompted_checker_update_case():
         and "We moved the deadline to Wednesday" in user
     )
     assert get_prompt("consistency", "v1").version == "v1"
+
+
+@pytest.mark.parametrize(
+    "name,version",
+    [("../v1/consistency", "v1"), ("consistency", "../v1"), ("consistency", "v1/.."),
+     ("v1\consistency", "v1"), ("", "v1"), ("consistency", ""), ("consistency", ".")],
+)  # fmt: skip
+def test_get_prompt_rejects_unsafe_name_or_version(name, version):
+    with pytest.raises(ValueError, match="plain"):
+        get_prompt(name, version)
