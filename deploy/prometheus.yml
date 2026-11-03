@@ -1,0 +1,8 @@
+# Scrapes the app's /metrics. The app serves it only when started with serve_metrics(); from inside Docker the
+# app on the host is reached as host.docker.internal, so it must listen on a host address Docker can reach.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: contextlens
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
