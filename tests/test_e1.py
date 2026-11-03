@@ -189,3 +189,31 @@ def test_an_uncommitted_qmsum_manifest_stops_the_run(repo: Path) -> None:
 def test_the_runner_never_reads_the_test_split() -> None:
     src = Path(e1.__file__).read_text(encoding="utf-8")
     assert '"test"' not in src and "'test'" not in src
+
+
+def test_query_for_lives_in_a_shared_module_and_e1_uses_it() -> None:
+    from contextlens.retrieval import query
+
+    assert e1.query_for is query.query_for
+    q, last = query.query_for(_scenario("c", 1, question=False))
+    assert q == "remember the garden plan" and last == 5
+
+
+def test_config_marks_the_choice_as_provisional_and_can_be_rebuilt_from_records(repo: Path) -> None:
+    e1.run_e1(root=repo, embedder=HashEmbedder(), reranker=make_reranker())
+    path = repo / "configs/retrieval.json"
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert written["labels_reviewed"] is False
+    assert written["winner"] in written["not_measurably_better_than_statement"]
+    path.unlink()
+    rebuilt = e1.regenerate_config(repo, run_ids=written["run_ids"])
+    assert rebuilt == written
+    assert json.loads(path.read_text(encoding="utf-8")) == written
+
+
+def test_saturation_note_names_sources_where_several_systems_score_one() -> None:
+    def src(ones: int) -> dict:
+        return {f"s{i}": {"recall@5": 1.0 if i < ones else 0.5, "mrr": 0.5} for i in range(8)}
+
+    assert e1.saturated_sources({"easy": src(4), "hard": src(1)}) == ["easy"]
+    assert e1.saturated_sources({"hard": src(2)}) == []

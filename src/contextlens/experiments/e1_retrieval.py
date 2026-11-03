@@ -20,6 +20,7 @@ from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_
 from contextlens.eval.series import base_name
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Prediction
+from contextlens.retrieval.query import query_for
 from contextlens.retrieval.hybrid import Retriever, ScoredTurn
 from contextlens.schemas import Scenario, Turn
 
@@ -37,6 +38,7 @@ WINNER_RULE = ("highest mean over the sources of recall@5; ties broken by higher
 QUERY_RULE = ("the question when there is one; otherwise the text of the last turn, searched over the turns "
               "before it")
 CONFIG_REL = Path("configs/retrieval.json")
+SATURATED_MIN = 3  # systems at recall@5 of 1.0 that make a source unable to tell them apart
 
 
 class RerankerFallback(RuntimeError):
@@ -77,14 +79,6 @@ def chunks(turns: list[Turn], size: int) -> tuple[list[Turn], dict[str, list[str
         units.append(unit)
         members[unit.id] = [t.id for t in held]
     return units, members
-
-
-def query_for(sc: Scenario) -> tuple[str, int]:
-    """The query text and the last seq that may be searched."""
-    if sc.request.question:
-        return sc.request.question, sc.request.as_of_seq
-    last = max((t for t in sc.conversation.turns if t.seq <= sc.request.as_of_seq), key=lambda t: t.seq)
-    return last.text, sc.request.as_of_seq - 1
 
 
 def ranked_turns(hits: list[ScoredTurn], members: dict[str, list[str]], k: int = K) -> list[str]:
@@ -213,27 +207,59 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
             intervals, attempts, preds, digest, comparisons=comparisons, scenario_source=source, root=root)
     if not complete:
         return {"winner": None, "complete": False, "records": paths}
-    cfg = _config(winner, done, metrics, paths, reranker)
-    (root / CONFIG_REL).parent.mkdir(parents=True, exist_ok=True)
-    (root / CONFIG_REL).write_text(json.dumps(cfg, indent=1) + "\n", encoding="utf-8")
+    _write_config(config_from_records(paths), root)
     return {"winner": winner, "complete": True, "records": paths}
 
 
-def _config(winner: str, done: dict, metrics: dict, paths: dict[str, Path], reranker: Any) -> dict[str, Any]:
+def saturated_sources(scores: dict[str, dict[str, dict[str, float]]]) -> list[str]:
+    """Sources where SATURATED_MIN or more systems reach recall@5 of 1.0, so they cannot separate systems."""
+    return [src for src, ms in scores.items() if sum(m["recall@5"] >= 1.0 for m in ms.values()) >= SATURATED_MIN]
+
+
+def config_from_records(paths: dict[str, Path]) -> dict[str, Any]:
+    """The retrieval config, built only from the written E1 records (source -> record path)."""
+    records = {src: json.loads(p.read_text(encoding="utf-8")) for src, p in paths.items()}
+    scores = {src: {n: {k: m[k] for k in ("recall@5", "mrr")} for n, m in r["metrics"].items()} for src, r in records.items()}
+    winner = pick_winner(scores)
     kind, chunk = winner.rsplit("_", 1)
     undecided: dict[str, list[str]] = defaultdict(list)  # others the winner does not measurably beat
-    for source, path in paths.items():
-        for c in json.loads(path.read_text(encoding="utf-8"))["comparisons"]:
+    for source, r in records.items():
+        for c in r["comparisons"]:
             if c["ci"][0] <= 0 <= c["ci"][1]:
                 undecided[c["b"]].append(source)
-    return {
+    saturated = saturated_sources(scores)
+    statement = (f"{winner} was picked by the rule, not shown to be better than: "
+                 + (", ".join(f"{n} ({' and '.join(srcs)})" for n, srcs in undecided.items()) or "nothing") + ".")
+    cfg: dict[str, Any] = {
         "split": SPLIT, "winner": winner, "mode": kind.replace("_rerank", ""), "rerank": kind.endswith("rerank"),
-        "chunk_turns": CHUNKS[chunk], "k": K, "pool": POOL, "reranker_model": reranker.model_name,
+        "chunk_turns": CHUNKS[chunk], "k": K, "pool": POOL, "reranker_model": next(iter(records.values()))["models"]["reranker"],
         "rule": WINNER_RULE, "query_rule": QUERY_RULE,
-        "scores": {src: {n: {k: m[k] for k in ("recall@5", "mrr")} for n, m in ms.items()} for src, ms in metrics.items()},
+        "scores": scores,
         "no_measurable_difference_from": dict(undecided),
         "run_ids": {src: p.stem for src, p in paths.items()},
+        "labels_reviewed": all(r["labels_reviewed"] for r in records.values()),
+        "not_measurably_better_than_statement": statement,
+        "saturated_sources": saturated,
     }
+    if saturated:
+        cfg["saturation_note"] = (f"{', '.join(saturated)}: {SATURATED_MIN} or more systems have recall@5 of 1.0, so "
+                                  "that source cannot separate them and only the other sources decide between them.")
+    return cfg
+
+
+def _write_config(cfg: dict[str, Any], root: Path) -> None:
+    (root / CONFIG_REL).parent.mkdir(parents=True, exist_ok=True)
+    (root / CONFIG_REL).write_text(json.dumps(cfg, indent=1) + "\n", encoding="utf-8")
+
+
+def regenerate_config(root: Path = ROOT, run_ids: dict[str, str] | None = None) -> dict[str, Any]:
+    """Rewrite the config from records already in results/runs/ (those named in the current config by default).
+    Reads records only; nothing is run and no record changes."""
+    if run_ids is None:
+        run_ids = json.loads((root / CONFIG_REL).read_text(encoding="utf-8"))["run_ids"]
+    cfg = config_from_records({src: root / "results/runs" / f"{rid}.json" for src, rid in run_ids.items()})
+    _write_config(cfg, root)
+    return cfg
 
 
 def main() -> int:

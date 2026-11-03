@@ -101,5 +101,11 @@
  "run_ids": {
   "scenarios": "E1-20261103T034100128807Z",
   "qmsum": "E1-20261103T035342386305Z"
- }
+ },
+ "labels_reviewed": false,
+ "not_measurably_better_than_statement": "hybrid_t1 was picked by the rule, not shown to be better than: dense_t1 (scenarios and qmsum), hybrid_rerank_t1 (scenarios and qmsum), dense_w3 (scenarios), hybrid_w3 (scenarios), hybrid_rerank_w3 (scenarios).",
+ "saturated_sources": [
+  "scenarios"
+ ],
+ "saturation_note": "scenarios: 3 or more systems have recall@5 of 1.0, so that source cannot separate them and only the other sources decide between them."
 }
