@@ -10,5 +10,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  speech:
+    build: ./speech
+    ports:
+      - "50051:50051"
+
 volumes:
   pgdata:

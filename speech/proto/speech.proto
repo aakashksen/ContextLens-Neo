@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package contextlens.speech;
+
+// Audio is 16 kHz, mono, signed 16-bit little-endian PCM, split into chunks of any size.
+message AudioChunk {
+  bytes pcm = 1;
+}
+
+// Times are milliseconds from the start of the stream.
+message TranscriptSegment {
+  string text = 1;
+  int64 start_ms = 2;
+  int64 end_ms = 3;
+  bool is_final = 4;
+}
+
+// The server sends its compute backend ("cpu" or "gpu:<name>") as initial metadata
+// under the key "x-compute-backend".
+service Speech {
+  rpc Transcribe(stream AudioChunk) returns (stream TranscriptSegment);
+}
