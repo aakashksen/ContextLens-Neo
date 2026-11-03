@@ -16,6 +16,8 @@ export type SocketCtor = new (url: string) => WebSocket;
 export class Session {
   private ws: WebSocket;
   private listeners = new Set<() => void>();
+  // True from the user's Resume press until the server answers recording.
+  private resumePending = false;
   private state: SessionState = { connection: 'connecting', error: null, turns: [], card: null, waiting: false };
 
   constructor(
@@ -26,7 +28,9 @@ export class Session {
     this.ws = new Socket(url);
     this.ws.onmessage = (e) => this.receive(e.data);
     this.ws.onclose = () => {
-      if (this.state.connection !== 'deleted') this.set({ connection: 'closed', waiting: false });
+      if (this.state.connection === 'deleted') return;
+      this.resumePending = false;
+      this.set({ connection: 'closed', waiting: false });
     };
     this.ws.onerror = () => this.set({ error: 'Could not reach the server.' });
   }
@@ -56,10 +60,22 @@ export class Session {
       this.set({ error: msg.detail ?? 'The server reported an error.', waiting: false });
     } else if (msg.state === 'deleted') {
       this.set({ connection: 'deleted', turns: [], card: null, waiting: false, error: null });
-    } else if (this.state.connection === 'deleting' || this.state.connection === 'closed') {
-      // A late status must not restart capture after delete or disconnect.
     } else {
-      this.set({ connection: msg.state, error: null });
+      this.receiveStatus(msg.state);
+    }
+  }
+
+  // Capture may start only from the first connect or a Resume the user pressed.
+  // After pause, delete or close, a recording status is stale and is ignored.
+  private receiveStatus(state: 'recording' | 'paused') {
+    const c = this.state.connection;
+    if (c === 'deleting' || c === 'deleted' || c === 'closed') return;
+    if (state === 'recording') {
+      if (c === 'paused' && !this.resumePending) return;
+      this.resumePending = false;
+      this.set({ connection: 'recording', error: null });
+    } else if (c !== 'paused') {
+      this.set({ connection: 'paused', error: null });
     }
   }
 
@@ -85,15 +101,21 @@ export class Session {
 
   pause() {
     if (this.state.connection !== 'recording') return;
+    this.resumePending = false;
     this.set({ connection: 'paused' });
     this.send({ type: 'pause' });
   }
 
   resume() {
+    if (this.state.connection !== 'paused' || this.resumePending) return;
+    this.resumePending = true;
     this.send({ type: 'resume' });
   }
 
   delete() {
+    const c = this.state.connection;
+    if (c === 'deleting' || c === 'deleted' || c === 'closed') return;
+    this.resumePending = false;
     this.set({ connection: 'deleting' });
     this.send({ type: 'delete' });
   }
