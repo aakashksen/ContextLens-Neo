@@ -19,3 +19,4 @@ orchestration/run_loop.log
 *.egg-info/
 orchestration/.state.lock
 orchestration/.land.lock
+results/study/

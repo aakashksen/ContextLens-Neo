@@ -35,5 +35,37 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # Opt-in metrics and dashboards: `docker compose --profile obs up -d prometheus grafana`. Plain `up` never
+  # starts them. Grafana needs GRAFANA_ADMIN_PASSWORD in the environment (.env); there is no default.
+  prometheus:
+    profiles: ["obs"]
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    profiles: ["obs"]
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    # An empty password would fall back to Grafana's built-in default, so refuse to start without one.
+    entrypoint:
+      - sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "set GRAFANA_ADMIN_PASSWORD" >&2; exit 1; }; exec /run.sh'
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:

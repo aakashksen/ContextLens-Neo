@@ -4,6 +4,8 @@ from contextlens.llm.untrusted import effective_speaker
 from contextlens.memory.store import TranscriptStore
 from contextlens.schemas import Card, EvidenceRef, Finding
 
+SCENE_PREFIX = "scene:"  # reserved: scene notes only. Never use it for a turn id; guard_card drops such citations
+
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
@@ -19,7 +21,7 @@ def guard_card(
         refs: list[EvidenceRef] = []
         for e in f.evidence:
             t = known.get(e.turn_id)
-            if t is None or not e.quote.strip() or _norm(e.quote) not in _norm(t.text):
+            if e.turn_id.startswith(SCENE_PREFIX) or t is None or not e.quote.strip() or _norm(e.quote) not in _norm(t.text):
                 break
             refs.append(
                 e.model_copy(
