@@ -118,7 +118,7 @@ def build_cases(dev: dict[str, list[Scenario]], rescored: dict[str, list[dict]],
         if [r["id"] for r in rescored[src]] != ids or [p.scenario_id for p in prompted[src]] != ids:
             raise ValueError(f"{src}: the dev, rescored and prompted ids do not line up")
         t_ms = {p.scenario_id: p.stage_latency_ms.get("total") for p in (trained or {}).get(src, [])}
-        for s, r, p in zip(scs, rescored[src], prompted[src]):
+        for s, r, p in zip(scs, rescored[src], prompted[src], strict=True):
             if s.gold_label is None:
                 continue
             out.append(Case(src, s.id, s.gold_label == "contradiction", r["probs"]["contradiction"],

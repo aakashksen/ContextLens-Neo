@@ -220,7 +220,9 @@ class GpuGuard(Sandbox):
         self.assertEqual(self.run_ctl("unused", "start", "T2").returncode, 0)
 
 
-class Tracks(Sandbox):
+class TrackSandbox(Sandbox):
+    """Tracks' fixtures. Decisions shares them without inheriting (and rerunning) Tracks' tests."""
+
     def setUp(self):
         super().setUp()
         self.wt_root = Path(self.tmp.name + "-wt")
@@ -251,6 +253,8 @@ class Tracks(Sandbox):
         self.assertEqual(self.ctl("verify", task_id).returncode, 0)
         self.verdict(task_id, commit=commit)
 
+
+class Tracks(TrackSandbox):
     def test_next_offers_every_independent_task(self):
         state = json.loads(self.ctl("next").stdout)
         self.assertEqual([t["id"] for t in state["ready"]], ["T1", "T2"])
@@ -424,7 +428,7 @@ class Tracks(Sandbox):
         self.assertEqual({self.state(t["id"])["status"] for t in tasks}, {"in_progress"})
 
 
-class Decisions(Tracks):
+class Decisions(TrackSandbox):
     """Closing a task needs docs/DECISIONS.md to mention its id, in the copy that is being closed."""
 
     def decisions(self, text, base=None):

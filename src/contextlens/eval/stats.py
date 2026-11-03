@@ -19,7 +19,7 @@ def _by_group(values: Sequence[float], groups: Sequence[str]) -> list[list[float
     if len(values) != len(groups):
         raise ValueError("values and groups differ in length")
     d: dict[str, list[float]] = defaultdict(list)
-    for v, g in zip(values, groups):
+    for v, g in zip(values, groups, strict=True):
         d[g].append(v)
     return list(d.values())
 
@@ -52,7 +52,7 @@ def paired_bootstrap_diff(
     """(mean of a-b, lo, hi) with a 95% interval, resampling whole conversations."""
     if len(a) != len(b):
         raise ValueError("a and b differ in length")
-    diffs = [x - y for x, y in zip(a, b)]
+    diffs = [x - y for x, y in zip(a, b, strict=True)]
     means = _resample_means(_by_group(diffs, groups), n, seed)
     return sum(diffs) / len(diffs), percentile(means, 2.5), percentile(means, 97.5)
 
@@ -61,8 +61,8 @@ def mcnemar_exact(a_correct: Sequence[bool], b_correct: Sequence[bool]) -> float
     """Two-sided exact McNemar p-value on discordant pairs."""
     if len(a_correct) != len(b_correct):
         raise ValueError("a_correct and b_correct differ in length")
-    b = sum(1 for x, y in zip(a_correct, b_correct) if x and not y)
-    c = sum(1 for x, y in zip(a_correct, b_correct) if y and not x)
+    b = sum(1 for x, y in zip(a_correct, b_correct, strict=True) if x and not y)
+    c = sum(1 for x, y in zip(a_correct, b_correct, strict=True) if y and not x)
     m = b + c
     if m == 0:
         return 1.0

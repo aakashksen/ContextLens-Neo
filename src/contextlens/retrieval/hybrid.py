@@ -27,7 +27,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
     na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
     if na == 0 or nb == 0:
         return 0.0
-    return sum(x * y for x, y in zip(a, b)) / (na * nb)
+    return sum(x * y for x, y in zip(a, b, strict=True)) / (na * nb)
 
 
 def _bm25(query: str, docs: list[Turn], k1: float = 1.5, b: float = 0.75) -> list[float]:
@@ -64,7 +64,7 @@ class Retriever:
             have = {t.id: self._cache[t.id, t.text] for t in turns if (t.id, t.text) in self._cache}
             missing = [t for t in turns if t.id not in have]
             if missing:
-                for t, v in zip(missing, self.embedder.embed([t.text for t in missing])):
+                for t, v in zip(missing, self.embedder.embed([t.text for t in missing]), strict=True):
                     self._cache[t.id, t.text] = have[t.id] = v
         return [have[t.id] for t in turns]
 
