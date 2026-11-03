@@ -117,6 +117,10 @@ class TrainedChecker:
         model, tokenizer, labels = load_checkpoint(directory)
         return cls(model.to(device), tokenizer, labels, threshold)
 
+    def probabilities(self, statement: Turn, earlier: list[Turn]) -> dict[ConsistencyLabel, float]:
+        probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]
+        return dict(zip(self.labels, probs))  # type: ignore[arg-type]
+
     def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]:
         probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]
         best = max(range(len(probs)), key=probs.__getitem__)
