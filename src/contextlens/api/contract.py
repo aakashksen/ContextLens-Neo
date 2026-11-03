@@ -36,6 +36,13 @@ class TranscriptMessage(BaseModel):
     turn: Turn
 
 
+class TurnUpdateMessage(BaseModel):
+    """A turn already sent as `transcript` now has a (new) speaker. Same id and seq; replace, do not append."""
+
+    type: Literal["turn_update"] = "turn_update"
+    turn: Turn
+
+
 class CardMessage(BaseModel):
     type: Literal["card"] = "card"
     card: Card
@@ -52,7 +59,7 @@ ClientMessage = Annotated[
     Field(discriminator="type"),
 ]
 ServerMessage = Annotated[
-    TranscriptMessage | CardMessage | StatusMessage, Field(discriminator="type")
+    TranscriptMessage | TurnUpdateMessage | CardMessage | StatusMessage, Field(discriminator="type")
 ]
 
 client_adapter: TypeAdapter = TypeAdapter(ClientMessage)

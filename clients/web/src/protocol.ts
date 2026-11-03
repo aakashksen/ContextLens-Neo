@@ -44,6 +44,7 @@ export type StatusState = 'recording' | 'paused' | 'deleted' | 'error';
 
 export type ServerMessage =
   | { type: 'transcript'; turn: Turn }
+  | { type: 'turn_update'; turn: Turn }
   | { type: 'card'; card: Card }
   | { type: 'status'; state: StatusState; detail?: string | null };
 
@@ -70,6 +71,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   }
   if (!m || typeof m !== 'object') return null;
   if (m.type === 'transcript' && m.turn && typeof m.turn.seq === 'number' && typeof m.turn.text === 'string') {
+    return m as ServerMessage;
+  }
+  if (m.type === 'turn_update' && m.turn && typeof m.turn.seq === 'number' && typeof m.turn.id === 'string') {
     return m as ServerMessage;
   }
   if (m.type === 'card' && m.card && STATUSES.includes(m.card.status) && Array.isArray(m.card.findings)) {

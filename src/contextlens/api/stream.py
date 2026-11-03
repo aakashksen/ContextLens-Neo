@@ -17,8 +17,10 @@ from contextlens.api.contract import (
     CardMessage,
     StatusMessage,
     TranscriptMessage,
+    TurnUpdateMessage,
     client_adapter,
 )
+from contextlens.llm.warm import Warmup
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
 from contextlens.memory.store import TranscriptStore
 from contextlens.memory.summary import RollingSummary
@@ -46,6 +48,10 @@ class Services:
     speech_timeout_s: float = 3.0
     speech_retry_s: float = 10.0
     answer_timeout_s: float = 60.0
+    forget: Callable[[str], None] | None = None  # called with the conversation id when its data is deleted
+    on_shutdown: Callable[[], None] | None = None
+    warmup: Warmup | None = None  # when set, no connection is accepted until the models are loaded
+    idle_evict_s: float = 900.0  # a conversation nobody is connected to for this long is dropped from memory
 
 
 class _FrozenStore:
@@ -78,7 +84,10 @@ class ConversationState:
         self.diarizer = Diarizer(conv_id)  # gets its backend from load_backend(), off the connection's path
         self._backend_task: asyncio.Task | None = None
         self.summary = svc.make_summary() if svc.make_summary else None
-        self.memory_upto = -1
+        self.memory_upto = max((m.as_of_seq for m in svc.memory.items(conv_id, ALL)), default=-1)
+        self.connections: set[Connection] = set()
+        self.last_active = time.monotonic()
+        self.told: dict[int, str] = {}  # seq -> the speaker clients were last told for that turn
         self._memory_dirty = False
         self._memory_task: asyncio.Task | None = None
         self._speaker_dirty = False
@@ -107,6 +116,10 @@ class ConversationState:
             return
         if backend is not None:
             self.diarizer.set_backend(backend)
+
+    def idle(self, idle_s: float) -> bool:
+        busy = any(t is not None and not t.done() for t in (self._memory_task, self._speaker_task))
+        return not self.connections and not busy and time.monotonic() - self.last_active >= idle_s
 
     # -- ingest --
 
@@ -158,9 +171,8 @@ class ConversationState:
             self.memory_upto = new[-1].seq
 
     # -- speakers, in the background --
-    # A turn is sent as "unknown". When the pipeline later names its speaker, only the stored turn changes: the
-    # contract has no message for updating a sent turn, and resending it would show twice in clients that append.
-    # Cards cite the stored turn, so they carry the speaker once it is known.
+    # A turn is sent as "unknown". When the pipeline later names its speaker, the stored turn changes and
+    # connections get a `turn_update` with the whole turn, once per change. Cards cite the stored turn.
 
     def schedule_speakers(self) -> None:
         if not self.diarizer.background:
@@ -172,24 +184,31 @@ class ConversationState:
     async def _speaker_loop(self) -> None:
         while self._speaker_dirty:
             self._speaker_dirty = False
+            epoch = self.epoch
             try:
-                await asyncio.to_thread(self._speaker_step, self.epoch)
+                changed = await asyncio.to_thread(self._speaker_step, epoch)
+                for turn in changed:
+                    sent = [await c.send(TurnUpdateMessage(turn=turn), epoch) for c in list(self.connections)]
+                    if any(sent) and epoch == self.epoch:
+                        self.told[turn.seq] = turn.speaker
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 log.warning("speaker assignment failed: %s", type(exc).__name__)
 
-    def _speaker_step(self, epoch: int) -> None:
+    def _speaker_step(self, epoch: int) -> list[Turn]:
         pcm, start = self.diarizer.window()
         if not pcm:
-            return
+            return []
         spans = self.diarizer.backend.spans(pcm)
         with self.lock:
             if epoch != self.epoch:
-                return  # deleted while the pipeline ran: its result is dropped
+                return []  # deleted while the pipeline ran: its result is dropped
             turns = self.svc.store.turns(self.conv_id, ALL)
             for seq, speaker, confidence in self.diarizer.speaker_updates(spans, start, start + len(pcm) // BYTES_PER_MS, turns):
                 self.svc.store.relabel(self.conv_id, seq, speaker, confidence)
+            now = self.svc.store.turns(self.conv_id, ALL)
+            return [t for t in now if t.seq in self.told and self.told[t.seq] != t.speaker]
 
     # -- delete --
 
@@ -203,6 +222,9 @@ class ConversationState:
             self.summary = self.svc.make_summary() if self.svc.make_summary else None
             self.memory_upto = -1
             self.last_sent_seq = -1
+            self.told.clear()
+            if self.svc.forget is not None:
+                self.svc.forget(self.conv_id)
 
     def stop_background(self) -> None:
         self._memory_dirty = self._speaker_dirty = False
@@ -241,6 +263,7 @@ class Connection:
 
     async def run(self) -> None:
         await self.ws.accept()
+        self.conv.connections.add(self)
         await self.send(StatusMessage(state="recording"))
         try:
             while True:
@@ -275,6 +298,8 @@ class Connection:
             return
         finally:
             self.closed = True
+            self.conv.connections.discard(self)
+            self.conv.last_active = time.monotonic()
             await self._close_stream()
             for t in list(self.answers):
                 t.cancel()
@@ -351,6 +376,7 @@ class Connection:
                 for turn in turns:
                     if await self.send(TranscriptMessage(turn=turn), epoch):
                         self.conv.last_sent_seq = max(self.conv.last_sent_seq, turn.seq)
+                        self.conv.told[turn.seq] = turn.speaker
                 if turns:
                     self.conv.schedule_memory()
                     self.conv.schedule_speakers()

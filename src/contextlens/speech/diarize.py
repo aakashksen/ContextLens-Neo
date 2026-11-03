@@ -7,6 +7,7 @@ is filled in later in the background (`speaker_updates`). Without a backend ever
 
 import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -77,6 +78,37 @@ class PyannoteBackend:
             (round(seg.start * 1000), round(seg.end * 1000), str(label))
             for seg, _, label in annotation.itertracks(yield_label=True)
         ]
+
+
+class SharedSpeakerModel:
+    """One speaker model for every conversation: loaded on the first call, and used by one conversation at a time.
+    A load that fails is not tried again; the same error is raised to each caller."""
+
+    def __init__(self, load: Callable[[], WindowBackend]) -> None:
+        self._load, self._backend, self._error = load, None, None
+        self._mu = threading.Lock()  # loading
+        self._run = threading.Lock()  # running the model
+
+    def __call__(self) -> WindowBackend:
+        with self._mu:
+            if self._error is not None:
+                raise self._error
+            if self._backend is None:
+                try:
+                    self._backend = _Serialized(self._load(), self._run)
+                except Exception as exc:
+                    self._error = exc
+                    raise
+            return self._backend
+
+
+class _Serialized:
+    def __init__(self, inner: WindowBackend, lock: threading.Lock) -> None:
+        self._inner, self._lock = inner, lock
+
+    def spans(self, pcm: bytes) -> list[tuple[int, int, str]]:
+        with self._lock:
+            return self._inner.spans(pcm)
 
 
 class Diarizer:

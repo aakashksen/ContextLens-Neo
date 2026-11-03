@@ -9,6 +9,8 @@ export interface SessionState {
   turns: Turn[];
   card: Card | null;
   waiting: boolean;
+  // The server reported an error while recording. Capture stays off until a recording status follows a Resume.
+  fault: boolean;
 }
 
 export type SocketCtor = new (url: string) => WebSocket;
@@ -18,7 +20,7 @@ export class Session {
   private listeners = new Set<() => void>();
   // True from the user's Resume press until the server answers recording.
   private resumePending = false;
-  private state: SessionState = { connection: 'connecting', error: null, turns: [], card: null, waiting: false };
+  private state: SessionState = { connection: 'connecting', error: null, turns: [], card: null, waiting: false, fault: false };
 
   constructor(
     url: string,
@@ -52,14 +54,20 @@ export class Session {
   private receive(raw: unknown) {
     const msg = parseServerMessage(raw);
     if (!msg) return;
+    if (msg.type !== 'status' && this.state.connection === 'deleted') return;
     if (msg.type === 'transcript') {
       this.set({ turns: [...this.state.turns, msg.turn] });
+    } else if (msg.type === 'turn_update') {
+      const update = msg.turn;
+      if (!this.state.turns.some((t) => t.id === update.id)) return;
+      this.set({ turns: this.state.turns.map((t) => (t.id === update.id ? update : t)) });
     } else if (msg.type === 'card') {
       this.set({ card: msg.card, waiting: false });
     } else if (msg.state === 'error') {
-      this.set({ error: msg.detail ?? 'The server reported an error.', waiting: false });
+      const fault = this.state.fault || this.state.connection === 'recording';
+      this.set({ error: msg.detail ?? 'The server reported an error.', waiting: false, fault });
     } else if (msg.state === 'deleted') {
-      this.set({ connection: 'deleted', turns: [], card: null, waiting: false, error: null });
+      this.set({ connection: 'deleted', turns: [], card: null, waiting: false, error: null, fault: false });
     } else {
       this.receiveStatus(msg.state);
     }
@@ -73,7 +81,7 @@ export class Session {
     if (state === 'recording') {
       if (c === 'paused' && !this.resumePending) return;
       this.resumePending = false;
-      this.set({ connection: 'recording', error: null });
+      this.set({ connection: 'recording', error: null, fault: false });
     } else if (c !== 'paused') {
       this.set({ connection: 'paused', error: null });
     }
@@ -85,14 +93,14 @@ export class Session {
 
   // Audio leaves only while the client itself believes it is recording.
   sendAudio(data: string, sampleRate = 16000) {
-    if (this.state.connection !== 'recording') return;
+    if (this.state.connection !== 'recording' || this.state.fault) return;
     this.send({ type: 'audio', data, sample_rate: sampleRate });
   }
 
   press(detail: Detail) {
     const last = this.state.turns[this.state.turns.length - 1];
     if (!last) return;
-    this.set({ waiting: true, error: null });
+    this.set({ waiting: true, error: this.state.fault ? this.state.error : null });
     this.send({
       type: 'press',
       request: { conversation_id: this.conversationId, as_of_seq: last.seq, detail },

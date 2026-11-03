@@ -467,17 +467,22 @@ def speakers(svc, conv="c1"):
     return [(t.speaker, t.speaker_confidence) for t in svc.store.turns(conv, 10**9)]
 
 
-def test_speakers_are_assigned_in_the_background_without_resending_turns():
+def test_speakers_are_assigned_in_the_background_and_sent_as_turn_updates():
     spans = Spans()
     client, svc = build(backend=spans)
     with client.websocket_connect("/ws/c1") as ws:
         ws.receive_json()
-        for t in hear_audio(ws, 2):
-            assert (t["speaker"], t["speaker_confidence"]) == ("unknown", 0.0)  # sent before any speaker is known
+        for _ in range(2):
+            ws.send_json(ONE_SECOND)
+        frames = [ws.receive_json() for _ in range(4)]  # two transcripts and, once the pipeline has run, two updates
+        sent = [f["turn"] for f in frames if f["type"] == "transcript"]
+        assert [(t["seq"], t["speaker"], t["speaker_confidence"]) for t in sent] == [(0, "unknown", 0.0), (1, "unknown", 0.0)]
+        updates = {f["turn"]["seq"]: f["turn"]["speaker"] for f in frames if f["type"] == "turn_update"}
+        assert updates == {0: "speaker_1", 1: "speaker_2"}
         assert wait_for(lambda: speakers(svc) == [("speaker_1", 1.0), ("speaker_2", 1.0)])
         ws.send_json(ONE_SECOND)
-        msg = ws.receive_json()  # the next frame is the next turn: no turn is sent twice
-        assert (msg["type"], msg["turn"]["seq"]) == ("transcript", 2)
+        msgs = [ws.receive_json(), ws.receive_json()]
+        assert sorted((m["type"], m["turn"]["seq"]) for m in msgs) == [("transcript", 2), ("turn_update", 2)]  # no resends
         assert wait_for(lambda: [s for s, _ in speakers(svc)] == ["speaker_1", "speaker_2", "speaker_1"])
 
 

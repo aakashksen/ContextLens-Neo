@@ -74,6 +74,16 @@ namespace ContextLens
                         turns.Add(JsonUtility.FromJson<TranscriptMessage>(frame).turn);
                         RefreshTranscript();
                         break;
+                    case "turn_update":
+                        // The same turn with its speaker now known: replace it, never append.
+                        var update = JsonUtility.FromJson<TurnUpdateMessage>(frame).turn;
+                        var at = turns.FindIndex(t => t.id == update.id);
+                        if (at >= 0)
+                        {
+                            turns[at] = update;
+                            RefreshTranscript();
+                        }
+                        break;
                     case "card":
                         ShowCard(JsonUtility.FromJson<CardMessage>(frame).card);
                         break;

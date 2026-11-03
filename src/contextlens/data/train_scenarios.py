@@ -118,6 +118,12 @@ def held_out(scenarios_root: Path = SCENARIOS_DIR) -> list[Scenario]:
     return [s for split in ("dev", "test") for s in load_scenarios(split, scenarios_root)]
 
 
+def held_out_present(scenarios_root: Path = SCENARIOS_DIR) -> list[Scenario]:
+    """Like `held_out`, for whichever of the dev and test files exist under `scenarios_root`."""
+    return [s for split in ("dev", "test") if (scenarios_root / f"{split}.jsonl").is_file()
+            for s in load_scenarios(split, scenarios_root)]
+
+
 def load_train_scenarios(root: Path = TRAIN_DIR) -> list[Scenario]:
     return load_scenarios("train", root)
 

@@ -22,6 +22,7 @@ class PromptedChecker:
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
         self.prompt = get_prompt("consistency", "v1")
+        self.last_tokens: int | None = None  # prompt plus completion tokens of the last call; None if it failed
 
     def check(
         self, statement: Turn, earlier: list[Turn]
@@ -30,6 +31,9 @@ class PromptedChecker:
             {"role": "system", "content": self.prompt.text},
             {"role": "user", "content": render_transcript_block([*earlier, statement])},
         ]
-        out = self.llm.complete(messages, schema=_Out, max_tokens=100).parsed
+        self.last_tokens = None
+        res = self.llm.complete(messages, schema=_Out, max_tokens=100)
+        out = res.parsed
         assert isinstance(out, _Out)
+        self.last_tokens = res.prompt_tokens + res.completion_tokens
         return out.label, max(0.0, min(1.0, out.confidence))

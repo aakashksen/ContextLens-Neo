@@ -164,9 +164,25 @@ def _post_json(url: str, payload: dict, timeout_s: float) -> dict:
         raise LLMError(f"request to {url} failed: {err}") from err
 
 
+def unload_ollama(model: str, base_url: str = "http://127.0.0.1:11434") -> bool:
+    """Ask Ollama to drop `model` from memory (keep_alive 0). False when the server cannot be reached; never raises."""
+    try:
+        _post_json(f"{base_url.rstrip('/')}/api/generate", {"model": model, "keep_alive": 0}, 30.0)
+    except LLMError:
+        return False
+    return True
+
+
 class OllamaClient(_Base):
-    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434"):
-        self.model, self.base_url = model, base_url.rstrip("/")
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434", keep_alive: str | None = None):
+        self.model, self.base_url, self.keep_alive = model, base_url.rstrip("/"), keep_alive
+
+    def load(self, timeout_s: float = 300.0) -> None:
+        """Loads the model into memory without a prompt (an empty message list does that)."""
+        payload: dict = {"model": self.model, "messages": [], "stream": False}
+        if self.keep_alive:
+            payload["keep_alive"] = self.keep_alive
+        _post_json(f"{self.base_url}/api/chat", payload, timeout_s)
 
     def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
         payload = {
@@ -176,6 +192,8 @@ class OllamaClient(_Base):
             "think": False,
             "options": {"num_predict": max_tokens, "temperature": temperature},
         }
+        if self.keep_alive:
+            payload["keep_alive"] = self.keep_alive
         if schema is not None:
             payload["format"] = schema.model_json_schema()
         t0 = time.perf_counter()
@@ -226,11 +244,16 @@ class OpenAICompatClient(_Base):
 
 
 class Embedder:
-    def __init__(self, model: str = "nomic-embed-text", base_url: str = "http://127.0.0.1:11434"):
-        self.model, self.base_url = model, base_url.rstrip("/")
+    def __init__(
+        self, model: str = "nomic-embed-text", base_url: str = "http://127.0.0.1:11434", keep_alive: str | None = None
+    ):
+        self.model, self.base_url, self.keep_alive = model, base_url.rstrip("/"), keep_alive
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        data = _post_json(f"{self.base_url}/api/embed", {"model": self.model, "input": texts}, 60.0)
+        payload: dict = {"model": self.model, "input": texts}
+        if self.keep_alive:
+            payload["keep_alive"] = self.keep_alive
+        data = _post_json(f"{self.base_url}/api/embed", payload, 60.0)
         vectors = data.get("embeddings")
         if not isinstance(vectors, list) or len(vectors) != len(texts):
             raise LLMError(f"unexpected embedding reply: {str(data)[:200]}")
