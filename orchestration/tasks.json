@@ -570,10 +570,12 @@
       "worktree": "<local path>",
       "started_at": "2026-11-03T07:44:16+00:00",
       "verified": {
-        "commit": "2dbadc2a054f306818167685859ca190d01ba0c3",
+        "commit": "eaa7b8c52716af7832885d6bff57cd63eef5ffe2",
         "passed": true,
-        "at": "2026-11-03T07:56:51+00:00"
-      }
+        "at": "2026-11-03T08:23:04+00:00"
+      },
+      "attempts": 1,
+      "reason": "a raising make_backend kills the websocket (stream.py:78 runs in the handler), so a diarizer load failure breaks every connection instead of leaving turns unknown"
     },
     {
       "id": "T8.3",
@@ -612,7 +614,16 @@
         "{py} -m pytest tests/test_obs.py tests/test_vision.py -q",
         "docker compose config -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T08:05:15+00:00",
+      "verified": {
+        "commit": "fd201cfcb0ccd4d6311d5543d7e17806c3d9dd39",
+        "passed": true,
+        "at": "2026-11-03T08:30:39+00:00"
+      },
+      "attempts": 1,
+      "reason": "SingleAgent gets no agent span or token metric; a slow exporter delays answer by 2s; span start approximation unstated; SceneStore has no delete; privacy test never fills suggestion or missing",
+      "done_at": "2026-11-03T08:35:57+00:00"
     },
     {
       "id": "T8.6",
