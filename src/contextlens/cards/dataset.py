@@ -54,6 +54,8 @@ N_RECENT = 3
 ABSTAIN_EVERY = 5  # about one recall example in five has its gold evidence removed
 VAL_EVERY = 5  # about one conversation in five goes to val
 WINDOW = 3
+# Guards against accidental reuse in our hand-written set, not a deliberate paraphrase. Turns in
+# short conversations average 6 words, so a one-word edit per turn gets past 50% about half the time.
 CONV_MATCH_REFUSE = 0.5  # share of a training conversation's 3-word windows found in one dev/test conversation
 
 
