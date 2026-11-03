@@ -38,6 +38,27 @@ def test_retry_succeeds_with_valid_second_answer():
     assert res.parsed == Answer(answer="ok")
 
 
+class Counting(FakeLLM):
+    def _raw(self, *a):
+        res = super()._raw(*a)
+        return res.model_copy(update={"prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.5})
+
+
+def test_retry_success_reports_both_attempts():
+    res = Counting(["nope", '{"answer": "ok"}']).complete(MSGS, schema=Answer)
+    assert (res.prompt_tokens, res.completion_tokens, res.cost_usd) == (20, 10, 1.0)
+
+
+def test_failed_attempts_are_carried_on_the_error():
+    with pytest.raises(LLMError) as err:
+        Counting(["nope", "still nope"]).complete(MSGS, schema=Answer)
+    assert [r.prompt_tokens for r in err.value.results] == [10, 10]
+    with pytest.raises(LLMError) as err:
+        Counting(["nope"]).complete(MSGS, schema=Answer)  # the retry itself fails
+    assert [r.prompt_tokens for r in err.value.results] == [10]
+    assert LLMError("plain").results == []
+
+
 def test_timeout_raises_llm_error(monkeypatch):
     def boom(*a, **k):
         raise socket.timeout("timed out")

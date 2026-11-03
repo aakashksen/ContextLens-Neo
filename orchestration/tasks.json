@@ -339,16 +339,17 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:41:55+00:00",
+      "attempts": 1,
+      "reason": "finding dropped by the number rule leaves no note on the card: card.missing stays empty in 12 of 13 should-drop cases (single.py _finish lines 275-281)",
+      "note": "one more attempt, decided by the coordinator: simple token-run number rule",
       "verified": {
-        "commit": "4efc114f83d3771ae2d38ed8337d826729f2c764",
+        "commit": "2706b61afe3a7ae023bb338f5258cc9b405734d0",
         "passed": true,
-        "at": "2026-11-03T06:06:45+00:00"
+        "at": "2026-11-03T07:02:41+00:00"
       },
-      "attempts": 2,
-      "reason": "suggestion rule drops 6 of 16 good dev suggestions yet paraphrased injected claims pass, drops unmarked; baselines have no deadline (20s invalid-reply path); no test for dropping suggestion on a findingless card"
+      "done_at": "2026-11-03T07:05:49+00:00"
     },
     {
       "id": "T3.3",
@@ -376,7 +377,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_team.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:05:56+00:00",
+      "verified": {
+        "commit": "19b3d62dc6017bc6a109058cf18d26b240fb2b0f",
+        "passed": true,
+        "at": "2026-11-03T07:36:42+00:00"
+      },
+      "attempts": 1,
+      "reason": "assistance_ms includes follow-up time already in the specialist's own ms; isolation test passes when Assistance gets raw quotes; follow-up escape and forced agent labels are untested",
+      "done_at": "2026-11-03T07:43:06+00:00"
     },
     {
       "id": "T4.2",
@@ -427,7 +437,9 @@
         "{py} -m pytest tests/test_e4.py -q",
         "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:47:48+00:00"
     },
     {
       "id": "T7.1",
@@ -468,7 +480,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:23:49+00:00",
+      "verified": {
+        "commit": "6968ed45fb6b8b23c83092b5885730532d4ae6c5",
+        "passed": true,
+        "at": "2026-11-03T07:31:23+00:00"
+      },
+      "attempts": 2,
+      "reason": "_check_train_scenarios compares whole turns exactly, so a dev conversation with one word edited per turn passes into training"
     },
     {
       "id": "T6.2",
@@ -478,7 +499,8 @@
       "deps": [
         "T6.1",
         "T3.3",
-        "T7.1"
+        "T7.1",
+        "T5.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_e5.py -q",
@@ -596,16 +618,16 @@
       "acceptance": [
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T06:00:09+00:00",
       "verified": {
-        "commit": "816f34e98ae73c8236c4d9626b4d68e4ffe38ab0",
+        "commit": "f4b243aed5dff77942db5aaf21ca3250a1739cf7",
         "passed": true,
-        "at": "2026-11-03T06:08:23+00:00"
+        "at": "2026-11-03T06:40:55+00:00"
       },
       "attempts": 1,
-      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
+      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply",
+      "done_at": "2026-11-03T06:51:32+00:00"
     },
     {
       "id": "T8.7",

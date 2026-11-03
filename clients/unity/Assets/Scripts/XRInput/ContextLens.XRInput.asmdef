@@ -1,0 +1,19 @@
+{
+    "name": "ContextLens.XRInput",
+    "rootNamespace": "ContextLens",
+    "references": [
+        "ContextLens",
+        "Unity.InputSystem"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "CONTEXTLENS_INPUT_SYSTEM"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "1.0.0",
+            "define": "CONTEXTLENS_INPUT_SYSTEM"
+        }
+    ]
+}
