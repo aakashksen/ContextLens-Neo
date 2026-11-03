@@ -135,7 +135,7 @@ def test_cache_is_written_atomically_and_ignored_by_git(repo: Path) -> None:
     assert (repo / check_cache.CACHE_REL).is_file()
     assert not list((repo / "results").glob("*.tmp")) and not list((repo / "results").glob(".*.tmp"))
     ignore = (Path(__file__).resolve().parents[1] / ".gitignore").read_text(encoding="utf-8")
-    assert check_cache.CACHE_REL.as_posix() in ignore.splitlines()
+    assert check_cache.CACHE_REL.as_posix() + "*" in ignore.splitlines()
 
 
 def test_unreadable_cache_is_treated_as_empty(repo: Path, calls: list[str]) -> None:
@@ -143,3 +143,72 @@ def test_unreadable_cache_is_treated_as_empty(repo: Path, calls: list[str]) -> N
     (repo / "results").mkdir(exist_ok=True)
     (repo / check_cache.CACHE_REL).write_text("{not json", encoding="utf-8")
     assert _cached(repo) == [] and len(calls) == 1
+
+
+def test_all_keeps_the_other_experiments_passes(repo: Path, calls: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(check_run, "ROOT", repo)
+    real_check, real_gone = check_run.check, check_run.superseded_by
+    monkeypatch.setattr(check_run, "check", lambda *a, **k: real_check(*a, root=repo, **k))
+    monkeypatch.setattr(check_run, "superseded_by", lambda e, root=repo: real_gone(e, repo))
+    _run(repo, experiment="E1")
+    _run(repo, experiment="E2")
+    assert check_run.main(["E1"]) == 0 and check_run.main(["E2"]) == 0 and len(calls) == 2
+    assert check_run.main(["E1", "--all"]) == 0 and len(calls) == 3  # E1 was rechecked
+    assert check_run.main(["E2"]) == 0 and len(calls) == 3  # E2's remembered pass survived
+
+
+def test_two_writers_do_not_lose_each_others_entries(repo: Path) -> None:
+    first, second = PassCache(repo, CODE), PassCache(repo, CODE)  # both loaded the empty cache
+    first.add("k1", "E1-a.json")
+    second.add("k2", "E2-b.json")
+    first.save()
+    second.save()
+    assert set(PassCache(repo, CODE).passed) == {"k1", "k2"}
+
+
+def test_a_stale_lock_is_taken_over_and_a_fresh_one_is_waited_for(repo: Path) -> None:
+    import os
+    import time
+
+    cache = PassCache(repo, CODE)
+    cache.add("k1", "x")
+    (repo / "results").mkdir(exist_ok=True)
+    lock = repo / "results/.check-cache.json.lock"
+    lock.write_text("", encoding="utf-8")
+    os.utime(lock, (time.time() - 1000, time.time() - 1000))
+    cache.save()
+    assert PassCache(repo, CODE).passed == {"k1": "x"} and not lock.exists()
+    lock.write_text("", encoding="utf-8")
+    with pytest.raises(TimeoutError):
+        with check_cache._locked(lock, wait_s=0.2):
+            pass
+    lock.unlink()
+
+
+def _rechecked_after(repo: Path, calls: list[str], change) -> None:  # type: ignore[no-untyped-def]
+    _cached(repo)
+    before = len(calls)
+    change()
+    _cached(repo)
+    assert len(calls) == before + 1
+
+
+def test_a_changed_scenario_file_forces_a_recheck(repo: Path, calls: list[str]) -> None:
+    _run(repo)
+    f = repo / "datasets/scenarios/dev.jsonl"
+    _rechecked_after(repo, calls, lambda: f.write_text(f.read_text(encoding="utf-8") + "\n", encoding="utf-8"))
+
+
+def test_a_changed_manifest_forces_a_recheck(repo: Path, calls: list[str]) -> None:
+    _run(repo)
+    f = repo / "datasets/splits/scenarios.json"
+    _rechecked_after(repo, calls, lambda: f.write_text(f.read_text(encoding="utf-8") + "\n", encoding="utf-8"))
+
+
+def test_a_changed_subset_file_forces_a_recheck(repo: Path, calls: list[str]) -> None:
+    from tests.test_subsets import _manifest, _preds
+
+    _manifest(repo)
+    _run(repo, preds=_preds("d1", "d2"), subset="s1")
+    f = repo / "datasets/splits/subsets/s1.json"
+    _rechecked_after(repo, calls, lambda: f.write_text(f.read_text(encoding="utf-8") + "\n", encoding="utf-8"))

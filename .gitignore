@@ -22,4 +22,4 @@ orchestration/.state.lock
 orchestration/.land.lock
 results/study/
 results/local/
-results/.check-cache.json
+results/.check-cache.json*

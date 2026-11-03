@@ -7,7 +7,11 @@ failed is never stored."""
 import ast
 import hashlib
 import json
+import os
 import sys
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -81,25 +85,62 @@ def record_key(path: Path, rec: dict[str, Any], root: Path, min_n: int, split: s
     return hashlib.sha256("\n".join(deps).encode()).hexdigest()
 
 
+@contextmanager
+def _locked(path: Path, wait_s: float = 30.0, stale_s: float = 120.0) -> Iterator[None]:
+    """Hold an exclusive lock file for the short read-merge-write of the cache, so two checks cannot lose
+    each other's entries. A lock older than `stale_s` belongs to a crashed process and is taken over."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            break
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime > stale_s:
+                    path.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                continue
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"could not lock {path}")
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
 class PassCache:
+    """`read=False` (check_run --all) makes every lookup a miss but still keeps the stored entries, so a full
+    check of one experiment does not empty the cache of the others."""
+
     def __init__(self, root: Path, code: str, *, read: bool = True) -> None:
         self.path = root / CACHE_REL
         self.code = code
-        self.passed: dict[str, str] = {}
-        if read and self.path.is_file():
-            try:
-                data = json.loads(self.path.read_text(encoding="utf-8"))
-                if isinstance(data, dict) and data.get("code") == code and isinstance(data.get("passed"), dict):
-                    self.passed = data["passed"]
-            except ValueError:
-                pass  # an unreadable cache is an empty one
+        self.read = read
+        self.passed: dict[str, str] = self._stored()
+
+    def _stored(self) -> dict[str, str]:
+        """Entries on disk for this code; an unreadable file, or one for other code, is empty."""
+        if not self.path.is_file():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except ValueError:
+            return {}
+        if isinstance(data, dict) and data.get("code") == self.code and isinstance(data.get("passed"), dict):
+            return data["passed"]
+        return {}
 
     def hit(self, key: str) -> bool:
-        return key in self.passed
+        return self.read and key in self.passed
 
     def add(self, key: str, name: str) -> None:
         self.passed[key] = name
 
     def save(self) -> None:
+        """Merge with what is on disk now (another check may have written since this one loaded), then replace."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        write_atomic(self.path, json.dumps({"code": self.code, "passed": self.passed}, indent=1) + "\n")
+        with _locked(self.path.with_name(self.path.name + ".lock")):
+            self.passed = {**self._stored(), **self.passed}
+            write_atomic(self.path, json.dumps({"code": self.code, "passed": self.passed}, indent=1) + "\n")
