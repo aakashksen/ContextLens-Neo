@@ -313,6 +313,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
 **Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
+**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
