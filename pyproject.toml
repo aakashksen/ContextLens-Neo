@@ -15,6 +15,7 @@ server = ["fastapi", "uvicorn", "websockets"]
 postgres = ["psycopg[binary]", "pgvector"]
 rerank = ["sentence-transformers"]
 speech = ["grpcio", "grpcio-tools"]
+train = ["peft", "accelerate", "bitsandbytes"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
