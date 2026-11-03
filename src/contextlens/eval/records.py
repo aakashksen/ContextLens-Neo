@@ -72,6 +72,18 @@ def split_hash(split: str, root: Path = ROOT, source: str = "scenarios") -> str:
     return hashlib.sha256((root / SCENARIO_SOURCES[source][1] / f"{split}.jsonl").read_bytes()).hexdigest()
 
 
+def load_verified(source: str, split: str, root: Path = ROOT) -> tuple[list[Scenario], str]:
+    """A split's scenarios and the hash a record will carry; fails if the file no longer matches its manifest."""
+    from contextlens.data.scenarios import load_scenarios
+
+    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
+    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][split]
+    digest = split_hash(split, root, source)
+    if digest != entry["hash"]:
+        raise RuntimeError(f"the {source} scenario file does not match its manifest")
+    return load_scenarios(split, root / scenario_dir), digest
+
+
 def write_local_manifest(source: str, scenarios: dict[str, list[Scenario]], root: Path = ROOT) -> Path:
     """Write a source's scenario files (git-ignored) and its manifest of hash, count and ids (committed)."""
     manifest_rel, directory = SCENARIO_SOURCES[source]
@@ -145,6 +157,8 @@ def write_run(
     bad = [name for name in predictions if not SYSTEM_NAME.match(name)]
     if not predictions or bad:
         raise ValueError(f"predictions must map system names (letters, digits, _ and -) to rows: {bad}")
+    if len({len(rows) for rows in predictions.values()}) > 1:
+        raise ValueError(f"every system must have the same number of rows: { {k: len(v) for k, v in predictions.items()} }")
     dirty = is_dirty(root)
     if dirty and not allow_dirty:
         raise RuntimeError("working tree has uncommitted changes; commit first")

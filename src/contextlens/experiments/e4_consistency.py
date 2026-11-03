@@ -34,7 +34,7 @@ from contextlens.data import train_scenarios as ts
 from contextlens.data.loaders import Pair
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_local_manifest, write_run
+from contextlens.eval.records import load_verified, ROOT, SCENARIO_SOURCES, head_commit, write_local_manifest, write_run
 from contextlens.llm.client import unload_ollama
 from contextlens.eval.series import F1_LABELS, base_name, predicted_label
 from contextlens.replay.runner import Prediction
@@ -314,15 +314,6 @@ def warm_up(checker: ConsistencyChecker, scenario: Scenario, tries: int = 3) -> 
             time.sleep(2)
 
 
-def _load(source: str, root: Path) -> tuple[list[Scenario], str]:
-    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
-    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
-    digest = split_hash(SPLIT, root, source)
-    if digest != entry["hash"]:
-        raise RuntimeError(f"the {source} scenario file does not match its manifest")
-    return load_scenarios(SPLIT, root / scenario_dir), digest
-
-
 def _saved(fresh: dict[str, float | None], src: str) -> dict[str, float | None]:
     """The metrics a record keeps. Our scenarios keep the four-label set and accuracy per category; DECODE is binary,
     so it keeps accuracy, false alert rate and latency only."""
@@ -439,7 +430,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
     if not committed_unchanged({"git_commit": head_commit(root)}, root, SCENARIO_SOURCES["decode"][0].as_posix()):
         raise RuntimeError("the decode manifest must be committed before the run (run with --prepare)")
     started = datetime.now(timezone.utc).isoformat()
-    data = {src: _load(src, root) for src in SOURCES}
+    data = {src: load_verified(src, SPLIT, root) for src in SOURCES}
     scenarios = {src: scs for src, (scs, _) in data.items()}
     train = training_data(raw_root, root, scenarios["scenarios"])
     dev_examples = cm.examples_from_scenarios(scenarios["scenarios"])

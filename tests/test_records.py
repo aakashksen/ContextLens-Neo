@@ -383,3 +383,10 @@ def test_config_cannot_set_labels_reviewed(repo: Path) -> None:
 def test_labels_from_another_source_stay_unreviewed(repo: Path) -> None:
     from contextlens.eval.records import labels_reviewed
     assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
+
+
+def test_write_run_refuses_systems_with_different_row_counts(repo: Path) -> None:
+    rows = [_pred(s, g) for s, g in _predl("dev")]
+    with pytest.raises(ValueError, match="same number of rows"):
+        _run(repo, systems={"a": rows, "b": rows[:2]}, metrics={})
+    assert not list((repo / "results/runs").glob("*.json")) if (repo / "results/runs").exists() else True

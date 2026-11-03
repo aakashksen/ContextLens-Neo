@@ -15,9 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_run
+from contextlens.eval.records import load_verified, ROOT, SCENARIO_SOURCES, head_commit, write_run
 from contextlens.eval.series import base_name
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Prediction
@@ -165,17 +164,6 @@ def pick_winner(scores: dict[str, dict[str, dict[str, float]]]) -> str:
     return min(sorted(systems, key=SYSTEMS.index), key=lambda n: (-mean(n, "recall@5"), -mean(n, "mrr")))
 
 
-def _load(source: str, root: Path) -> tuple[list[Scenario], str]:
-    """The dev scenarios of a source and the hash the record will carry; only dev is ever loaded."""
-    scenario_dir = SCENARIO_SOURCES[source][1]
-    manifest_rel = SCENARIO_SOURCES[source][0]
-    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
-    digest = split_hash(SPLIT, root, source)
-    if digest != entry["hash"]:
-        raise RuntimeError(f"the {source} scenario file does not match its manifest")
-    return load_scenarios(SPLIT, root / scenario_dir), digest
-
-
 def _proof(reranker: Any) -> None:
     """Fail now, before any work, if the reranker cannot run."""
     turn = Turn(id="p:t0", conversation_id="p", seq=0, speaker="A", text="a", start_ms=0, end_ms=1, source="synthetic")
@@ -196,7 +184,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
     _proof(reranker)
     done: dict[str, tuple[list[Scenario], str, dict[str, list[Prediction]], dict[str, str]]] = {}
     for source in SOURCES:
-        scenarios, digest = _load(source, root)
+        scenarios, digest = load_verified(source, SPLIT, root)
         say(f"{source}: {len(scenarios)} dev scenarios")
         preds, failed = evaluate(scenarios, embedder, reranker, say)
         done[source] = (scenarios, digest, preds, failed)
