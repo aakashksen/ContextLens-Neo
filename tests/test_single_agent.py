@@ -548,22 +548,61 @@ def _f(statement, quote):
     ("fee is 15", "fee is 5", False),
     ("3.5 hours", "3 hours", False),
     ("3 hours", "3.5 hours", False),
-    ("$9", "nine dollars", True),
+    ("$9", "nine dollars", False),
     ("$9", "9 dollars", True),
     ("3 pm", "3pm", True),
     ("1000 dollars", "1,000 dollars", True),
     ("1,000 dollars", "1000 dollars", True),
-    ("3 people", "three people", True),
-    ("2.5k", "2500", True),
-    ("2500", "2.5k", True),
+    ("3 people", "three people", False),
+    ("2.5k", "2500", False),
+    ("2500", "2.5k", False),
     ("March 5", "5th of March", True),
     ("15:00", "3 pm", False),
     ("5/3", "March 5th", False),
     ("1000 dollars", "one thousand", False),
     ("no numbers here", "anything", True),
+    # the verifier's cases and the coordinator's examples
+    ("five hundred dollars", "5 dollars", False),
+    ("5 dollars", "five hundred dollars", False),
+    ("twenty-five dollars", "20 dollars", False),
+    ("20 dollars", "twenty-five dollars", False),
+    ("five dollars", "fifty dollars", False),
+    ("three dollars", "$13", False),
+    ("five hundred", "five hundred", True),
+    ("500", "500", True),
+    ("500", "five hundred", False),
+    ("five", "five hundred", False),
+    ("5", "5.5", False),
+    ("5", "500", False),
+    ("five hundred", "five apples, and later hundred", False),
+    ("five hundred", "five. Then hundred", False),
+    ("twenty-five", "twenty five", True),
+    ("2.5", "2.5", True),
+    ("a hundred", "a hundred", True),
+    ("a hundred", "two hundred", False),
+    ("the one", "no number", True),
+    ("twenty one", "twenty-one", True),
 ])  # fmt: skip
 def test_numbers_must_match_as_whole_numbers(statement, quote, kept):
     assert single._numbers_supported(_f(statement, quote)) is kept
+
+
+NUMS = [turn(1, "The fee is five hundred dollars", "Ravi"), turn(2, "ok"), turn(3, "What was the fee?")]
+
+
+@pytest.mark.parametrize(("suggestion", "kept"), [
+    ("Ask about the five hundred dollar fee", True),
+    ("Ask about the 500 dollar fee", False),
+    ("Ask about the five dollar fee", False),
+    ("Ask whether the fee is twenty-five dollars", False),
+])  # fmt: skip
+def test_suggestion_numbers_must_be_in_the_kept_quotes(suggestion, kept):
+    f = with_statement("Ravi gave the fee", quote="The fee is five hundred dollars")
+    agent, ctx, _ = setup(NUMS, FakeLLM([respond([f]), {"suggestion": suggestion}]))
+    card = agent.answer(req(3), ctx)
+    assert card.status == "answered" and len(card.findings) == 1
+    assert card.suggestion == (suggestion if kept else None)
+    assert any("number" in m for m in card.missing) is (not kept)
 
 
 # ---- baselines and the deadline ----

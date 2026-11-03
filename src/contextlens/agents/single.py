@@ -4,7 +4,6 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -161,36 +160,40 @@ def fit_turns(turns: list[Turn], max_tokens: int) -> list[Turn]:
     return [t for t in shown if t.id in kept]
 
 
-_WORDS = {
-    w: i
-    for i, w in enumerate(
-        "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
-        "sixteen seventeen eighteen nineteen twenty".split()
-    )
-    if w != "one"  # mostly a pronoun
-}
-_NUMBER = re.compile(r"(\d+(?:\.\d+)?)(k\b)?|\b(" + "|".join(_WORDS) + r")\b")
+_NUMBER_WORDS = frozenset(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+    "seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand "
+    "million billion".split()
+)
+_TOKEN = re.compile(r"\d+(?:\.\d+)?|[a-z]+")
 
 
-def _numbers(text: str, words: bool) -> set[Decimal]:
-    """Numbers in `text`: digits (`1,000`, `2.5k`) and, if `words`, spelled-out 0 to 20 except one."""
-    found: set[Decimal] = set()
-    for m in _NUMBER.finditer(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower())):
-        if m.group(3):
-            if words:
-                found.add(Decimal(_WORDS[m.group(3)]))
-        else:
-            found.add(Decimal(m.group(1)) * (1000 if m.group(2) else 1))
-    return found
+def _runs(text: str) -> set[tuple[str, ...]]:
+    """Maximal runs of consecutive number tokens, lowercase. No values are computed.
+
+    Tokens are digit groups (`2.5` is one token) and words; the comma in `1,000` is removed first, `$`, `-` and
+    other marks split. So `$9` is (9), `1,000` is (1000), `2.5` is (2.5), `3pm` is (3), `twenty-five` is
+    (twenty, five), and `a hundred` is (hundred). A lone `one` is a pronoun and is not a run."""
+    runs: set[tuple[str, ...]] = set()
+    run: list[str] = []
+    for tok in [*_TOKEN.findall(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower())), ""]:
+        if tok[:1].isdigit() or tok in _NUMBER_WORDS:
+            run.append(tok)
+            continue
+        if run and run != ["one"]:
+            runs.add(tuple(run))
+        run = []
+    return runs
+
+
+def _runs_in(text: str, quotes: list[str]) -> bool:
+    """Every number run in `text` is, as the same whole run, in the quotes. `500` against `five hundred`
+    is not matched: failing closed is the safe direction."""
+    return _runs(text) <= _runs(" ".join(quotes))
 
 
 def _numbers_supported(f: Finding) -> bool:
-    """Every number in the statement is, as a whole number, in a quote it cites.
-
-    Not matched, so the finding is dropped (the safe side): `15:00` against `3 pm`, `5/3` against
-    `March 5th`, `1000` against `one thousand`, and `1` against `one`."""
-    quoted = _numbers(" ".join(e.quote for e in f.evidence), words=True)
-    return _numbers(f.statement, words=False) <= quoted
+    return _runs_in(f.statement, [e.quote for e in f.evidence])
 
 
 class _Suggestion(BaseModel):
@@ -288,6 +291,8 @@ def _finish(
         notes.append("suggestion not produced: no verified findings")
     elif wants:
         text, why = _suggest(card, req, ctx, llm, end, run)
+        if text and not _runs_in(text, [e.quote for f in card.findings for e in f.evidence]):
+            text, why = None, "suggestion dropped: a number in it is not in the cited quotes"
         card = card.model_copy(update={"suggestion": text})
         if why:
             notes.append(why)
