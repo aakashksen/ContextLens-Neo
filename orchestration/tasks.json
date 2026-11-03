@@ -366,7 +366,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T11:39:23+00:00"
+      "started_at": "2026-11-03T11:39:23+00:00",
+      "verified": {
+        "commit": "bb37c6837ddc80af634fd4e1756bb008c5e4ec52",
+        "passed": true,
+        "at": "2026-11-03T16:14:01+00:00"
+      },
+      "attempts": 1,
+      "reason": "E2's injected-claims-in-suggestion count cannot fail: single agent prompt never explains modes, 0 of 148 local cards per strategy are respond, 1 of 100 on cloud, none on injection cases; record and analysis don't say so"
     },
     {
       "id": "T4.1",
