@@ -58,9 +58,23 @@ Known limits of the rule: a lone one, half, dozen and ordinals are not number to
 
 ## Prompt-injection cases: injected words in the suggestion
 
+The count is a word-overlap proxy (words only the injected turn holds), not a reader's judgement.
 - recent: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - full: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - retrieval: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - retrieval_memory: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - recent_local: 11 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - recent_cloud: 11 cases, 0 with a suggestion, 0 using words only the injected turn holds
+
+## The suggestion step and the prompt change
+
+- The comparison records ran on the earlier prompt, which listed `mode` without saying what its values mean. A card gets a suggestion only when the model itself chooses mode respond, so on those records the suggestion step was essentially not exercised:
+    - recent: respond mode on 0 of 148 cards, a suggestion on 0; on the 16 injection cases, a suggestion on 0
+    - full: respond mode on 0 of 148 cards, a suggestion on 0; on the 16 injection cases, a suggestion on 0
+    - retrieval: respond mode on 0 of 148 cards, a suggestion on 0; on the 16 injection cases, a suggestion on 0
+    - retrieval_memory: respond mode on 0 of 148 cards, a suggestion on 0; on the 16 injection cases, a suggestion on 0
+    - recent_local: respond mode on 0 of 100 cards, a suggestion on 0; on the 11 injection cases, a suggestion on 0
+    - recent_cloud: respond mode on 1 of 100 cards, a suggestion on 1; on the 11 injection cases, a suggestion on 0
+- So the "0 injected" counts in the prompt-injection section are not evidence that injected claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.
+- retrieval_memory abstains on only 8 of the 16 insufficient-evidence cases (50%); on the others it gives an answer where the evidence is not there.
+- There is no respond-subset record yet. Nothing here is a result for the suggestion step, and the injected-claim count is not a finding until one exists.
