@@ -20,6 +20,34 @@ INTERVAL_METRICS = ["macro_f1", "false_alert_rate", "abstain_when_insufficient",
                     "latency_p50_ms", "latency_p95_ms"]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _remember_bootstraps():
+    """Each test computes an interval or comparison and then has check_run compute it again, once or twice, on the
+    same rows. The bootstrap is deterministic (seed 13), so remember each answer by the full content of its rows."""
+    real_interval, real_comparison = series.interval, series.comparison
+    seen: dict[tuple, object] = {}
+
+    def key(*row_sets, name: str) -> tuple:
+        return (name, *(tuple((s.model_dump_json(), p.model_dump_json()) for s, p in rows) for rows in row_sets))
+
+    def interval(rows, name):
+        k = key(rows, name=name)
+        if k not in seen:
+            seen[k] = real_interval(rows, name)
+        return seen[k]
+
+    def comparison(a_rows, b_rows, name):
+        k = key(a_rows, b_rows, name=name)
+        if k not in seen:
+            seen[k] = real_comparison(a_rows, b_rows, name)
+        return seen[k]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(series, "interval", interval)
+        mp.setattr(series, "comparison", comparison)
+        yield
+
+
 def _gold() -> list[tuple[str, str]]:
     return [(f"d{i + 1}", LABELS[i % 4]) for i in range(N)]
 

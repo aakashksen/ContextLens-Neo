@@ -39,35 +39,47 @@ def _split_of(i: int) -> str:
 
 def _written() -> dict[str, list[Scenario]]:
     out: dict[str, list[Scenario]] = {s: [] for s in SPLITS}
-
-    def add(sc: Scenario) -> None:
+    for sc in [*_labelled_cases(), *_question_cases(), *_deadline_cases()]:
         out[sc.conversation.split].append(sc)  # type: ignore[index]
-
-    for i, t in enumerate(cases.CONTRADICTION):
-        add(_scenario("con", i, _split_of(i), "contradiction", t, [0, -1], label="contradiction"))
-    for i, t in enumerate(cases.UPDATE):
-        add(_scenario("upd", i, _split_of(i), "legitimate_update", t, [0, -1], label="update"))
-    for i, t in enumerate(cases.HYPOTHETICAL):
-        add(_scenario("hyp", i, _split_of(i), "hypothetical_or_joking", t, [0, -1], label="consistent"))
-    for i, t in enumerate(cases.WRONG_SPEAKER_CONSISTENT):
-        add(_scenario("wsc", i, _split_of(i), "wrong_speaker_trap", t, [0, -1], label="consistent"))
-    for i, (t, q, a, ev) in enumerate(cases.WRONG_SPEAKER_QUESTION):
-        add(_scenario("wsq", i, _split_of(i), "wrong_speaker_trap", t, [ev], label=None, question=q, answer=a))
-    for i, (t, q, a, ev) in enumerate(cases.INJECTION):
-        add(_scenario("inj", i, _split_of(i), "prompt_injection", t, [ev], label=None, question=q, answer=a))
-    for i, (t, q) in enumerate(cases.INSUFFICIENT):
-        add(_scenario("ins", i, _split_of(i), "insufficient_evidence", t, [], label="insufficient", question=q))
-    for i, (t, a, ev) in enumerate(cases.RESPOND):
-        add(_scenario("rsp", i, _split_of(i), "respond_with_suggestion", t, list(ev), label=None, answer=a))
-    for i, (t, q, a, ev) in enumerate(cases.RECALL):
-        add(_scenario("rec", i, _split_of(i), "recall", t, list(ev), label=None, question=q, answer=a))
-
-    add(_scenario("deadline-update", 0, "dev", "legitimate_update",
-                  ["Ravi: The deadline is Monday", "Sue: We moved the deadline to Wednesday"], [0, 1], label="update"))
-    add(_scenario("deadline-contradiction", 0, "dev", "contradiction",
-                  ["Ravi: The deadline is Monday", "Sue: We moved the deadline to Wednesday",
-                   "Sue: It has always been Wednesday"], [0, 1, 2], label="contradiction"))
     return out
+
+
+def _labelled_cases() -> list[Scenario]:
+    out = []
+    for i, t in enumerate(cases.CONTRADICTION):
+        out.append(_scenario("con", i, _split_of(i), "contradiction", t, [0, -1], label="contradiction"))
+    for i, t in enumerate(cases.UPDATE):
+        out.append(_scenario("upd", i, _split_of(i), "legitimate_update", t, [0, -1], label="update"))
+    for i, t in enumerate(cases.HYPOTHETICAL):
+        out.append(_scenario("hyp", i, _split_of(i), "hypothetical_or_joking", t, [0, -1], label="consistent"))
+    for i, t in enumerate(cases.WRONG_SPEAKER_CONSISTENT):
+        out.append(_scenario("wsc", i, _split_of(i), "wrong_speaker_trap", t, [0, -1], label="consistent"))
+    return out
+
+
+def _question_cases() -> list[Scenario]:
+    out = []
+    for i, (t, q, a, ev) in enumerate(cases.WRONG_SPEAKER_QUESTION):
+        out.append(_scenario("wsq", i, _split_of(i), "wrong_speaker_trap", t, [ev], label=None, question=q, answer=a))
+    for i, (t, q, a, ev) in enumerate(cases.INJECTION):
+        out.append(_scenario("inj", i, _split_of(i), "prompt_injection", t, [ev], label=None, question=q, answer=a))
+    for i, (t, q) in enumerate(cases.INSUFFICIENT):
+        out.append(_scenario("ins", i, _split_of(i), "insufficient_evidence", t, [], label="insufficient", question=q))
+    for i, (t, a, ev) in enumerate(cases.RESPOND):
+        out.append(_scenario("rsp", i, _split_of(i), "respond_with_suggestion", t, list(ev), label=None, answer=a))
+    for i, (t, q, a, ev) in enumerate(cases.RECALL):
+        out.append(_scenario("rec", i, _split_of(i), "recall", t, list(ev), label=None, question=q, answer=a))
+    return out
+
+
+def _deadline_cases() -> list[Scenario]:
+    return [
+        _scenario("deadline-update", 0, "dev", "legitimate_update",
+                  ["Ravi: The deadline is Monday", "Sue: We moved the deadline to Wednesday"], [0, 1], label="update"),
+        _scenario("deadline-contradiction", 0, "dev", "contradiction",
+                  ["Ravi: The deadline is Monday", "Sue: We moved the deadline to Wednesday",
+                   "Sue: It has always been Wednesday"], [0, 1, 2], label="contradiction"),
+    ]
 
 
 def _dataset_recall(raw_root: Path, splits_dir: Path) -> dict[str, list[Scenario]]:

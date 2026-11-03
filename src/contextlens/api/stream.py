@@ -219,6 +219,7 @@ class ConversationState:
         with self.lock:
             self.epoch += 1
             self.svc.retriever.delete(self.conv_id)
+            self.svc.store.delete(self.conv_id)  # a delete must not depend on the retriever sharing this store
             self.svc.memory.delete(self.conv_id)
             self.diarizer.reset()
             self.summary = self.svc.make_summary() if self.svc.make_summary else None

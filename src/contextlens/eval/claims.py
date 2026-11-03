@@ -47,6 +47,33 @@ def _cited(c: dict[str, Any], rec: dict[str, Any]) -> tuple[object, str | None, 
     return table[metric], metric, None
 
 
+def _value_problem(c: dict[str, Any], rec: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(a problem with the claim's value against the record, the metric it cites)."""
+    saved, metric, problem = _cited(c, rec)
+    if problem:
+        return problem, metric
+    if saved is None:
+        return f"{metric} is undefined (None) in the run", metric
+    if saved != c.get("value"):
+        return f"value differs from the {c.get('kind', 'metric')} in the run", metric
+    return None, metric
+
+
+def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated: list[str]) -> list[str]:
+    cid = c.get("id", "?")
+    problem, metric = _value_problem(c, rec)
+    problems = [f"claim {cid}: {problem}"] if problem else []
+    if metric and base_name(metric) in JUDGED:
+        problems += [f"claim {cid}: {m}" for m in review_problems(rec.get("config"))]
+    if not rec.get("labels_reviewed"):
+        problems.append(f"claim {cid}: run has labels_reviewed false")
+    if c.get("run_id") in superseded_by(rec.get("experiment", ""), root):
+        problems.append(f"claim {cid}: run {c.get('run_id')} is superseded by a later record")
+    problems += [f"claim {cid}: run: {m}" for m in check_record(rec, root)]
+    problems += [f"claim {cid}: run: {m}" for m in repeated if m.startswith(f"{c.get('run_id')}:")]
+    return problems
+
+
 def check_claims(root: Path = ROOT) -> list[str]:
     claims = json.loads((root / CLAIMS_REL).read_text(encoding="utf-8")).get("claims")
     if not isinstance(claims, list):
@@ -54,29 +81,14 @@ def check_claims(root: Path = ROOT) -> list[str]:
     problems: list[str] = []
     repeated: list[str] | None = None
     for c in claims:
-        cid = c.get("id", "?")
         path = root / RUNS_REL / f"{c.get('run_id')}.json"
         if not path.is_file():
-            problems.append(f"claim {cid}: no run record {c.get('run_id')}")
+            problems.append(f"claim {c.get('id', '?')}: no run record {c.get('run_id')}")
             continue
         rec = json.loads(path.read_text(encoding="utf-8"))
-        saved, metric, problem = _cited(c, rec)
-        if problem:
-            problems.append(f"claim {cid}: {problem}")
-        elif saved is None:
-            problems.append(f"claim {cid}: {metric} is undefined (None) in the run")
-        elif saved != c.get("value"):
-            problems.append(f"claim {cid}: value differs from the {c.get('kind', 'metric')} in the run")
-        if metric and base_name(metric) in JUDGED:
-            problems += [f"claim {cid}: {m}" for m in review_problems(rec.get("config"))]
-        if not rec.get("labels_reviewed"):
-            problems.append(f"claim {cid}: run has labels_reviewed false")
-        if c.get("run_id") in superseded_by(rec.get("experiment", ""), root):
-            problems.append(f"claim {cid}: run {c.get('run_id')} is superseded by a later record")
-        problems += [f"claim {cid}: run: {m}" for m in check_record(rec, root)]
-        if rec.get("split") == "test":
-            repeated = _test_once_problems(root) if repeated is None else repeated
-            problems += [f"claim {cid}: run: {m}" for m in repeated if m.startswith(f"{c.get('run_id')}:")]
+        if rec.get("split") == "test" and repeated is None:
+            repeated = _test_once_problems(root)  # computed once, and only when a claim cites a test record
+        problems += _claim_problems(c, rec, root, repeated if rec.get("split") == "test" and repeated else [])
     return problems
 
 

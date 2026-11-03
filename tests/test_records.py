@@ -51,6 +51,15 @@ def _git(root: Path, *args: str) -> None:
                    capture_output=True)
 
 
+def set_h2(root: Path, status: str) -> None:
+    """Write orchestration/tasks.json with H2 in the given state and commit it."""
+    path = root / "orchestration/tasks.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"tasks": [{"id": "H2", "owner": "human", "status": status}]}), encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", f"H2 {status}")
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     d = tmp_path / "datasets/scenarios"
@@ -62,6 +71,7 @@ def repo(tmp_path: Path) -> Path:
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "init")
+    set_h2(tmp_path, "done")  # the person has signed H2; tests of the unsigned state call set_h2(repo, "pending")
     return tmp_path
 
 
@@ -347,3 +357,106 @@ def test_leftover_temp_is_not_a_record_and_not_dirty(repo: Path) -> None:
     (runs / ".E1-20250101T000000000000Z.json.123.tmp").write_text("{", encoding="utf-8")
     assert check("E1", root=repo) == []
     assert not is_dirty(repo)
+
+
+def _reviewed(path: Path) -> bool:
+    return json.loads(path.read_text(encoding="utf-8"))["labels_reviewed"]
+
+
+def test_labels_reviewed_false_before_h2_and_true_after(repo: Path) -> None:
+    set_h2(repo, "pending")
+    assert _reviewed(_run(repo)) is False
+    set_h2(repo, "done")
+    assert _reviewed(_run(repo)) is True
+
+
+def test_labels_reviewed_is_false_without_a_task_file(tmp_path: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    assert labels_reviewed(tmp_path) is False
+
+
+def test_config_cannot_set_labels_reviewed(repo: Path) -> None:
+    set_h2(repo, "pending")
+    assert _reviewed(_run(repo, config={"labels_reviewed": True})) is False
+
+
+def test_labels_from_another_source_stay_unreviewed(repo: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
+
+
+def test_write_run_refuses_systems_with_different_row_counts(repo: Path) -> None:
+    rows = [_pred(s, g) for s, g in _predl("dev")]
+    with pytest.raises(ValueError, match="same number of rows"):
+        _run(repo, systems={"a": rows, "b": rows[:2]}, metrics={})
+    assert not list((repo / "results/runs").glob("*.json")) if (repo / "results/runs").exists() else True
+
+
+def _worktree_of(repo: Path) -> Path:
+    wt = repo / "linked-worktree"
+    _git(repo, "worktree", "add", "-q", str(wt))
+    return wt
+
+
+def _write_tasks(root: Path, status: str) -> None:
+    (root / "orchestration").mkdir(exist_ok=True)
+    (root / "orchestration/tasks.json").write_text(
+        json.dumps({"tasks": [{"id": "H2", "owner": "human", "status": status}]}), encoding="utf-8")
+
+
+def test_a_linked_worktree_reads_the_main_folders_h2_not_its_own_copy(repo: Path) -> None:
+    wt = _worktree_of(repo)  # cut while H2 was done, so its committed copy says done
+    assert json.loads((wt / "orchestration/tasks.json").read_text(encoding="utf-8"))["tasks"][0]["status"] == "done"
+    _write_tasks(repo, "pending")  # the main folder's live state: H2 was reopened
+    assert _reviewed(_run(wt)) is False
+    _write_tasks(repo, "done")
+    assert _reviewed(_run(wt)) is True
+
+
+def test_unreadable_task_state_means_false(tmp_path: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    (tmp_path / "orchestration").mkdir()
+    (tmp_path / "orchestration/tasks.json").write_text("{not json", encoding="utf-8")
+    assert labels_reviewed(tmp_path) is False
+    (tmp_path / "orchestration/tasks.json").write_text(json.dumps({"tasks": "oops"}), encoding="utf-8")
+    assert labels_reviewed(tmp_path) is False
+
+
+def test_label_source_follows_the_scenario_source_and_not_the_config(repo: Path) -> None:
+    from contextlens.eval.records import label_source
+    assert [label_source(s) for s in ("scenarios", "ami", "qmsum", "decode")] == [
+        "scenarios", "ami_rule", "publisher", "publisher"]
+    rec = json.loads(_run(repo, config={"label_source": "publisher"}).read_text(encoding="utf-8"))
+    assert rec["label_source"] == "scenarios"
+
+
+def test_ami_labels_need_their_own_signed_line_from_the_main_folder(repo: Path) -> None:
+    from contextlens.eval.records import AMI_SIGNED_REL, labels_reviewed
+    assert labels_reviewed(repo, "ami") is False  # H2 is done in this repo, and does not cover AMI
+    wt = _worktree_of(repo)
+    signed = repo / AMI_SIGNED_REL
+    signed.parent.mkdir(parents=True, exist_ok=True)
+    signed.write_text("", encoding="utf-8")
+    assert labels_reviewed(repo, "ami") is False  # an empty file is not a signature
+    signed.write_text("read 40 of 120 questions, 1 wrong, 2026-11-04", encoding="utf-8")
+    assert labels_reviewed(repo, "ami") is True and labels_reviewed(wt, "ami") is True
+    _write_tasks(repo, "pending")
+    assert labels_reviewed(repo, "ami") is True and labels_reviewed(repo, "scenarios") is False
+
+
+def test_publisher_labels_are_never_reviewed(repo: Path) -> None:
+    from contextlens.eval.records import AMI_SIGNED_REL, labels_reviewed
+    (repo / AMI_SIGNED_REL).parent.mkdir(parents=True, exist_ok=True)
+    (repo / AMI_SIGNED_REL).write_text("signed", encoding="utf-8")
+    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
+
+
+def test_check_run_accepts_older_records_without_label_source_and_rejects_a_wrong_one(repo: Path) -> None:
+    path = _run(repo)
+    assert check("E1", root=repo) == []
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    del rec["label_source"]
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    assert check("E1", root=repo) == []
+    _edit(path, label_source="publisher")
+    assert any("label_source" in p for p in check("E1", root=repo))
