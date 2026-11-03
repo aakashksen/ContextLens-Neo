@@ -315,6 +315,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Files:** `tests/test_integration.py`, `docs/run-everything.md`, changes wherever integration needs them.
 **Do:** Run the real backend with the real agent team, the speech service, and the web client together, and connect Unity's message types to the real server. The earlier client tasks used the fake server, so this is where any mismatch has to surface and get fixed. Document starting everything with one command.
 **Tests:** `test_real_backend_matches_contract` (fakes for models); real-marked `test_press_end_to_end_returns_a_cited_card`, covering audio → transcript → press → card; `test_fake_server_and_real_backend_send_same_shapes`.
+**From T8.3's verifier:** In the web client, a server `error` status while recording leaves the microphone live and sending while the indicator reads "Error", so stop capture on it; and `Session` still accepts transcript and card messages after `deleted`, so reject them, and check the real backend can't send a late transcript. Run the real browser microphone, `AudioContext`, and WebSocket path here, since nothing has yet.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client

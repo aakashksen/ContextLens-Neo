@@ -341,7 +341,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T05:41:55+00:00"
+      "started_at": "2026-11-03T05:41:55+00:00",
+      "verified": {
+        "commit": "b1f7aec24616682ce64fe45f9422f1b06350d081",
+        "passed": true,
+        "at": "2026-11-03T05:48:43+00:00"
+      },
+      "attempts": 1,
+      "reason": "deadline overrun on slow tools/embedder/LLM (0.3s took 4s); injected claim survives in suggestion when a finding quotes the turn; baseline budget unenforced, future turn via req.as_of_seq; failed-attempt tokens uncounted"
     },
     {
       "id": "T3.3",
@@ -398,7 +405,9 @@
       "acceptance": [
         "{py} -m pytest tests/test_consistency_baselines.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:45:45+00:00"
     },
     {
       "id": "T5.2",
@@ -545,14 +554,16 @@
         "npm --prefix clients/web test -- --run",
         "npm --prefix clients/web run build"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:35:25+00:00",
       "verified": {
-        "commit": "254be7e1647281a7b29c3c5f3137e67e73fd1d3e",
+        "commit": "8d8ea7ce4b8b3ed6b772f518d4238cedad474e48",
         "passed": true,
-        "at": "2026-11-03T05:44:56+00:00"
-      }
+        "at": "2026-11-03T05:59:28+00:00"
+      },
+      "attempts": 2,
+      "reason": "session.ts: late recording status restarts the mic and says Recording after deleted, and overwrites a local pause with no Resume pressed",
+      "done_at": "2026-11-03T06:05:16+00:00"
     },
     {
       "id": "T8.4",
@@ -580,7 +591,9 @@
       "acceptance": [
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:00:09+00:00"
     },
     {
       "id": "T8.7",
