@@ -213,7 +213,7 @@ def test_ids_are_unique_across_updates_even_with_empty_existing():
     store = MemoryStore()
     store.add(a)
     store.add(b)
-    fix = MemoryExtractor(FakeLLM([{"items": [correction_item()]}])).update([turn(3, "Friday")], store.items("c1", 2))
+    fix = MemoryExtractor(FakeLLM([{"items": [item("correction", "meeting day", "Meet on Friday", ("t3",))]}])).update([turn(3, "Friday")], store.items("c1", 2))
     store.add(fix)
     assert fix[0].supersedes == b[0].id  # the latest same-subject item, not both
 
