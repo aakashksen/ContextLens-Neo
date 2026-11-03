@@ -148,6 +148,15 @@ def _post_json(url: str, payload: dict, timeout_s: float) -> dict:
         raise LLMError(f"request to {url} failed: {err}") from err
 
 
+def unload_ollama(model: str, base_url: str = "http://127.0.0.1:11434") -> bool:
+    """Ask Ollama to drop `model` from memory (keep_alive 0). False when the server cannot be reached; never raises."""
+    try:
+        _post_json(f"{base_url.rstrip('/')}/api/generate", {"model": model, "keep_alive": 0}, 30.0)
+    except LLMError:
+        return False
+    return True
+
+
 class OllamaClient(_Base):
     def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434", keep_alive: str | None = None):
         self.model, self.base_url, self.keep_alive = model, base_url.rstrip("/"), keep_alive

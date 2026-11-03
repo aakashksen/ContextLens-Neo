@@ -37,19 +37,26 @@ def mrr(ranks: Sequence[int | None]) -> float | None:
     return sum(1.0 / r for r in ranks if r) / len(ranks)
 
 
+def _f1(gold: Sequence[str], pred: Sequence[str], label: str) -> float:
+    tp = sum(1 for g, p in zip(gold, pred) if g == label and p == label)
+    fp = sum(1 for g, p in zip(gold, pred) if g != label and p == label)
+    fn = sum(1 for g, p in zip(gold, pred) if g == label and p != label)
+    denom = 2 * tp + fp + fn
+    return 2 * tp / denom if denom else 0.0
+
+
+def label_f1(gold: Sequence[str], pred: Sequence[str], label: str) -> float | None:
+    """F1 of one label. None when no gold case has that label, so there is nothing to find."""
+    _same_length(gold, pred)
+    return _f1(gold, pred, label) if label in gold else None
+
+
 def macro_f1(gold: Sequence[str], pred: Sequence[str]) -> float | None:
     """None when there are no cases."""
     _same_length(gold, pred)
     if not gold:
         return None
-    f1s = []
-    for label in LABELS:
-        tp = sum(1 for g, p in zip(gold, pred) if g == label and p == label)
-        fp = sum(1 for g, p in zip(gold, pred) if g != label and p == label)
-        fn = sum(1 for g, p in zip(gold, pred) if g == label and p != label)
-        denom = 2 * tp + fp + fn
-        f1s.append(2 * tp / denom if denom else 0.0)
-    return sum(f1s) / len(f1s)
+    return sum(_f1(gold, pred, label) for label in LABELS) / len(LABELS)
 
 
 def false_alert_rate(gold: Sequence[str], pred: Sequence[str]) -> float | None:
@@ -59,6 +66,20 @@ def false_alert_rate(gold: Sequence[str], pred: Sequence[str]) -> float | None:
     if not negatives:
         return None
     return sum(1 for p in negatives if p == "contradiction") / len(negatives)
+
+
+def ece(correct: Sequence[bool], probabilities: Sequence[float], bins: int = 10) -> float | None:
+    """Expected calibration error: equal-width probability bins, each bin's |accuracy - mean probability|
+    weighted by its share of the cases. A probability of 1 falls in the last bin. None when there are no cases."""
+    _same_length(correct, probabilities)
+    if not correct:
+        return None
+    grouped: list[list[tuple[bool, float]]] = [[] for _ in range(bins)]
+    for ok, p in zip(correct, probabilities):
+        grouped[min(int(p * bins), bins - 1)].append((ok, p))
+    total = len(correct)
+    return sum(len(g) / total * abs(sum(ok for ok, _ in g) / len(g) - sum(p for _, p in g) / len(g))
+               for g in grouped if g)
 
 
 def _finding_grounded(

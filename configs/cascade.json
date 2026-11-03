@@ -1,0 +1,44 @@
+{
+ "system": "cascade",
+ "flag_threshold": 0.95,
+ "catch_floor": 0.5,
+ "selection_rule": "lowest mean false-alert rate over the sources among points with catch rate >= catch_floor on every source; ties to higher catch, then the trained model alone, then the higher threshold",
+ "selection_data": "dev (selection data, not held out); dev labels are unreviewed",
+ "provisional": true,
+ "thresholds_swept": [
+  0.0,
+  0.05,
+  0.1,
+  0.15,
+  0.2,
+  0.25,
+  0.3,
+  0.35,
+  0.4,
+  0.45,
+  0.5,
+  0.55,
+  0.6,
+  0.65,
+  0.7,
+  0.75,
+  0.8,
+  0.85,
+  0.9,
+  0.95
+ ],
+ "stage_two": {
+  "model": "qwen3.5:4b-q4_K_M",
+  "prompt": "consistency v1"
+ },
+ "trained_checkpoint": "models/e4/lr3e-05_ep3",
+ "checkpoint_sha256": "6f0cc95019bfc44a14adb8ccf13b52fdec05870392858b8e0fc7574cb2f4eba9",
+ "from_records": {
+  "scenarios": "E4-20261103T102658868337Z",
+  "decode": "E4-20261103T102930546849Z"
+ },
+ "cases": {
+  "decode": 1000,
+  "scenarios": 82
+ }
+}

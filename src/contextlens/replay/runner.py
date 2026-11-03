@@ -6,7 +6,7 @@ from typing import Protocol, Self
 from pydantic import BaseModel, Field, model_validator
 
 from contextlens.memory.store import InMemoryTranscriptStore, TranscriptStore
-from contextlens.schemas import ButtonRequest, Card, Scenario
+from contextlens.schemas import ButtonRequest, Card, ConsistencyLabel, Scenario
 
 
 @dataclass
@@ -28,11 +28,13 @@ class Prediction(BaseModel):
     raw_output: str | None = None  # model text, kept so schema validity can be recomputed
     stage_latency_ms: dict[str, int] = Field(default_factory=dict)
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
+    label: ConsistencyLabel | None = None  # a bare consistency verdict, for rows that may hold no text
+    probability: float | None = Field(default=None, ge=0, le=1)  # the model's probability for the label it gave
 
     @model_validator(mode="after")
     def _has_output(self) -> Self:
-        if self.card is None and self.ranked_turn_ids is None:
-            raise ValueError("a prediction row needs a card or ranked_turn_ids")
+        if self.card is None and self.ranked_turn_ids is None and self.label is None:
+            raise ValueError("a prediction row needs a card, ranked_turn_ids or a label")
         return self
 
 

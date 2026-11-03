@@ -212,6 +212,9 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Do:** Same cases, same tools, same model, on dev. Compare quality, latency, tokens, with paired bootstrap and McNemar. Also break it down by category. Write the finding in plain language in the record's `notes`, including if the team loses.
 **Suggestions:** Also count injected claims in suggestions on the prompt-injection scenarios, for both systems, as in T3.3.
 **Tests:** tiny fixture writes a valid record holding both systems, with their comparison.
+**Decision (the coordinator):** After T5.2 lands and before this experiment, save the trained model's probabilities on DECODE dev by rescoring T5.2's chosen checkpoint, with no retraining and no test split. Compare a threshold sweep with a cascade, and add `CascadeChecker` implementing `ConsistencyChecker`: the trained model runs first, and only its flagged cases go to the prompted checker. Select the operating point on dev, by false-alert rate first with a catch-rate floor recorded before selecting. Carry it into this experiment and E8 as a system. Report its real latency. Report alert precision at 5% and 20% contradiction rates, labeled as calculated, not measured. Hand-read 30 false alarms for a pattern; DECODE text stays out of tracked files.
+**From phase review (decided by the coordinator):** The trained model's result changes with the statement's speaker name, and an injected turn can flip a label. Without retraining: at inference, pass low-confidence speakers as `unknown` and escape context. On dev, score with the original speaker names and with neutral role labels, and use whichever flips less unless accuracy falls measurably. Report speaker-flip and injection-flip rates per system, for the trained model alone and for the cascade. Bring it to the coordinator before E8 if either is above about 5% in the chosen system. Use the shared helpers from `fix/phase5` to find the chosen checkpoint and unload Ollama.
+**Decision (the coordinator):** The cascade in `configs/cascade.json` is a candidate, not final: carry trained-alone and cascade as systems. Add one arm: a code rule that only same-speaker pairs can be `contradiction`, with different-speaker conflicts shown as a disagreement. Measure catches and false alarms on dev with and without it, and keep it only if it helps. Count wrong-speaker false alarms per system here and in E8. Draw the 30 false alarms to hand-read from trained-alone at the selected threshold, since the cascade has too few; DECODE text stays out of tracked files.
 **Accept:** `{py} -m pytest tests/test_e3.py -q`; `{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev`.
 
 ---
@@ -315,6 +318,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
 **Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
+**Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
@@ -333,6 +337,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Decision (the coordinator):** T8.7 owns the pyannote adapter's real run. It needs the person to accept the terms of `pyannote/speaker-diarization-community-1`; until then, turns stay honest `unknown`. Don't patch around that fetch, and don't change the shared venv's torch.
 **From T8.4's verifier:** Wire telemetry and vision into the backend: call `TracedAssistant.flush(timeout)` at shutdown, since its worker thread is non-daemon and an exporter that never returns would block exit; build a fresh `Context` per press; have delete call `SceneStore.delete` and clear queued telemetry jobs for that conversation, which hold cards in memory until the worker runs them; and count dropped presses in a metric, not only a log warning.
 **From T8.2's verifier:** Models are per conversation, and `app.py`'s `conversations` dict never evicts, so each conversation id keeps its own pyannote pipeline until the process exits. Share the model and evict idle conversations.
+**Decision (the coordinator):** Metrics are off by default, opt-in through the `obs` profile, and bound only to Docker's host-side address. Add one real-marked test that brings up the `obs` profile and sees a metric reach Prometheus, and document it in `docs/run-everything.md`.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client

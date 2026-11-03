@@ -129,3 +129,18 @@ def test_empty_input_is_none_not_zero() -> None:
 def test_bootstrap_ci_empty_raises_clear_error() -> None:
     with pytest.raises(ValueError, match="no values"):
         bootstrap_ci([], [])
+
+
+def test_label_f1_is_the_per_label_term_of_macro_f1_and_none_without_gold_cases():
+    from contextlens.eval.metrics import label_f1
+
+    gold = ["consistent", "consistent", "update", "update",
+            "contradiction", "contradiction", "insufficient", "insufficient"]
+    pred = ["consistent", "update", "update", "update",
+            "contradiction", "consistent", "insufficient", "insufficient"]
+    got = {x: label_f1(gold, pred, x) for x in LABELS}
+    assert got == pytest.approx({"consistent": 0.5, "update": 0.8, "contradiction": 2 / 3, "insufficient": 1.0})
+    assert sum(got.values()) / 4 == pytest.approx(macro_f1(gold, pred))
+    # a label that is only predicted has no gold cases: undefined, not 0.0 (macro_f1 still counts it as 0)
+    assert label_f1(["consistent"], ["update"], "update") is None
+    assert label_f1([], [], "update") is None

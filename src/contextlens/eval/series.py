@@ -20,6 +20,7 @@ RESAMPLES = 10_000
 Unit = tuple[str, float]  # scenario id, 1.0 when correct
 
 BINARY = ("label_accuracy", "schema_valid_rate", "recall@")
+F1_LABELS = tuple(f"f1[label={x}]" for x in M.LABELS)  # per-label F1; undefined (None) without gold cases
 JUDGED = ("grounded_rate", "unsupported_claim_rate")
 GROUP_SUFFIX = re.compile(r"^(.*)\[(category|origin)=(.*)\]$")
 
@@ -29,6 +30,13 @@ def label_of(card: Card) -> str:
         if f.label:
             return f.label
     return "insufficient"
+
+
+def predicted_label(p: Prediction) -> str | None:
+    """The consistency label a row gives: from its card, else its bare label; None for a retrieval row."""
+    if p.card is not None:
+        return label_of(p.card)
+    return p.label
 
 
 def schema_valid(raw: str) -> bool:
@@ -71,10 +79,9 @@ def is_binary(name: str) -> bool:
 def units(rows: Rows, name: str) -> list[Unit] | None:
     """Correct/incorrect outcome per scenario for a binary metric, or None when not recomputable."""
     if name == "label_accuracy":
-        if any(p.card is None for _, p in rows):
+        if any(predicted_label(p) is None for _, p in rows):
             return None
-        out = [(s.id, float(label_of(p.card) == s.gold_label))  # type: ignore[arg-type]
-               for s, p in rows if s.gold_label]
+        out = [(s.id, float(predicted_label(p) == s.gold_label)) for s, p in rows if s.gold_label]
     elif name == "schema_valid_rate":
         if any(p.raw_output is None for _, p in rows):
             return None
@@ -172,11 +179,20 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
 
     out: Metrics = {}
     carded = [(s, p, p.card) for s, p in rows if p.card is not None]
-    if want("macro_f1", "false_alert_rate"):
-        labelled = [(s.gold_label, label_of(c)) for s, _, c in carded if s.gold_label]
+    if want("macro_f1", "false_alert_rate", *F1_LABELS):
+        labelled = [(s.gold_label, q) for s, p in rows if s.gold_label and (q := predicted_label(p))]
         gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
         out["macro_f1"] = M.macro_f1(gold, pred)
         out["false_alert_rate"] = M.false_alert_rate(gold, pred)
+        for label, name in zip(M.LABELS, F1_LABELS):
+            out[name] = M.label_f1(gold, pred, label)
+    if want("label_accuracy"):
+        u = units(rows, "label_accuracy")
+        out["label_accuracy"] = M.mean([v for _, v in u]) if u else None
+    if want("ece"):
+        scored = [(s, p, predicted_label(p)) for s, p in rows if s.gold_label and predicted_label(p)]
+        if scored and all(p.probability is not None for _, p, _ in scored):  # else the source field is missing
+            out["ece"] = M.ece([s.gold_label == q for s, _, q in scored], [p.probability for _, p, _ in scored])  # type: ignore[misc]
     if want("abstain_when_insufficient", "answer_when_answerable"):
         out.update(M.abstention_accuracy(
             [c.status == "abstained" for _, _, c in carded],

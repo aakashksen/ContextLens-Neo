@@ -1,0 +1,441 @@
+{
+ "run_id": "E4-20261103T084834918198Z",
+ "experiment": "E4",
+ "git_commit": "0ac406a30aa6d0ef8b9ed8787c21bc263c5e1ce6",
+ "dirty": false,
+ "dataset_hash": "409ac3772f7a2f5dc01ee7a95581e23874361284bc3614c244aaffc4a3bc58a1",
+ "split": "dev",
+ "scenario_source": "decode",
+ "config": {
+  "experiment": "E4",
+  "source": "decode",
+  "winner_rule": "highest dev macro-F1 over the four labels on our dev scenarios (the best epoch of the run); ties broken by fewer epochs, then by lower learning rate",
+  "winner": "lr1e-05_ep2",
+  "grid": [
+   [
+    1e-05,
+    2
+   ],
+   [
+    1e-05,
+    3
+   ],
+   [
+    2e-05,
+    2
+   ],
+   [
+    2e-05,
+    3
+   ],
+   [
+    3e-05,
+    2
+   ],
+   [
+    3e-05,
+    3
+   ]
+  ],
+  "batch_size": 8,
+  "min_batch_size": 2,
+  "settings_at_lower_batch_size": [],
+  "winner_batch_size": 8,
+  "batch_size_note": "on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like",
+  "num_workers": 2,
+  "patience": 1,
+  "threshold": 0.5,
+  "freeze_word_embeddings": true,
+  "training": {
+   "decode_train_pairs": 8000,
+   "scenarios_train_pairs": 48,
+   "scenario_repeat": 8,
+   "examples": 8384,
+   "label_consistent": 4129,
+   "label_contradiction": 4079,
+   "label_insufficient": 80,
+   "label_update": 96
+  },
+  "sample_rule": "pairs ordered by sha256 of conversation_id|label|statement, the first N taken; the same rule picks the DECODE train sample and the DECODE dev sample",
+  "decode_dev_sample": 1000,
+  "decode_train_sample": 8000,
+  "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
+  "style_note": "training used our own writing style (the train-only scenario set was written for this project, like the dev and test scenarios), so scores on our scenarios could look better than real use",
+  "train_set_review_note": "an independent read of the invented train-only set, before training, caught real near-copies of held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it could not have caught them; those cases were rewritten and read again",
+  "decode_note": "DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used for no training; DECODE test is untouched.",
+  "checkpoint_sha256": "2ef5bbd22c78a7609e745be4a771fd07de4a862517751ad865d34dafc6b2754c",
+  "scored_cases": 1000,
+  "started_at": "2026-11-03T07:58:22.686274+00:00",
+  "labels_reviewed": false,
+  "failed_systems": {}
+ },
+ "models": {
+  "trained": "microsoft/deberta-v3-base fine-tuned",
+  "tfidf": "tfidf-logreg",
+  "zeroshot": "cross-encoder/nli-deberta-v3-xsmall",
+  "prompted": "qwen3.5:4b-q4_K_M"
+ },
+ "prompt_versions": {
+  "consistency": "v1"
+ },
+ "n": 1000,
+ "metrics": {
+  "trained": {
+   "false_alert_rate": 0.0,
+   "label_accuracy": 0.503,
+   "latency_p50_ms": 22.0,
+   "latency_p95_ms": 37.0
+  },
+  "tfidf": {
+   "false_alert_rate": 0.2485089463220676,
+   "label_accuracy": 0.763,
+   "latency_p50_ms": 0.0,
+   "latency_p95_ms": 1.0
+  },
+  "zeroshot": {
+   "false_alert_rate": 0.4731610337972167,
+   "label_accuracy": 0.715,
+   "latency_p50_ms": 22.0,
+   "latency_p95_ms": 32.0
+  },
+  "prompted": {
+   "false_alert_rate": 0.02186878727634195,
+   "label_accuracy": 0.8,
+   "latency_p50_ms": 554.0,
+   "latency_p95_ms": 634.05
+  }
+ },
+ "intervals": {
+  "trained": {
+   "label_accuracy": [
+    0.47205449101796404,
+    0.534
+   ],
+   "false_alert_rate": [
+    0.0,
+    0.0
+   ]
+  },
+  "tfidf": {
+   "label_accuracy": [
+    0.7364729458917836,
+    0.7889461055276381
+   ],
+   "false_alert_rate": [
+    0.2118315752242658,
+    0.28712972111875135
+   ]
+  },
+  "zeroshot": {
+   "label_accuracy": [
+    0.6863727454909819,
+    0.7424849699398798
+   ],
+   "false_alert_rate": [
+    0.4301438894523327,
+    0.5172447077619491
+   ]
+  },
+  "prompted": {
+   "label_accuracy": [
+    0.7749993693239152,
+    0.8248248248248248
+   ],
+   "false_alert_rate": [
+    0.010040160642570281,
+    0.03557477979135073
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "label_accuracy",
+   "diff": -0.26,
+   "ci": [
+    -0.3001988570584525,
+    -0.2193158953722334
+   ],
+   "mcnemar_p": 7.989143998291564e-32
+  },
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "false_alert_rate",
+   "diff": -0.2485089463220676,
+   "ci": [
+    -0.28712972111875135,
+    -0.2118315752242658
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "label_accuracy",
+   "diff": -0.21199999999999997,
+   "ci": [
+    -0.26100540877367895,
+    -0.16232399274355158
+   ],
+   "mcnemar_p": 5.12120918967349e-16
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "false_alert_rate",
+   "diff": -0.4731610337972167,
+   "ci": [
+    -0.5172447077619492,
+    -0.43014388945233273
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "label_accuracy",
+   "diff": -0.29700000000000004,
+   "ci": [
+    -0.32669322709163345,
+    -0.2676616915422886
+   ],
+   "mcnemar_p": 1.4222521493273725e-76
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "false_alert_rate",
+   "diff": -0.02186878727634195,
+   "ci": [
+    -0.03557477979135076,
+    -0.010040160642570281
+   ],
+   "mcnemar_p": null
+  }
+ ],
+ "supersedes": [],
+ "attempts": [
+  {
+   "setting": "lr1e-05_ep2",
+   "lr": 1e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 173.03092079999988
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 157.9855929999976
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 165.50825689999874,
+   "peak_gpu_memory_mb": 3312.599609375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr1e-05_ep3",
+   "lr": 1e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 168.59098340000128
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 127.75889059999827
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 148.17493699999977,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep2",
+   "lr": 2e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 145.37616449999769
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 137.6107278999989
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 141.4934461999983,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep3",
+   "lr": 2e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 154.48237259999587
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 114.04081530000258
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 134.26159394999922,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep2",
+   "lr": 3e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 122.45544340000197
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 115.06269939999765
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 118.75907139999981,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep3",
+   "lr": 3e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 139.71905369999877
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 116.89951739999378
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 128.30928554999628,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "tfidf",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "zeroshot",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "prompted",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": false,
+ "predictions": {
+  "trained": "results/runs/E4-20261103T084834918198Z.trained.predictions.jsonl",
+  "tfidf": "results/runs/E4-20261103T084834918198Z.tfidf.predictions.jsonl",
+  "zeroshot": "results/runs/E4-20261103T084834918198Z.zeroshot.predictions.jsonl",
+  "prompted": "results/runs/E4-20261103T084834918198Z.prompted.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T07:58:22.686274+00:00",
+ "finished_at": "2026-11-03T08:48:34.918198+00:00"
+}

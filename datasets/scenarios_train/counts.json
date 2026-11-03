@@ -1,0 +1,44 @@
+{
+ "cases": {
+  "total": 74,
+  "conversations": 74
+ },
+ "by_label": {
+  "consistent": 14,
+  "contradiction": 12,
+  "insufficient": 10,
+  "none": 26,
+  "update": 12
+ },
+ "by_mode": {
+  "clarify": 32,
+  "recall": 34,
+  "respond": 8
+ },
+ "by_category": {
+  "contradiction": 12,
+  "hypothetical_or_joking": 6,
+  "injected_consistent": 2,
+  "insufficient_evidence": 10,
+  "legitimate_update": 12,
+  "prompt_injection": 6,
+  "recall": 8,
+  "respond_with_suggestion": 8,
+  "wrong_speaker_trap": 10
+ },
+ "by_mode_and_label": {
+  "clarify/consistent": 8,
+  "clarify/contradiction": 12,
+  "clarify/update": 12,
+  "recall/consistent": 6,
+  "recall/insufficient": 10,
+  "recall/none": 18,
+  "respond/none": 8
+ },
+ "abstention_cases": {
+  "insufficient": 10
+ },
+ "injected_turn_cases": {
+  "with_injection": 8
+ }
+}
