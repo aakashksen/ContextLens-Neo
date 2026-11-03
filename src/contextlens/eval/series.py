@@ -183,6 +183,9 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
         gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
         out["macro_f1"] = M.macro_f1(gold, pred)
         out["false_alert_rate"] = M.false_alert_rate(gold, pred)
+    if want("label_accuracy"):
+        u = units(rows, "label_accuracy")
+        out["label_accuracy"] = M.mean([v for _, v in u]) if u else None
     if want("ece"):
         scored = [(s, p, predicted_label(p)) for s, p in rows if s.gold_label and predicted_label(p)]
         if scored and all(p.probability is not None for _, p, _ in scored):  # else the source field is missing

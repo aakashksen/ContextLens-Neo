@@ -228,3 +228,228 @@ def test_mlflow_logging_goes_to_a_local_store(tmp_path: Path) -> None:
     found = mlflow.MlflowClient(tracking_uri=(tmp_path / "mlruns").as_uri()).search_runs(
         [mlflow.MlflowClient(tracking_uri=(tmp_path / "mlruns").as_uri()).get_experiment_by_name("e4-test").experiment_id])
     assert found[0].data.params["lr"] == "0.001" and found[0].data.metrics["dev_macro_f1"] == 0.5
+
+
+# ---- the runner on a tiny model and a tiny invented fixture ----
+
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from contextlens.agents.consistency_check import PromptedChecker  # noqa: E402
+from contextlens.consistency.baselines import ZeroShotChecker  # noqa: E402
+from contextlens.eval.check_run import check  # noqa: E402
+from contextlens.eval.records import write_scenarios_manifest  # noqa: E402
+from contextlens.experiments import e4_consistency as e4  # noqa: E402
+
+FIXTURE_RAW = ROOT / "tests/fixtures/data"
+DEV_CASES = [
+    ("contradiction", "contradiction", ["Quincy: The kettle has never once been broken.", "Rue: Handy.", "Quincy: I replaced the kettle after it cracked in half."]),
+    ("contradiction", "contradiction", ["Pim: My stall opens at six every day.", "Ode: Early.", "Pim: On Mondays the stall stays closed till noon."]),
+    ("legitimate_update", "update", ["Tal: The quiz starts at seven.", "Una: Fine.", "Tal: The host asked for eight instead, so the quiz is at eight."]),
+    ("legitimate_update", "update", ["Vic: Our table is number nine.", "Wyn: Good.", "Vic: They moved us, so we are at table twelve now."]),
+    ("wrong_speaker_trap", "consistent", ["Xan: I will drive on Sunday.", "Yoli: Okay.", "Yoli: I will take the train on Sunday."]),
+    ("hypothetical_or_joking", "consistent", ["Zed: The picnic is on the ninth.", "Abe: Great.", "Zed: If it snowed we would eat indoors, ha."]),
+    ("insufficient_evidence", "insufficient", ["Bix: We booked the boat.", "Cy: Lovely."]),
+    ("insufficient_evidence", "insufficient", ["Dov: A parcel arrived for us.", "Eli: Good."]),
+    ("recall", None, ["Fen: The key is under the mat.", "Gus: Thanks."]),
+]
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True, capture_output=True)
+
+
+def _stub_llm(label: str = "consistent"):
+    class Llm:
+        model = "stub-llm-for-tests"
+
+        def complete(self, messages, *, schema=None, max_tokens=512, temperature=0.0, timeout_s=10.0):
+            return SimpleNamespace(parsed=schema(label=label, confidence=0.7))
+
+    return Llm()
+
+
+def _scorer(pairs):
+    return [[0.9, 0.05, 0.05] if "never" in b else [0.1, 0.8, 0.1] for _, b in pairs]
+
+
+class Repo:
+    def __init__(self, root: Path, base: Path) -> None:
+        self.root, self.base = root, base
+
+    def run(self, **kw):
+        args = dict(root=self.root, raw_root=FIXTURE_RAW, base_model=str(self.base), device="cpu",
+                    grid=((1e-3, 2), (3e-3, 2)), make_zeroshot=lambda: ZeroShotChecker(scorer=_scorer),
+                    make_prompted=lambda: PromptedChecker(_stub_llm()))
+        args.update(kw)
+        return e4.run_e4(**args)
+
+
+def _dev_scenario(i: int, cat: str, label: str | None, lines: list[str]) -> Scenario:
+    s = ts._scenario("x", i, cat, lines, [], label=label)  # type: ignore[arg-type]
+    cid = f"dev-fx-{i}"
+    turns = [t.model_copy(update={"conversation_id": cid, "id": f"{cid}:t{t.seq}"}) for t in s.conversation.turns]
+    conv = s.conversation.model_copy(update={"id": cid, "split": "dev", "turns": turns})
+    return s.model_copy(update={"id": cid, "conversation": conv, "request": s.request.model_copy(update={"conversation_id": cid})})
+
+
+@pytest.fixture
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
+    from contextlens.eval import series as ser
+
+    monkeypatch.setattr(ser, "RESAMPLES", 100)
+    root = tmp_path / "repo"
+    d = root / "datasets/scenarios"
+    d.mkdir(parents=True)
+    fixed = [_dev_scenario(i, *case) for i, case in enumerate(DEV_CASES)]
+    (d / "dev.jsonl").write_text("".join(s.model_dump_json() + "\n" for s in fixed), encoding="utf-8")
+    write_scenarios_manifest(root)
+    (root / "datasets/scenarios_train").mkdir(parents=True)
+    shutil.copy(ROOT / "datasets/scenarios_train/train.jsonl", root / "datasets/scenarios_train/train.jsonl")
+    (root / ".gitignore").write_text("datasets/raw/\nmodels/\nmlruns/\n", encoding="utf-8")
+    e4.prepare_decode_dev(FIXTURE_RAW, root)
+    _git(root, "init", "-q")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "init")
+    base, tok = _tiny(tmp_path)
+    base.save_pretrained(tmp_path / "base")
+    tok.save_pretrained(tmp_path / "base")
+    return Repo(root, tmp_path / "base")
+
+
+def _records(root: Path) -> dict[str, dict]:
+    recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((root / "results/runs").glob("E4-*.json"))]
+    return {r["scenario_source"]: r for r in recs}
+
+
+def test_the_run_writes_valid_records_for_both_sources(repo: Repo) -> None:
+    result = repo.run()
+    assert result["complete"] and result["winner"] in {"lr0.001_ep2", "lr0.003_ep2"}
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+    recs = _records(repo.root)
+    assert set(recs) == {"scenarios", "decode"}
+    for r in recs.values():
+        assert r["split"] == "dev" and sorted(r["predictions"]) == sorted(e4.SYSTEMS)
+        training = [a for a in r["attempts"] if a["kind"] == "training"]
+        assert [a["setting"] for a in training] == ["lr0.001_ep2", "lr0.003_ep2"] and all(a["ok"] for a in training)
+        assert {a["setting"] for a in r["attempts"] if a["kind"] == "system"} == {"tfidf", "zeroshot", "prompted"}
+        assert r["config"]["winner_rule"] == e4.WINNER_RULE and "own writing style" in r["config"]["style_note"]
+        assert {c["b"] for c in r["comparisons"]} <= {"tfidf", "zeroshot", "prompted"}
+    sc = recs["scenarios"]
+    assert {"macro_f1", "false_alert_rate", "label_accuracy", "ece"} <= set(sc["metrics"]["trained"])
+    assert sc["n"] == len(DEV_CASES) and sc["config"]["scored_cases"] == len(DEV_CASES) - 1
+    assert (repo.root / "results/error-analysis-e4.md").is_file()
+    assert any((repo.root / "models/e4").glob("*/label_map.json"))
+
+
+def test_decode_rows_hold_ids_and_labels_only_and_check_run_enforces_it(repo: Repo) -> None:
+    repo.run()
+    rec = _records(repo.root)["decode"]
+    for rel in rec["predictions"].values():
+        for line in (repo.root / rel).read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            assert row["card"] is None and row["raw_output"] is None and row["label"] in ("contradiction", "consistent")
+    tracked = subprocess.run(["git", "ls-files"], cwd=repo.root, capture_output=True, text=True).stdout
+    assert "scenarios/decode" not in tracked and (repo.root / "datasets/raw/scenarios/decode/dev.jsonl").is_file()
+    path = repo.root / rec["predictions"]["trained"]
+    rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()]
+    rows[0]["card"] = {"mode": "clarify", "status": "abstained", "findings": []}
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    assert any("ids and metrics only" in p for p in check("E4", root=repo.root, split="dev"))
+
+
+def test_a_tampered_ece_is_rejected_and_an_honest_one_is_not(repo: Repo) -> None:
+    repo.run()
+    run_json = next(p for p in (repo.root / "results/runs").glob("E4-*.json")
+                    if json.loads(p.read_text(encoding="utf-8"))["scenario_source"] == "scenarios")
+    rec = json.loads(run_json.read_text(encoding="utf-8"))
+    assert rec["metrics"]["trained"]["ece"] is not None
+    rec["metrics"]["trained"]["ece"] += 0.05
+    run_json.write_text(json.dumps(rec), encoding="utf-8")
+    assert any("ece does not recompute" in p for p in check("E4", root=repo.root, split="dev"))
+
+
+def test_a_search_run_that_fails_is_listed_and_the_search_goes_on(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = ct.fit
+
+    def flaky(*a, **kw):
+        if kw["lr"] == 1e-3:
+            raise RuntimeError("CUDA out of memory")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ct, "fit", flaky)
+    result = repo.run()
+    assert result["winner"] == "lr0.003_ep2" and result["complete"]
+    attempts = {a["setting"]: a for a in _records(repo.root)["scenarios"]["attempts"] if a["kind"] == "training"}
+    assert not attempts["lr0.001_ep2"]["ok"] and "out of memory" in attempts["lr0.001_ep2"]["error"]
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+
+
+def test_when_every_run_fails_nothing_is_written(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(*a, **kw):
+        raise RuntimeError("no GPU memory")
+
+    monkeypatch.setattr(ct, "fit", broken)
+    with pytest.raises(RuntimeError, match="no training run finished"):
+        repo.run()
+    assert not (repo.root / "results").exists()
+
+
+def test_a_baseline_that_fails_is_listed_and_left_out(repo: Repo) -> None:
+    class Down:
+        def complete(self, *a, **kw):
+            raise ConnectionError("ollama is not running")
+
+    result = repo.run(make_prompted=lambda: PromptedChecker(Down()))
+    assert not result["complete"] and "prompted" in result["failed"]
+    recs = _records(repo.root)
+    assert "prompted" not in recs["scenarios"]["predictions"]
+    failed = [a for a in recs["decode"]["attempts"] if a["kind"] == "system" and not a["ok"]]
+    assert [a["setting"] for a in failed] == ["prompted"] and "ollama is not running" in failed[0]["error"]
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+
+
+def test_the_winner_rule_is_fixed_by_macro_f1_then_fewer_epochs_then_lower_lr() -> None:
+    def a(lr, ep, f1, ok=True):
+        return {"setting": f"{lr}-{ep}", "lr": lr, "epochs": ep, "ok": ok, "dev_macro_f1": f1}
+
+    assert e4.pick_winner([a(1e-5, 2, 0.5), a(2e-5, 3, 0.6), a(3e-5, 2, 0.4)])["setting"] == "2e-05-3"
+    assert e4.pick_winner([a(2e-5, 3, 0.6), a(2e-5, 2, 0.6), a(1e-5, 3, 0.6)])["setting"] == "2e-05-2"
+    assert e4.pick_winner([a(1e-5, 3, 0.6), a(2e-5, 3, 0.6)])["setting"] == "1e-05-3"
+    assert e4.pick_winner([a(1e-5, 2, None, ok=False)]) is None
+    assert len(e4.GRID) <= 6
+
+
+def test_dev_scenarios_cannot_reach_training(repo: Repo) -> None:
+    mine = ts.load_train_scenarios(repo.root / "datasets/scenarios_train")
+    with pytest.raises(RuntimeError, match="share text with dev"):
+        e4.training_data(FIXTURE_RAW, repo.root, mine[:3])
+    dev = load_scenarios("dev", repo.root / "datasets/scenarios")
+    data = e4.training_data(FIXTURE_RAW, repo.root, dev)
+    assert data.counts["decode_train_pairs"] == 4 and {e.label for e in data.examples} >= {"update", "insufficient"}
+    assert not {e.group for e in data.examples} & {s.id for s in dev}
+
+
+def test_the_runner_never_reads_the_test_split() -> None:
+    src = Path(e4.__file__).read_text(encoding="utf-8")
+    assert '"test"' not in src and "'test'" not in src
+
+
+def test_error_analysis_lists_fifty_by_category_and_never_shows_decode_text() -> None:
+    def sc(i: int, cat: str, text: str) -> Scenario:
+        s = _sc(f"{cat}-{i}", "contradiction", cat)
+        turns = [t.model_copy(update={"text": text}) for t in s.conversation.turns]
+        return s.model_copy(update={"conversation": s.conversation.model_copy(update={"turns": turns})})
+
+    mine = [sc(i, c, "invented words here") for c in ("update_case", "trap_case") for i in range(40)]
+    theirs = [sc(i, "decode", "SECRET DECODE SENTENCE") for i in range(40)]
+
+    def wrong(ss):
+        return [Prediction(scenario_id=s.id, label="consistent", probability=0.6) for s in ss]
+
+    md = e4.error_analysis({"scenarios": mine, "decode": theirs}, {"scenarios": wrong(mine), "decode": wrong(theirs)})
+    assert md.count("\n### ") == 50 and "SECRET DECODE SENTENCE" not in md and "invented words here" in md
+    counts = {c: md.count(f"### {c}-") for c in ("update_case", "trap_case", "decode")}
+    assert counts == {"update_case": 16, "trap_case": 17, "decode": 17}  # alphabetical, so decode and trap_case get the extra one
+    assert "- decode: 40" in md and "- trap_case: 40" in md

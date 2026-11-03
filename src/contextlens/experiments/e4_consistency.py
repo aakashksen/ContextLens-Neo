@@ -1,0 +1,412 @@
+"""E4: does a trained consistency model beat TF-IDF, zero-shot and prompted baselines?
+
+Four systems on the dev split only, in two records: our dev scenarios (four labels, cards, with the model's
+probability so calibration is scored) and a fixed sample of DECODE's dev conversations (contradiction or not,
+ids only, no DECODE text). The trained model is the best of a small search over learning rate and epochs, picked by a
+rule fixed here (`pick_winner`), never by a test split, which this module does not read.
+
+Training data: DECODE's train split (a fixed sample) plus the train-only scenario set at datasets/scenarios_train/.
+That set is in our own writing style, so scores on our scenarios could look better than real use. Dev scenarios are used
+for early stopping and for picking the winner, so they are selection data, not a held-out score.
+
+Run: .venv/Scripts/python -m contextlens.experiments.e4_consistency --prepare   (once; then commit the manifest)
+     .venv/Scripts/python -m contextlens.experiments.e4_consistency
+"""
+import argparse
+import gc
+import hashlib
+import json
+import sys
+import time
+from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from contextlens.agents.consistency_check import ConsistencyChecker, PromptedChecker
+from contextlens.consistency import model as cm
+from contextlens.consistency import train as ct
+from contextlens.consistency.baselines import ZERO_SHOT_MODEL, TfidfChecker, ZeroShotChecker
+from contextlens.consistency.data import build_pairs
+from contextlens.data import train_scenarios as ts
+from contextlens.data.loaders import Pair
+from contextlens.data.scenarios import load_scenarios
+from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
+from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_local_manifest, write_run
+from contextlens.eval.series import base_name, predicted_label
+from contextlens.replay.runner import Prediction
+from contextlens.schemas import ButtonRequest, Card, Conversation, Finding, Scenario, Turn
+
+SPLIT = "dev"
+SOURCES = ("scenarios", "decode")
+GRID = tuple((lr, epochs) for lr in (1e-5, 2e-5, 3e-5) for epochs in (2, 3))  # 6 runs, the most the plan allows
+BATCH_SIZE = 8
+PATIENCE = 1
+DECODE_TRAIN_N = 8000  # DECODE train pairs used, a fixed sample
+DECODE_DEV_N = 1000  # DECODE dev pairs scored, a fixed sample
+SCENARIO_REPEAT = 8  # each train-only scenario pair is seen this many times per epoch
+PROMPTED_MODEL = "qwen3.5:4b-q4_K_M"  # docs/model-choice.md
+RAW_DIR = Path("datasets/raw")
+CHECKPOINTS = Path("models/e4")  # git-ignored
+MLRUNS = Path("mlruns")  # git-ignored
+ERROR_ANALYSIS_REL = Path("results/error-analysis-e4.md")
+ERRORS_SHOWN = 50
+SYSTEMS = ("trained", "tfidf", "zeroshot", "prompted")
+SAVED = {"macro_f1", "false_alert_rate", "label_accuracy", "ece", "latency_p50_ms", "latency_p95_ms",
+         "abstain_when_insufficient", "answer_when_answerable"}
+WINNER_RULE = ("highest dev macro-F1 over the four labels on our dev scenarios (the best epoch of the run); ties broken "
+               "by fewer epochs, then by lower learning rate")
+SAMPLE_RULE = ("pairs ordered by sha256 of conversation_id|label|statement, the first N taken; the same rule picks the "
+               "DECODE train sample and the DECODE dev sample")
+STYLE_NOTE = ("training used our own writing style (the train-only scenario set was written for this project, like the "
+              "dev and test scenarios), so scores on our scenarios could look better than real use")
+DECODE_NOTE = ("DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are "
+               "accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used "
+               "for no training; DECODE test is untouched.")
+
+
+class SystemFailed(RuntimeError):
+    pass
+
+
+def _rank(*parts: str) -> str:
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
+def sample_pairs(pairs: list[Pair], n: int) -> list[Pair]:
+    return sorted(pairs, key=lambda p: _rank(p.conversation_id, p.label, p.statement))[:n]
+
+
+def _speaker(m: int, j: int) -> str:
+    return "A" if (m - j) % 2 == 0 else "B"
+
+
+def decode_scenario(p: Pair) -> Scenario:
+    """A DECODE dev pair as a scenario: the statement is the last turn. The text stays in git-ignored datasets/raw/."""
+    sid = f"decode-dev-{_rank(p.conversation_id, p.label, p.statement)[:12]}"
+    texts = [*p.earlier, p.statement]
+    m = len(p.earlier)
+    turns = [Turn(id=f"{sid}:t{i}", conversation_id=p.conversation_id, seq=i, speaker=_speaker(m, i), text=t,
+                  start_ms=i * 1000, end_ms=i * 1000 + 900, source="dataset") for i, t in enumerate(texts)]
+    return Scenario(
+        id=sid, conversation=Conversation(id=p.conversation_id, turns=turns, source="decode", split="dev"),
+        request=ButtonRequest(conversation_id=p.conversation_id, as_of_seq=m), category="decode",
+        gold_evidence_turn_ids=[], gold_label=p.label, gold_answer=None, origin="dataset")  # type: ignore[arg-type]
+
+
+def prepare_decode_dev(raw_root: Path = RAW_DIR, root: Path = ROOT, n: int = DECODE_DEV_N) -> int:
+    """Write the DECODE dev sample (git-ignored) and its manifest of hash, count and ids (commit it before the run)."""
+    pairs = [p for p in build_pairs(SPLIT, raw_root, root / "datasets/none") if p.source == "decode"]
+    scs = [decode_scenario(p) for p in sample_pairs(pairs, n)]
+    write_local_manifest("decode", {SPLIT: scs}, root)
+    return len(scs)
+
+
+@dataclass
+class TrainingData:
+    examples: list[cm.Example]
+    pairs: list[Pair]  # the same data as pairs, for the TF-IDF baseline
+    counts: dict[str, int]
+
+
+def training_data(raw_root: Path, root: Path, dev_scenarios: list[Scenario]) -> TrainingData:
+    """DECODE train sample plus the train-only scenarios. Stops if anything of dev reaches training."""
+    mine = ts.load_train_scenarios(root / ts.TRAIN_DIR)
+    if mine != ts.build_train_scenarios():
+        raise RuntimeError("datasets/scenarios_train/train.jsonl is not what the code builds; rebuild and commit it")
+    clash = ts.overlap_problems(mine, dev_scenarios)
+    if clash:
+        raise RuntimeError("the train-only scenarios share text with dev: " + "; ".join(clash))
+    got = build_pairs("train", raw_root, root / ts.TRAIN_DIR)
+    if any(p.split != "train" for p in got):
+        raise RuntimeError("a non-train pair reached training")
+    decode = sample_pairs([p for p in got if p.source == "decode"], DECODE_TRAIN_N)
+    own = [p for p in got if p.source == "scenarios"]
+    dev_convs = {p.conversation_id for p in build_pairs(SPLIT, raw_root, root / "datasets/none")}
+    if dev_convs & {p.conversation_id for p in decode}:
+        raise RuntimeError("a dev conversation reached training")
+    pairs = decode + own * SCENARIO_REPEAT
+    examples = cm.examples_from_pairs(decode) + cm.examples_from_scenarios(mine, "scenarios_train") * SCENARIO_REPEAT
+    return TrainingData(examples, pairs, {
+        "decode_train_pairs": len(decode), "scenarios_train_pairs": len(own), "scenario_repeat": SCENARIO_REPEAT,
+        "examples": len(examples), **{f"label_{k}": v for k, v in sorted(Counter(e.label for e in examples).items())}})
+
+
+def pick_winner(attempts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The finished attempt that WINNER_RULE picks; None when none finished."""
+    done = [(i, a) for i, a in enumerate(attempts) if a["ok"]]
+    return min(done, key=lambda ia: (-ia[1]["dev_macro_f1"], ia[1]["epochs"], ia[1]["lr"], ia[0]))[1] if done else None
+
+
+def _free() -> None:
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
+def search(base_model: str, data: TrainingData, dev: list[cm.Example], *, device: str, root: Path, grid=GRID,
+           say=print) -> list[dict[str, Any]]:
+    """Every setting of the grid, in order. A run that errors is listed with its error and the search goes on."""
+    attempts = []
+    for lr, epochs in grid:
+        name = f"lr{lr:g}_ep{epochs}"
+        out = root / CHECKPOINTS / name
+        row: dict[str, Any] = {"setting": name, "lr": lr, "epochs": epochs, "ok": False, "error": None,
+                               "best_epoch": None, "dev_macro_f1": None, "history": [], "checkpoint": out.as_posix()}
+        say(f"training {name}")
+        model = tokenizer = None
+        try:
+            model, tokenizer = cm.load_pretrained(base_model)
+            model.to(device)
+            params = {"lr": lr, "epochs": epochs, "batch_size": BATCH_SIZE, "base_model": base_model, **data.counts}
+            with ct.mlflow_run(root / MLRUNS, "E4", {"setting": name, **params}) as log:
+                res = ct.fit(model, tokenizer, data.examples, dev, lr=lr, epochs=epochs, batch_size=BATCH_SIZE,
+                             patience=PATIENCE, out_dir=out, freeze_embeddings=True, log=log, meta=params)
+            row.update(ok=True, best_epoch=res.best_epoch, dev_macro_f1=res.best_macro_f1, history=res.history)
+            say(f"  best epoch {res.best_epoch}, dev macro-F1 {res.best_macro_f1:.4f}")
+        except Exception as exc:  # out of memory included: the setting is recorded as failed and the search goes on
+            row["error"] = f"{type(exc).__name__}: {exc}"
+            say(f"  failed: {row['error']}")
+        finally:
+            del model, tokenizer
+            _free()
+        attempts.append(row)
+    return attempts
+
+
+def _card(label: str, confidence: float, statement: str) -> Card:
+    if label == "insufficient":
+        return Card(mode="clarify", status="abstained", findings=[], missing=["not enough information"])
+    return Card(mode="clarify", status="answered", findings=[Finding(
+        agent="consistency", kind="consistency", statement=statement, evidence=[], label=label,  # type: ignore[arg-type]
+        confidence=confidence)])
+
+
+def _judged(s: Scenario) -> tuple[Turn, list[Turn]]:
+    turns = sorted((t for t in s.conversation.turns if t.seq <= s.request.as_of_seq), key=lambda t: t.seq)
+    return turns[-1], turns[:-1]
+
+
+def predict_scenarios(checker: ConsistencyChecker, scenarios: list[Scenario]) -> list[Prediction]:
+    out = []
+    for s in scenarios:
+        statement, earlier = _judged(s)
+        start = time.perf_counter()
+        label, conf = checker.check(statement, earlier)
+        ms = int((time.perf_counter() - start) * 1000)
+        out.append(Prediction(scenario_id=s.id, card=_card(label, conf, statement.text), probability=min(1.0, max(0.0, conf)),
+                              stage_latency_ms={"total": ms}))
+    return out
+
+
+def predict_decode(checker: ConsistencyChecker, scenarios: list[Scenario]) -> list[Prediction]:
+    """Ids and a bare label only; any label but contradiction is non-contradiction (`consistent`)."""
+    out = []
+    for s in scenarios:
+        statement, earlier = _judged(s)
+        start = time.perf_counter()
+        label, _ = checker.check(statement, earlier)
+        ms = int((time.perf_counter() - start) * 1000)
+        out.append(Prediction(scenario_id=s.id, label="contradiction" if label == "contradiction" else "consistent",
+                              stage_latency_ms={"total": ms}))
+    return out
+
+
+def evaluate_system(checker: ConsistencyChecker, data: dict[str, list[Scenario]]) -> dict[str, list[Prediction]]:
+    """Predictions on every source, or SystemFailed: a system that fails anywhere is out of both records."""
+    try:
+        return {"scenarios": predict_scenarios(checker, data["scenarios"]),
+                "decode": predict_decode(checker, data["decode"])}
+    except Exception as exc:
+        raise SystemFailed(f"{type(exc).__name__}: {exc}") from exc
+
+
+def warm_up(checker: ConsistencyChecker, scenario: Scenario, tries: int = 3) -> None:
+    """The first call to a local server loads its model and can time out; later calls are the ones that count."""
+    statement, earlier = _judged(scenario)
+    for _ in range(tries):
+        try:
+            checker.check(statement, earlier)
+            return
+        except Exception:
+            time.sleep(2)
+
+
+def _load(source: str, root: Path) -> tuple[list[Scenario], str]:
+    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
+    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
+    digest = split_hash(SPLIT, root, source)
+    if digest != entry["hash"]:
+        raise RuntimeError(f"the {source} scenario file does not match its manifest")
+    return load_scenarios(SPLIT, root / scenario_dir), digest
+
+
+def _saved(fresh: dict[str, float | None], src: str) -> dict[str, float | None]:
+    """The metrics a record keeps. Our scenarios keep the four-label set and accuracy per category; DECODE is binary,
+    so it keeps accuracy, false alert rate and latency only."""
+    if src == "decode":
+        return {k: v for k, v in fresh.items() if k in {"false_alert_rate", "label_accuracy", "latency_p50_ms", "latency_p95_ms"}}
+    return {k: v for k, v in fresh.items() if (base_name(k) in SAVED and "[" not in k) or k.startswith("label_accuracy[category=")}
+
+
+def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[Prediction]], limit: int = ERRORS_SHOWN) -> str:
+    """Markdown on the trained model's mistakes. Which mistakes are shown is fixed: take categories in alphabetical order,
+    one mistake at a time from each (by scenario id), until `limit`. Our own scenario text is quoted; DECODE
+    mistakes are shown by id only."""
+    wrong: dict[str, list[tuple[Scenario, Prediction, str]]] = {}
+    scored = 0
+    for source, scs in scenarios.items():
+        by_id = {p.scenario_id: p for p in preds[source]}
+        for s in scs:
+            p = by_id[s.id]
+            if not s.gold_label:
+                continue
+            scored += 1
+            got = predicted_label(p)
+            if got != s.gold_label:
+                wrong.setdefault(s.category, []).append((s, p, source))
+    queues = {c: sorted(v, key=lambda t: t[0].id) for c, v in sorted(wrong.items())}
+    shown: list[tuple[Scenario, Prediction, str]] = []
+    while len(shown) < limit and any(queues.values()):
+        for q in queues.values():
+            if q and len(shown) < limit:
+                shown.append(q.pop(0))
+    total = sum(len(v) for v in wrong.values())
+    lines = ["# E4 error analysis: the trained model's mistakes on dev", "",
+             f"{total} mistakes among {scored} scored dev cases; {len(shown)} are listed, chosen by a fixed rule "
+             "(categories in alphabetical order, one at a time from each, by id). DECODE cases appear by id only.", "",
+             "## Mistakes by category", ""]
+    lines += [f"- {c}: {len(v)}" for c, v in sorted(wrong.items())] or ["- none"]
+    lines += ["", "## Listed mistakes", ""]
+    for s, p, source in shown:
+        got = predicted_label(p)
+        prob = f", probability {p.probability:.2f}" if p.probability is not None else ""
+        lines.append(f"### {s.id} ({s.category})")
+        lines.append(f"- gold: {s.gold_label}; predicted: {got}{prob}")
+        if source == "scenarios":
+            judged, earlier = _judged(s)
+            lines += [f"- {t.speaker}: {t.text}" for t in earlier[-3:]]
+            lines.append(f"- statement, {judged.speaker}: {judged.text}")
+        else:
+            lines.append("- text not shown (DECODE); look the id up in the local file")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cpu",
+           grid=GRID, make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker],
+           prompted_model: str = PROMPTED_MODEL, say=print) -> dict[str, Any]:
+    """Search, train the winner, score every system on both sources, and write two records and the error analysis.
+    A search run or a baseline that errors is listed in `attempts` and left out. With no finished training run
+    nothing is written and the run raises. Any left-out system makes the result incomplete."""
+    raw_root = raw_root or root / RAW_DIR
+    if not committed_unchanged({"git_commit": head_commit(root)}, root, SCENARIO_SOURCES["decode"][0].as_posix()):
+        raise RuntimeError("the decode manifest must be committed before the run (run with --prepare)")
+    started = datetime.now(timezone.utc).isoformat()
+    data = {src: _load(src, root) for src in SOURCES}
+    scenarios = {src: scs for src, (scs, _) in data.items()}
+    train = training_data(raw_root, root, scenarios["scenarios"])
+    dev_examples = cm.examples_from_scenarios(scenarios["scenarios"])
+    say(f"training data: {train.counts}; dev macro-F1 is scored on {len(dev_examples)} labelled dev scenarios")
+
+    attempts = search(base_model, train, dev_examples, device=device, root=root, grid=grid, say=say)
+    winner = pick_winner(attempts)
+    if winner is None:
+        raise RuntimeError("no training run finished; nothing is written: " + "; ".join(a["error"] for a in attempts))
+    say(f"winner: {winner['setting']}")
+
+    systems: dict[str, dict[str, list[Prediction]]] = {}
+    failed: dict[str, str] = {}
+
+    def score(name: str, make: Callable[[], ConsistencyChecker], warm: bool = False) -> None:
+        say(f"scoring {name}")
+        try:
+            checker = make()
+            if warm:
+                warm_up(checker, scenarios["scenarios"][0])
+            systems[name] = evaluate_system(checker, scenarios)
+        except Exception as exc:
+            failed[name] = f"{type(exc).__name__}: {exc}"
+            say(f"  {name} failed: {failed[name]}")
+        finally:
+            _free()
+
+    ckpt = root / CHECKPOINTS / winner["setting"]
+    score("trained", lambda: cm.TrainedChecker.from_checkpoint(ckpt, device=device))
+    score("tfidf", lambda: TfidfChecker().fit(train.pairs))
+    score("zeroshot", make_zeroshot)
+    score("prompted", make_prompted, warm=True)
+    if "trained" not in systems:
+        raise RuntimeError(f"the winning model could not be scored: {failed['trained']}")
+
+    error_md = error_analysis(scenarios, {src: systems["trained"][src] for src in SOURCES})
+    ckpt_hash = hashlib.sha256((ckpt / "model.safetensors").read_bytes()).hexdigest() if (ckpt / "model.safetensors").is_file() else None
+    paths = {}
+    for src in SOURCES:
+        scs, digest = data[src]
+        preds = {n: systems[n][src] for n in SYSTEMS if n in systems}
+        metrics = {n: _saved(recompute_metrics(scs, p), src) for n, p in preds.items()}
+        names = ["macro_f1", "label_accuracy", "ece"] if src == "scenarios" else ["label_accuracy", "false_alert_rate"]
+        intervals = {}
+        for n, p in preds.items():
+            got = {m: iv for m, iv in recompute_intervals(scs, p, [m for m in names if metrics[n].get(m) is not None]).items() if iv}
+            if got:
+                intervals[n] = got
+        comparisons = []
+        for other in preds:
+            for m in [x for x in names if x != "ece"]:
+                if other != "trained" and (c := recompute_comparison(scs, preds["trained"], preds[other], m)):
+                    comparisons.append({"a": "trained", "b": other, **c})
+        attempt_rows = [{**a, "kind": "training"} for a in attempts] + [
+            {"setting": n, "kind": "system", "ok": n in systems, "error": failed.get(n)} for n in SYSTEMS if n != "trained"]
+        config = {
+            "experiment": "E4", "source": src, "winner_rule": WINNER_RULE, "winner": winner["setting"],
+            "grid": [list(g) for g in grid], "batch_size": BATCH_SIZE, "patience": PATIENCE,
+            "threshold": cm.THRESHOLD, "freeze_word_embeddings": True, "training": train.counts,
+            "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
+            "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
+            "style_note": STYLE_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
+            "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started, "labels_reviewed": False,
+            "failed_systems": failed,
+        }
+        paths[src] = write_run(
+            "E4", SPLIT, config,
+            {"trained": f"{base_model} fine-tuned", "tfidf": "tfidf-logreg", "zeroshot": ZERO_SHOT_MODEL,
+             "prompted": prompted_model}, {"consistency": "v1"}, metrics, intervals, attempt_rows, preds, digest,
+            comparisons=comparisons, scenario_source=src, root=root)
+    out = root / ERROR_ANALYSIS_REL
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(error_md, encoding="utf-8")
+    return {"winner": winner["setting"], "complete": not failed, "records": paths, "failed": failed}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--prepare", action="store_true", help="write the DECODE dev sample and its manifest, then stop")
+    args = ap.parse_args()
+    if args.prepare:
+        print(prepare_decode_dev())
+        return 0
+    import torch
+
+    if not torch.cuda.is_available():
+        print("no GPU: this run trains DeBERTa and needs a GPU turn", file=sys.stderr)
+        return 3
+    from contextlens.llm.client import OllamaClient
+
+    result = run_e4(device="cuda", make_zeroshot=ZeroShotChecker,
+                    make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)))
+    print(json.dumps({"winner": result["winner"], "complete": result["complete"], "failed": result["failed"],
+                      "records": [p.as_posix() for p in result["records"].values()]}, indent=1))
+    return 0 if result["complete"] else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

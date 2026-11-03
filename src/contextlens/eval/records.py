@@ -41,9 +41,10 @@ MANIFEST_REL = Path("datasets/splits/scenarios.json")
 SCENARIO_SOURCES = {
     "scenarios": (MANIFEST_REL, Path("datasets/scenarios")),
     "qmsum": (Path("datasets/splits/qmsum-scenarios.json"), Path("datasets/raw/scenarios/qmsum")),
+    "decode": (Path("datasets/splits/decode-scenarios.json"), Path("datasets/raw/scenarios/decode")),
 }
-# Prediction rows of these sources may hold ids and metrics data only: no quotes, cards or raw output.
-IDS_ONLY_SOURCES = {"qmsum"}
+# Prediction rows of these sources may hold ids and metrics data only (a bare label is fine): no quotes, cards or raw output.
+IDS_ONLY_SOURCES = {"qmsum", "decode"}
 
 
 def split_hash(split: str, root: Path = ROOT, source: str = "scenarios") -> str:
