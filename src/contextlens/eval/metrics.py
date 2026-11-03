@@ -1,4 +1,8 @@
+import re
 from collections.abc import Callable, Sequence
+from functools import lru_cache
+
+import numpy as np
 
 from contextlens.schemas import Card, ConsistencyLabel, Finding
 
@@ -146,3 +150,83 @@ def speaker_accuracy(pred_speakers: Sequence[str], gold_speakers: Sequence[str])
     if not gold_speakers:
         return None
     return sum(p == g for p, g in zip(pred_speakers, gold_speakers)) / len(gold_speakers)
+
+
+_WORD = re.compile(r"[a-z0-9']+")
+
+
+@lru_cache(maxsize=4096)
+def word_errors(ref: str, hyp: str) -> tuple[int, int]:
+    """(substitutions + insertions + deletions, words in ref) after lowercasing and dropping punctuation."""
+    r, h = _WORD.findall(ref.lower()), _WORD.findall(hyp.lower())
+    if not r or not h:
+        return len(r) or len(h), len(r)
+    ids = {w: i for i, w in enumerate(set(r) | set(h))}
+    hv = np.array([ids[w] for w in h])
+    cols = np.arange(len(h) + 1)
+    prev = cols.copy()
+    for i, w in enumerate(r, start=1):
+        cand = np.empty_like(prev)
+        cand[0] = i
+        cand[1:] = np.minimum(prev[1:] + 1, prev[:-1] + (hv != ids[w]))
+        prev = np.minimum.accumulate(cand - cols) + cols  # the left neighbour's +1 insertion
+    return int(prev[-1]), len(r)
+
+
+def word_error_rate(refs: Sequence[str], hyps: Sequence[str]) -> float | None:
+    """Word errors over reference words, summed over all pairs. None when the references hold no words."""
+    _same_length(refs, hyps)
+    pairs = [word_errors(r, h) for r, h in zip(refs, hyps)]
+    total = sum(n for _, n in pairs)
+    return sum(e for e, _ in pairs) / total if total else None
+
+
+Span = tuple[int, int, str]  # start_ms, end_ms, speaker
+FRAME_MS = 10
+
+
+def _frames(spans: Sequence[Span], skip: str | None = None) -> dict[str, np.ndarray]:
+    end = max((e for _, e, _ in spans), default=0) // FRAME_MS + 1
+    out: dict[str, np.ndarray] = {}
+    for start, stop, who in spans:
+        if who != skip and stop > start:
+            out.setdefault(who, np.zeros(end, dtype=bool))[start // FRAME_MS : -(-stop // FRAME_MS)] = True
+    return out
+
+
+def _best_match(overlap: list[list[int]]) -> int:
+    """Largest total overlap when each row (reference speaker) takes a distinct column (hypothesis speaker)."""
+    best: dict[int, int] = {0: 0}
+    for row in overlap:
+        nxt = dict(best)
+        for used, score in best.items():
+            for j, v in enumerate(row):
+                if not used >> j & 1 and score + v > nxt.get(used | 1 << j, -1):
+                    nxt[used | 1 << j] = score + v
+        best = nxt
+    return max(best.values())
+
+
+def diarization_error(ref: Sequence[Span], hyp: Sequence[Span]) -> tuple[int, int]:
+    """(error frames, reference speaker frames) at 10 ms. Per frame the error is max(reference speakers,
+    hypothesis speakers) minus those matching under the best one-to-one mapping of hypothesis names to reference
+    names, so missed speech, false alarms and confusion all count, overlap included, with no collar. Hypothesis
+    spans named "unknown" are no speech at all."""
+    r, h = _frames(ref), _frames(hyp, skip="unknown")
+    n = max((len(a) for a in (*r.values(), *h.values())), default=0)
+    pad = lambda a: np.pad(a, (0, n - len(a)))  # noqa: E731
+    rm = np.array([pad(a) for a in r.values()]).reshape(len(r), n)
+    hm = np.array([pad(a) for a in h.values()]).reshape(len(h), n)
+    ref_total = int(rm.sum())
+    overlap = (rm.astype(np.int64) @ hm.T.astype(np.int64)).tolist() if len(h) else [[] for _ in r]
+    correct = _best_match(overlap) if len(h) else 0
+    worst = int(np.maximum(rm.sum(axis=0), hm.sum(axis=0)).sum()) if n else 0
+    return worst - correct, ref_total
+
+
+def diarization_error_rate(refs: Sequence[Sequence[Span]], hyps: Sequence[Sequence[Span]]) -> float | None:
+    """Error frames over reference speaker frames, summed over all pairs. None without reference speech."""
+    _same_length(refs, hyps)
+    pairs = [diarization_error(r, h) for r, h in zip(refs, hyps)]
+    total = sum(n for _, n in pairs)
+    return sum(e for e, _ in pairs) / total if total else None

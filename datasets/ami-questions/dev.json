@@ -1,0 +1,620 @@
+{
+ "source": "AMI Meeting Corpus, manual annotations v1.6.2, CC BY 4.0, https://groups.inf.ed.ac.uk/ami/corpus/. Questions are derived from its abstractive summaries and summary links; see docs/ami-questions.md.",
+ "seed": 13,
+ "labels_reviewed": false,
+ "questions": [
+  {
+   "meeting": "ES2003a",
+   "as_of_seq": 108,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2003a:t59",
+    "ES2003a:t103",
+    "ES2003a:t108"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will cost 12.50 Euro to produce. The remote will sell for 25 Euro. The remote will feature an ergonomic design."
+  },
+  {
+   "meeting": "ES2003a",
+   "as_of_seq": 87,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2003a:t87"
+   ],
+   "gold_label": null,
+   "gold_answer": "The team will decide how the user interface will work"
+  },
+  {
+   "meeting": "ES2003a",
+   "as_of_seq": 102,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2003a:t65",
+    "ES2003a:t67",
+    "ES2003a:t68",
+    "ES2003a:t70",
+    "ES2003a:t71",
+    "ES2003a:t72",
+    "ES2003a:t95",
+    "ES2003a:t98",
+    "ES2003a:t102"
+   ],
+   "gold_label": null,
+   "gold_answer": "Putting an LCD screen on the remote. Having a remote that controls multiple devices. Having a joystick on the remote."
+  },
+  {
+   "meeting": "ES2010d",
+   "as_of_seq": 217,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2010d:t161",
+    "ES2010d:t210",
+    "ES2010d:t211",
+    "ES2010d:t217"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group decided that the prototype and the final production cost satisfied enough of their initial criteria to able to continue with the project. The group decided to use one lithium battery instead of several triple A alkaline batteries in order to reduce the number of components."
+  },
+  {
+   "meeting": "ES2010d",
+   "as_of_seq": 316,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2010d:t316"
+   ],
+   "gold_label": null,
+   "gold_answer": "All participants will fill out a final questionnaire."
+  },
+  {
+   "meeting": "ES2010d",
+   "as_of_seq": 300,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2010d:t227",
+    "ES2010d:t228",
+    "ES2010d:t230",
+    "ES2010d:t300"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group felt that their options were constrained by the management's directives. The group had problems with some of the meeting-room equipment. The group complained of not having access to the internet while working on the project."
+  },
+  {
+   "meeting": "ES2011d",
+   "as_of_seq": 458,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2011d:t232",
+    "ES2011d:t233",
+    "ES2011d:t235",
+    "ES2011d:t248",
+    "ES2011d:t259",
+    "ES2011d:t269",
+    "ES2011d:t284",
+    "ES2011d:t298",
+    "ES2011d:t335",
+    "ES2011d:t353",
+    "ES2011d:t458"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group decided that the fruit and vegetable shapes of the device were uncomfortable to hold. They decided to produce the device in one uniform shape, with changeable covers in fruit colors and designs. The group decided that the final production cost and all of the other initial goals were met sufficiently to be able to continue with the project."
+  },
+  {
+   "meeting": "ES2011d",
+   "as_of_seq": 471,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2011d:t471"
+   ],
+   "gold_label": null,
+   "gold_answer": "All participants will write a final report."
+  },
+  {
+   "meeting": "ES2011d",
+   "as_of_seq": 394,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2011d:t232",
+    "ES2011d:t233",
+    "ES2011d:t235",
+    "ES2011d:t248",
+    "ES2011d:t367",
+    "ES2011d:t374",
+    "ES2011d:t382",
+    "ES2011d:t388",
+    "ES2011d:t392",
+    "ES2011d:t394"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group felt that the fruit and vegetable shapes of the remote were uncomfortable to hold. They complained that the meeting-room equipment was difficult to use. Some participants complained that there was not enough information provided to them."
+  },
+  {
+   "meeting": "ES2013c",
+   "as_of_seq": 352,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2013c:t297",
+    "ES2013c:t329",
+    "ES2013c:t350",
+    "ES2013c:t352"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will use a kinetic battery. The case of the remote will be made of rubber. The remote will contain a hard plastic inner shell to protect the interior. The remote will use push buttons."
+  },
+  {
+   "meeting": "ES2013c",
+   "as_of_seq": 365,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2013c:t356",
+    "ES2013c:t365"
+   ],
+   "gold_label": null,
+   "gold_answer": "The marketing expert will work on a product evaluation. The industrial designer will work on the look and feel of the design. The user interface designer will work on the user interface design. Two of the team members will create a prototype using modeling clay"
+  },
+  {
+   "meeting": "ES2013c",
+   "as_of_seq": 303,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2013c:t72",
+    "ES2013c:t74",
+    "ES2013c:t75",
+    "ES2013c:t77",
+    "ES2013c:t125",
+    "ES2013c:t126",
+    "ES2013c:t190",
+    "ES2013c:t194",
+    "ES2013c:t249",
+    "ES2013c:t281",
+    "ES2013c:t284",
+    "ES2013c:t287",
+    "ES2013c:t288",
+    "ES2013c:t290",
+    "ES2013c:t296",
+    "ES2013c:t297",
+    "ES2013c:t299",
+    "ES2013c:t303"
+   ],
+   "gold_label": null,
+   "gold_answer": "Whether to use titanium or a spongy material. Whether creating a fancy remote would adhere to the project budget. Whether to use a kinetic battery."
+  },
+  {
+   "meeting": "ES2013d",
+   "as_of_seq": 312,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2013d:t206",
+    "ES2013d:t262",
+    "ES2013d:t271",
+    "ES2013d:t274",
+    "ES2013d:t275",
+    "ES2013d:t283",
+    "ES2013d:t287",
+    "ES2013d:t289",
+    "ES2013d:t302",
+    "ES2013d:t312"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will use a kinetic battery. The remote will use an electronic simple chip on print. The remote will use push buttons. The remote case will be single-curved. The remote will be in a special color. The remote will be made of plastic. The buttons on the remote will be black. The buttons on the remote will be made of plastic."
+  },
+  {
+   "meeting": "ES2013d",
+   "as_of_seq": 378,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2013d:t378"
+   ],
+   "gold_label": null,
+   "gold_answer": "The team will work on a final questionnaire. The team will work on a meeting summary. The project manager will work on a final report"
+  },
+  {
+   "meeting": "ES2013d",
+   "as_of_seq": 312,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2013d:t22",
+    "ES2013d:t146",
+    "ES2013d:t150",
+    "ES2013d:t153",
+    "ES2013d:t155",
+    "ES2013d:t157",
+    "ES2013d:t160",
+    "ES2013d:t275",
+    "ES2013d:t278",
+    "ES2013d:t283",
+    "ES2013d:t291",
+    "ES2013d:t304",
+    "ES2013d:t312"
+   ],
+   "gold_label": null,
+   "gold_answer": "Whether to select a banana shaped remote or a chunky remote. Whether to create a single-curved or double-curved remote. Whether to have rubber or plastic buttons."
+  },
+  {
+   "meeting": "ES2016a",
+   "as_of_seq": 192,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "ES2016a:t85",
+    "ES2016a:t192"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will sell for 25 Euro. The team will not create a ball shaped remote."
+  },
+  {
+   "meeting": "ES2016a",
+   "as_of_seq": 232,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "ES2016a:t93",
+    "ES2016a:t232"
+   ],
+   "gold_label": null,
+   "gold_answer": "The marketing expert will find out what the most universally appealing remote control on the market is. The marketing expert will research user preferences"
+  },
+  {
+   "meeting": "ES2016a",
+   "as_of_seq": 192,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "ES2016a:t54",
+    "ES2016a:t55",
+    "ES2016a:t61",
+    "ES2016a:t70",
+    "ES2016a:t102",
+    "ES2016a:t106",
+    "ES2016a:t107",
+    "ES2016a:t116",
+    "ES2016a:t122",
+    "ES2016a:t125",
+    "ES2016a:t132",
+    "ES2016a:t136",
+    "ES2016a:t138",
+    "ES2016a:t142",
+    "ES2016a:t153",
+    "ES2016a:t154",
+    "ES2016a:t157",
+    "ES2016a:t178",
+    "ES2016a:t183",
+    "ES2016a:t185",
+    "ES2016a:t192"
+   ],
+   "gold_label": null,
+   "gold_answer": "The stability of a ball shaped remote. Having hinges on a ball shaped remote. What shape the remote should be."
+  },
+  {
+   "meeting": "TS3006b",
+   "as_of_seq": 717,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "TS3006b:t112",
+    "TS3006b:t132",
+    "TS3006b:t143",
+    "TS3006b:t144",
+    "TS3006b:t198",
+    "TS3006b:t208",
+    "TS3006b:t301",
+    "TS3006b:t303",
+    "TS3006b:t309",
+    "TS3006b:t316",
+    "TS3006b:t436",
+    "TS3006b:t454",
+    "TS3006b:t541",
+    "TS3006b:t705",
+    "TS3006b:t706",
+    "TS3006b:t713",
+    "TS3006b:t717"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will have an LCD screen and speech recognition. The advanced functions such as audio settings, contrast and channel programming will be accessed through the screen. The target group will be aged 16-40. A teletext option will not be included. The remote will be for TV only. The remote will feature the corporate logo and colour. The screen and microphone will be at the top of the remote. There will be LEDs under the buttons so that buttons in use will light up."
+  },
+  {
+   "meeting": "TS3006b",
+   "as_of_seq": 748,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "TS3006b:t609",
+    "TS3006b:t620",
+    "TS3006b:t626",
+    "TS3006b:t748"
+   ],
+   "gold_label": null,
+   "gold_answer": "The project manager will write up the meeting minutes. The user interface designer will work on the layout of the remote and the LCD screen menu. The industrial designer will work on the functional aspects of the remote."
+  },
+  {
+   "meeting": "TS3006b",
+   "as_of_seq": 643,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "TS3006b:t13",
+    "TS3006b:t26",
+    "TS3006b:t48",
+    "TS3006b:t49",
+    "TS3006b:t76",
+    "TS3006b:t83",
+    "TS3006b:t166",
+    "TS3006b:t169",
+    "TS3006b:t251",
+    "TS3006b:t272",
+    "TS3006b:t275",
+    "TS3006b:t279",
+    "TS3006b:t623",
+    "TS3006b:t631",
+    "TS3006b:t634",
+    "TS3006b:t643"
+   ],
+   "gold_label": null,
+   "gold_answer": "Some people had problems using the computers. The industrial designer did not receive the necessary information in time to prepare his presentation according to instructions, so his presentation was based on his own ideas. There was some confusion about the the roles of the user interface designer and the industrial designer."
+  },
+  {
+   "meeting": "TS3007a",
+   "as_of_seq": 314,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "TS3007a:t282",
+    "TS3007a:t296",
+    "TS3007a:t306",
+    "TS3007a:t308",
+    "TS3007a:t310",
+    "TS3007a:t312",
+    "TS3007a:t314"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group decided that it was important to incorporate a feature that would make the product very unique."
+  },
+  {
+   "meeting": "TS3007a",
+   "as_of_seq": 326,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "TS3007a:t326"
+   ],
+   "gold_label": null,
+   "gold_answer": "The Industrial Designer will work on the working design."
+  },
+  {
+   "meeting": "TS3007a",
+   "as_of_seq": 374,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "TS3007a:t262",
+    "TS3007a:t263",
+    "TS3007a:t282",
+    "TS3007a:t328",
+    "TS3007a:t331",
+    "TS3007a:t332",
+    "TS3007a:t335",
+    "TS3007a:t341",
+    "TS3007a:t342",
+    "TS3007a:t343",
+    "TS3007a:t347",
+    "TS3007a:t351",
+    "TS3007a:t353",
+    "TS3007a:t365",
+    "TS3007a:t370",
+    "TS3007a:t372",
+    "TS3007a:t374"
+   ],
+   "gold_label": null,
+   "gold_answer": "The group could not decide whether or not the remote should be able to control multiple devices. The group had difficulties deciding when to make decisions on the features they mentioned in their discussion."
+  },
+  {
+   "meeting": "TS3008c",
+   "as_of_seq": 574,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "TS3008c:t380",
+    "TS3008c:t434",
+    "TS3008c:t533",
+    "TS3008c:t571",
+    "TS3008c:t574"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will not feature an LCD screen. The remote will be available in different colour schemes, but not with changeable fronts. The case will be made of plastic and rubber. The remote will feature power, skip, volume, mute, teletext and menu buttons."
+  },
+  {
+   "meeting": "TS3008c",
+   "as_of_seq": 617,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "TS3008c:t6",
+    "TS3008c:t612",
+    "TS3008c:t613",
+    "TS3008c:t615",
+    "TS3008c:t617"
+   ],
+   "gold_label": null,
+   "gold_answer": "The project manager will write up the minutes and put them in the shared folder, using a keyboard instead of the digital pen. The rest of the group will receive instructions via email."
+  },
+  {
+   "meeting": "TS3008c",
+   "as_of_seq": 587,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "TS3008c:t6",
+    "TS3008c:t188",
+    "TS3008c:t189",
+    "TS3008c:t193",
+    "TS3008c:t214",
+    "TS3008c:t228",
+    "TS3008c:t230",
+    "TS3008c:t231",
+    "TS3008c:t260",
+    "TS3008c:t262",
+    "TS3008c:t264",
+    "TS3008c:t270",
+    "TS3008c:t274",
+    "TS3008c:t276",
+    "TS3008c:t277",
+    "TS3008c:t282",
+    "TS3008c:t290",
+    "TS3008c:t329",
+    "TS3008c:t334",
+    "TS3008c:t355",
+    "TS3008c:t390",
+    "TS3008c:t458",
+    "TS3008c:t463",
+    "TS3008c:t472",
+    "TS3008c:t476",
+    "TS3008c:t536",
+    "TS3008c:t541",
+    "TS3008c:t546",
+    "TS3008c:t583",
+    "TS3008c:t587"
+   ],
+   "gold_label": null,
+   "gold_answer": "The project manager had problems using the digital pen to write the minutes. The group were not sure to what extent the remote should incorporate the fruit and vegetable theme. The industrial designer was keen to incorporate an LCD screen, but the others were not so sure. The group were not sure whether to use plastic and rubber or titanium for the case. They were not sure how to use fruity colours without being too flashy."
+  },
+  {
+   "meeting": "TS3010c",
+   "as_of_seq": 392,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "TS3010c:t335",
+    "TS3010c:t338",
+    "TS3010c:t389",
+    "TS3010c:t392"
+   ],
+   "gold_label": null,
+   "gold_answer": "The remote will use a normal battery. The case will be made of hard plastic and rubber."
+  },
+  {
+   "meeting": "TS3010c",
+   "as_of_seq": 419,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "TS3010c:t119",
+    "TS3010c:t412",
+    "TS3010c:t419"
+   ],
+   "gold_label": null,
+   "gold_answer": "The interface designer will find out how much an LCD screen will cost. The industrial designer and user interface designer will stay in the room to design the prototypes."
+  },
+  {
+   "meeting": "TS3010c",
+   "as_of_seq": 404,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "TS3010c:t88",
+    "TS3010c:t98",
+    "TS3010c:t99",
+    "TS3010c:t101",
+    "TS3010c:t109",
+    "TS3010c:t111",
+    "TS3010c:t112",
+    "TS3010c:t113",
+    "TS3010c:t116",
+    "TS3010c:t119",
+    "TS3010c:t122",
+    "TS3010c:t210",
+    "TS3010c:t212",
+    "TS3010c:t214",
+    "TS3010c:t218",
+    "TS3010c:t229",
+    "TS3010c:t233",
+    "TS3010c:t284",
+    "TS3010c:t290",
+    "TS3010c:t293",
+    "TS3010c:t295",
+    "TS3010c:t297",
+    "TS3010c:t304",
+    "TS3010c:t309",
+    "TS3010c:t321",
+    "TS3010c:t404"
+   ],
+   "gold_label": null,
+   "gold_answer": "Whether to use an LCD screen or not. There was a lack of information about the cost of an LCD screen. If they can use a menu on the TV screen if the remote does not have an LCD. Whether to have a trigger-shaped power button. Whether to use a joystick rather than a scroll button to navigate the menu."
+  },
+  {
+   "meeting": "TS3012d",
+   "as_of_seq": 650,
+   "question": "What did the team decide so far?",
+   "category": "decisions",
+   "gold_evidence_turn_ids": [
+    "TS3012d:t46",
+    "TS3012d:t127",
+    "TS3012d:t173",
+    "TS3012d:t177",
+    "TS3012d:t650"
+   ],
+   "gold_label": null,
+   "gold_answer": "Because the prototype was over budget, the team decided to take out the speech recognition from the design. They also discarded the special colour, and decided to rely on the changeable covers for an attractive look. The remote control is going to be called Triple-R."
+  },
+  {
+   "meeting": "TS3012d",
+   "as_of_seq": 673,
+   "question": "What actions were assigned to team members so far?",
+   "category": "actions",
+   "gold_evidence_turn_ids": [
+    "TS3012d:t654",
+    "TS3012d:t672",
+    "TS3012d:t673"
+   ],
+   "gold_label": null,
+   "gold_answer": "The PM is going to finish the project report. The UI and ID will send him their design to include."
+  },
+  {
+   "meeting": "TS3012d",
+   "as_of_seq": 469,
+   "question": "What problems or open issues were raised so far?",
+   "category": "problems",
+   "gold_evidence_turn_ids": [
+    "TS3012d:t46",
+    "TS3012d:t58",
+    "TS3012d:t59",
+    "TS3012d:t63",
+    "TS3012d:t65",
+    "TS3012d:t76",
+    "TS3012d:t91",
+    "TS3012d:t96",
+    "TS3012d:t97",
+    "TS3012d:t115",
+    "TS3012d:t118",
+    "TS3012d:t127",
+    "TS3012d:t153",
+    "TS3012d:t280",
+    "TS3012d:t285",
+    "TS3012d:t291",
+    "TS3012d:t301",
+    "TS3012d:t390",
+    "TS3012d:t396",
+    "TS3012d:t421",
+    "TS3012d:t438",
+    "TS3012d:t446",
+    "TS3012d:t469"
+   ],
+   "gold_label": null,
+   "gold_answer": "The production cost was 17 euros, 4.5 more than the budget. It was imperative that some of the features had to be taken out. There was disagreement over whether the special colour should be scrapped and the look to rely on the separate covers. Other solutions, like abandoning the curve of the casing or replace the rubber with plastic were also suggested. They were also not allowed to raise the budget limit. The precise use of the LCD was not defined: it could be used for TV configuration, or, if possible, for displaying the TV programme and previews. Although the SMARTboard was useful to draw ideas quickly , it could be improved in terms of response time. Similarly, the digital pens did not allow the user to work on more than one page at a time. The team were unable to communicate amongst themselves in between meetings, which hindered the flow of information."
+  }
+ ]
+}

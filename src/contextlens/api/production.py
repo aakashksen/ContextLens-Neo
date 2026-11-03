@@ -3,6 +3,7 @@ speaker model, telemetry and the scene store. `build_services` takes every outsi
 can swap in fakes; `create_production_app` passes the real ones. Live paths use local models only."""
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.tools import Tools
 from contextlens.api.app import create_app
 from contextlens.api.stream import Services
-from contextlens.llm.client import Embedder, LLMClient, OllamaClient
+from contextlens.llm.client import Embedder, LLMClient, OllamaClient, unload_ollama
 from contextlens.llm.warm import Warmup
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
 from contextlens.memory.store import TranscriptStore
@@ -30,6 +31,7 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
 SHUTDOWN_FLUSH_S = 5.0
+EMBED_MODEL = "nomic-embed-text"
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
 
@@ -44,6 +46,12 @@ def local_llms() -> dict[str, LLMClient]:
 
 def local_embedder() -> Embedder:
     return Embedder(base_url=OLLAMA_URL, keep_alive=KEEP_ALIVE)
+
+
+def unload_local_models() -> None:
+    """Drop both models from Ollama's memory (they were loaded with a 30 minute keep_alive), so the GPU is free."""
+    for model in (MODEL, EMBED_MODEL):
+        unload_ollama(model, OLLAMA_URL)
 
 
 def local_warmup(llm: OllamaClient, embedder: Embedder, telemetry: Telemetry | None = None) -> Warmup:
@@ -68,7 +76,7 @@ class Production:
     scenes: SceneStore
 
 
-class _TeamPerPress:
+class TeamPerPress:
     """A team bound to the conversation and frozen seq of each press; nothing carries over between presses."""
 
     def __init__(self, store: TranscriptStore, retriever: Retriever, memory: MemoryStore, llms: dict[str, LLMClient],
@@ -84,23 +92,30 @@ class _TeamPerPress:
 def build_services(
     *, store: TranscriptStore, embedder, llms: dict[str, LLMClient], background_llm: LLMClient | None,
     speech: SpeechService, make_backend=None, telemetry: Telemetry | None = None,
-    deadline_s: float = DEADLINE_S, **service_kw,
+    deadline_s: float = DEADLINE_S, unload: Callable[[], None] | None = None, **service_kw,
 ) -> Production:  # fmt: skip
     retriever, memory = Retriever(store, embedder), MemoryStore()
     telemetry = telemetry or Telemetry()
-    inner: Assistant = _TeamPerPress(store, retriever, memory, llms, deadline_s)
+    inner: Assistant = TeamPerPress(store, retriever, memory, llms, deadline_s)
     traced, scenes = TracedAssistant(inner, telemetry), SceneStore()
 
     def forget(conversation_id: str) -> None:
         scenes.delete(conversation_id)
         traced.discard(conversation_id)
 
+    def shutdown() -> None:
+        try:
+            traced.flush(SHUTDOWN_FLUSH_S)
+        finally:
+            if unload is not None:
+                unload()
+
     services = Services(
         store=store, retriever=retriever, memory=memory, speech=speech,
         make_assistant=lambda conv_id, as_of: traced,
         extractor=MemoryExtractor(background_llm) if background_llm else None,
         make_summary=(lambda: RollingSummary(background_llm)) if background_llm else None,
-        make_backend=make_backend, forget=forget, on_shutdown=lambda: traced.flush(SHUTDOWN_FLUSH_S),
+        make_backend=make_backend, forget=forget, on_shutdown=shutdown,
         **service_kw,
     )  # fmt: skip
     return Production(services, traced, telemetry, scenes)
@@ -118,7 +133,7 @@ def create_production_app() -> FastAPI:
         store=PostgresTranscriptStore(database_url(), embedder), embedder=embedder, llms=llms,
         telemetry=telemetry, warmup=local_warmup(llms["memory"], embedder, telemetry),
         background_llm=llms["memory"], speech=GrpcSpeech(os.environ.get("SPEECH_ADDR", "localhost:50051")),
-        make_backend=SharedSpeakerModel(PyannoteBackend),
+        make_backend=SharedSpeakerModel(PyannoteBackend), unload=unload_local_models,
     )  # fmt: skip
     return create_app(prod.services)
 

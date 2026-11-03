@@ -30,6 +30,8 @@ class Prediction(BaseModel):
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
     label: ConsistencyLabel | None = None  # a bare consistency verdict, for rows that may hold no text
     probability: float | None = Field(default=None, ge=0, le=1)  # the model's probability for the label it gave
+    asr_text: str | None = None  # speech output for the audio up to as_of_seq, so word error rate recomputes
+    speaker_spans: list[tuple[int, int, str]] | None = None  # (start_ms, end_ms, speaker) of the transcribed turns
 
     @model_validator(mode="after")
     def _has_output(self) -> Self:

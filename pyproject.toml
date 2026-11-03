@@ -7,7 +7,7 @@ name = "contextlens"
 version = "0.1.0"
 description = "An on-demand conversation assistant."
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2", "langgraph"]
+dependencies = ["pydantic>=2", "langgraph", "numpy"]
 
 [project.optional-dependencies]
 dev = ["pytest", "opentelemetry-api", "opentelemetry-sdk", "prometheus-client", "ruff", "scikit-learn", "fastapi", "httpx", "uvicorn", "jsonschema", "psutil", "pyyaml", "websockets"]
