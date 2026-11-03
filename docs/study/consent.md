@@ -37,10 +37,19 @@ you; anything already shared outside this project cannot be recalled.
 ## How data is stored and deleted
 - The results file is stored only on [the person's computer], in a folder that is kept out of version control.
   It is not uploaded, emailed, or sent to any cloud service.
+- [CONFIRM BEFORE H4: does the assistant keep the question you type or say? Fill in what the backend does:
+  ____. Do not state anything here that has not been checked.]
 - The assistant used in the test runs on that computer. Nothing you say or do is sent to a cloud model.
 - This signed form is kept on paper, apart from the results, and is not marked with your participant code, so
   the form and the results cannot be matched to each other.
 - The results file and this form are deleted on [date or rule: ____].
+
+## Blanks to fill before H4 (delete this list from the printed copy)
+1. Session length, in minutes.
+2. Contact person for withdrawal, and the withdrawal deadline.
+3. Where the results file is stored.
+4. The deletion date or rule.
+5. Whether the assistant keeps the typed or spoken question, confirmed against what the backend does.
 
 ## Agreement
 I have read this form. I agree to take part. I know I can stop at any time.

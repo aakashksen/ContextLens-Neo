@@ -144,3 +144,61 @@ def test_staged_conversations_do_not_reuse_dev_scenario_text():
     assert staged
     dev = _shingles((ROOT / "datasets" / "scenarios" / "dev.jsonl").read_text(encoding="utf-8"))
     assert not staged & dev
+
+
+def _p(code, task, cond, pts):
+    return {"participant_code": code, "task_id": task, "condition": cond, "points": str(pts)}
+
+
+def test_t_interval_is_correct_beyond_seven_degrees_of_freedom():
+    # nine people with diffs of known spread: df 8 uses t = 2.306, not 1.96
+    pts = {f"P{i:02d}": v for i, v in enumerate(
+        [(2, 1, 2, 1), (1, 2, 1, 2), (2, 2, 1, 1), (1, 1, 2, 2), (2, 1, 1, 2),
+         (0, 1, 1, 2), (1, 2, 0, 1), (2, 2, 2, 2), (0, 2, 1, 2)], 1)}
+    res = e9.analyze(rows_from(pts))
+    assert res["n"] == 9
+    diffs = list(res["per_person"].values())
+    import statistics
+    half = 2.306 * statistics.stdev(diffs) / 3
+    lo, hi = res["t_interval"]
+    assert lo == pytest.approx(res["mean_diff"] - half, abs=1e-6)
+    assert hi == pytest.approx(res["mean_diff"] + half, abs=1e-6)
+
+
+def test_t_interval_fails_loudly_outside_the_table():
+    with pytest.raises(ValueError, match="table"):
+        e9._t_interval([0.1 * (i % 3) for i in range(60)])
+
+
+def test_duplicate_row_is_refused_naming_person_and_task():
+    rows = [_p("P01", "recall_a", "assisted", 2), _p("P01", "recall_a", "assisted", 0),
+            _p("P01", "recall_b", "alone", 1)]
+    with pytest.raises(ValueError, match=r"P01.*recall_a"):
+        e9.analyze(rows)
+
+
+def test_task_in_both_conditions_is_refused():
+    rows = [_p("P01", "recall_a", "assisted", 2), _p("P01", "recall_a", "alone", 1)]
+    with pytest.raises(ValueError, match=r"P01.*recall_a"):
+        e9.analyze(rows)
+
+
+@pytest.mark.parametrize("bad", [
+    _p("P01", "recall_a", "assisted", 3), _p("P01", "recall_a", "assisted", -1),
+    _p("P01", "recall_a", "assisted", "x"), _p("P01", "recall_z", "assisted", 1),
+    _p("P01", "recall_a", "with", 1)])
+def test_bad_score_task_or_condition_is_refused(bad):
+    with pytest.raises(ValueError, match="P01"):
+        e9.analyze([bad])
+
+
+def test_withdrawn_rows_are_removed_even_if_malformed():
+    rows = rows_from(POINTS) + [_p("P05", "recall_a", "assisted", 0), _p("P05", "recall_z", "alone", 9)]
+    res = e9.analyze(rows, withdrawn={"P05"})
+    assert res["n"] == 4 and res["withdrawn_removed"] == 1
+
+
+def test_zero_width_interval_is_flagged():
+    res = e9.analyze(rows_from({f"P0{i}": (2, 1, 2, 1) for i in range(1, 6)}))
+    assert res["t_interval"][0] == res["t_interval"][1]
+    assert "no variation" in e9.report(res)

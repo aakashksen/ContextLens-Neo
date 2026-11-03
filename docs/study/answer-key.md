@@ -13,14 +13,17 @@ style or speed. A point is not given for an answer that adds a wrong claim to th
 - Instead Pavel will ask the church hall for two Saturdays a month (turns 4 and 7).
 
 ## `clarify_a`
-- The headcount changed: forty (turn 3) became fifty-five (turns 8 and 9).
-- No one said the number was changing; the bakery was to be told fifty-five, but the earlier plan was forty (turn 7).
-  Give this point for stating both numbers, with the earlier one named.
+- Point 1, the new number: the headcount is now fifty-five (turns 8 and 9). Give it for stating fifty-five as the
+  current count.
+- Point 2, the conflict: the earlier figure was forty (turn 3) and Joss first proposed telling the bakery forty (turn 7).
+  Give it for naming forty as the old figure that was in the plan. Stating only fifty-five earns
+  point 1 alone; stating only forty earns point 2 alone.
 
 ## `clarify_b`
-- The entry price changed: six pounds per person (turn 2) became eight pounds (turn 8).
-- It was not announced as a change, and the poster would show the new price. Give this point for stating both
-  prices, with the earlier one named.
+- Point 1, the new price: the entry price is now eight pounds (turn 8). Give it for stating eight as the current
+  price.
+- Point 2, the conflict: the earlier price was six pounds per person (turn 2) and the change was never announced.
+  Give it for naming six as the old price that people were told. Stating only one price earns only that point.
 
 ## Scoring record
 Write only the participant code, task id, condition (`assisted` or `alone`), and points into the results file.

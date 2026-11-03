@@ -23,7 +23,9 @@ CONDITIONS = ("assisted", "alone")
 RESULT_FIELDS = ("participant_code", "task_id", "condition", "points")
 MIN_PEOPLE, MAX_PEOPLE = 5, 8
 # Two-sided 95% t critical values by degrees of freedom (n - 1).
-T975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365}
+T975 = dict(enumerate((
+    12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
+    2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042), 1))
 # Arrangements as (assisted_first, recall_first, assisted_version_is_a). Any first n of them (5 to 8) split each
 # choice evenly, or off by one when n is odd, so the order is fixed here, not shuffled.
 CELLS = ((0, 0, 0), (1, 1, 1), (0, 1, 1), (1, 0, 0), (1, 0, 1), (0, 1, 0), (1, 1, 0), (0, 0, 1))
@@ -58,9 +60,33 @@ def _t_interval(diffs: list[float]) -> tuple[float, float] | None:
     n = len(diffs)
     if n < 2:
         return None
-    half = T975.get(n - 1, 1.96) * statistics.stdev(diffs) / n**0.5
+    if n - 1 not in T975:
+        raise ValueError(f"no t table entry for {n} people (table covers 2 to {len(T975) + 1}); "
+                         "refusing to guess a narrower interval")
+    half = T975[n - 1] * statistics.stdev(diffs) / n**0.5
     mean = statistics.fmean(diffs)
     return mean - half, mean + half
+
+
+def check_rows(rows: list[dict[str, str]]) -> None:
+    """Refuse bad rows with the participant code and task named; nothing is dropped or overwritten."""
+    seen: dict[tuple[str, str], str] = {}
+    for r in rows:
+        code, task, cond = r["participant_code"], r["task_id"], r["condition"]
+        if task not in TASKS:
+            raise ValueError(f"{code}: unknown task {task!r}")
+        if cond not in CONDITIONS:
+            raise ValueError(f"{code} {task}: unknown condition {cond!r}")
+        try:
+            points = int(r["points"])
+        except ValueError:
+            raise ValueError(f"{code} {task}: points {r['points']!r} is not a whole number") from None
+        if not 0 <= points <= TASKS[task]:
+            raise ValueError(f"{code} {task}: points {points} outside 0 to {TASKS[task]}")
+        if (code, task) in seen:
+            how = "twice" if seen[(code, task)] == cond else "as both assisted and alone"
+            raise ValueError(f"{code} {task}: recorded {how}; fix the results file")
+        seen[(code, task)] = cond
 
 
 def _kind_diffs(rows: list[dict[str, str]]) -> dict[str, dict[str, float]]:
@@ -82,6 +108,7 @@ def _summary(diffs: list[float]) -> dict:
 
 def analyze(rows: list[dict[str, str]], withdrawn: set[str] | frozenset[str] = frozenset()) -> dict:
     kept = [r for r in rows if r["participant_code"] not in withdrawn]
+    check_rows(kept)
     by_person = _kind_diffs(kept)
     per_person = {c: statistics.fmean(k.values()) for c, k in sorted(by_person.items())}
     diffs = list(per_person.values())
@@ -129,7 +156,10 @@ def report(res: dict) -> str:
         if res["bootstrap_interval"]:
             b = res["bootstrap_interval"]
             lines.append(f"Bootstrap interval over people [{b[0]:+.2f}, {b[1]:+.2f}]")
-        if ti[0] <= 0 <= ti[1]:
+        if ti[0] == ti[1]:
+            lines.append("Degenerate interval: every person had the same difference (no variation), so the "
+                         "zero-width interval says nothing about uncertainty.")
+        elif ti[0] <= 0 <= ti[1]:
             lines.append("The interval includes zero: these people do not show a difference either way.")
         else:
             lines.append("The interval excludes zero for these people only; the sample is small and "
@@ -144,10 +174,6 @@ def load_rows(path: Path) -> list[dict[str, str]]:
     for r in rows:
         if set(r) != set(RESULT_FIELDS):
             raise ValueError(f"unexpected columns {sorted(r)}; expected {list(RESULT_FIELDS)}")
-        if r["task_id"] not in TASKS or r["condition"] not in CONDITIONS:
-            raise ValueError(f"bad task or condition in row {r}")
-        if not 0 <= int(r["points"]) <= TASKS[r["task_id"]]:
-            raise ValueError(f"points out of range in row {r}")
     return rows
 
 
