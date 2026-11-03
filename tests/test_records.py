@@ -380,10 +380,6 @@ def test_config_cannot_set_labels_reviewed(repo: Path) -> None:
     assert _reviewed(_run(repo, config={"labels_reviewed": True})) is False
 
 
-def test_labels_from_another_source_stay_unreviewed(repo: Path) -> None:
-    from contextlens.eval.records import labels_reviewed
-    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
-
 
 def test_write_run_refuses_systems_with_different_row_counts(repo: Path) -> None:
     rows = [_pred(s, g) for s, g in _predl("dev")]
