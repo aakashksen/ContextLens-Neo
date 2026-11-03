@@ -480,8 +480,7 @@
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T06:23:49+00:00",
       "verified": {
         "commit": "6968ed45fb6b8b23c83092b5885730532d4ae6c5",
@@ -489,7 +488,8 @@
         "at": "2026-11-03T07:31:23+00:00"
       },
       "attempts": 2,
-      "reason": "_check_train_scenarios compares whole turns exactly, so a dev conversation with one word edited per turn passes into training"
+      "reason": "_check_train_scenarios compares whole turns exactly, so a dev conversation with one word edited per turn passes into training",
+      "done_at": "2026-11-03T07:44:14+00:00"
     },
     {
       "id": "T6.2",
