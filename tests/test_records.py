@@ -281,3 +281,50 @@ def test_claim_on_none_metric_fails(repo: Path) -> None:
     path.write_text(json.dumps(rec), encoding="utf-8")
     _write_claims(repo, [{"id": "c1", "run_id": rec["run_id"], "metric": "false_alert_rate", "value": None}])
     assert any("c1" in p and "undefined" in p for p in claims.check_claims(repo))
+
+
+def test_failed_atomic_write_keeps_old_file_and_leaves_no_temp(tmp_path: Path, monkeypatch) -> None:
+    import os
+
+    target = tmp_path / "x.json"
+    target.write_text("old", encoding="utf-8")
+
+    def boom(*a, **k):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr(os, "replace", boom)
+    from contextlens.eval.records import write_atomic
+
+    with pytest.raises(OSError):
+        write_atomic(target, "new")
+    assert target.read_text(encoding="utf-8") == "old"
+    assert [p.name for p in tmp_path.iterdir()] == ["x.json"]
+
+
+def test_interrupted_write_between_predictions_and_record_gives_no_record(repo: Path, monkeypatch) -> None:
+    import contextlens.eval.records as rec
+
+    real = rec.write_atomic
+
+    def fail_on_record(path: Path, text: str) -> None:
+        if path.suffix == ".json":
+            raise OSError("crash")
+        real(path, text)
+
+    monkeypatch.setattr(rec, "write_atomic", fail_on_record)
+    with pytest.raises(OSError):
+        _run(repo)
+    runs = repo / "results/runs"
+    assert list(runs.glob("*Z.json")) == []
+    assert len(list(runs.glob("*.predictions.jsonl"))) == 1
+    assert [p.name for p in runs.glob(".*")] == []
+    assert check("E1", root=repo) != []  # no record: the experiment has no result
+    assert not is_dirty(repo)  # an orphan predictions file is an untracked run file, ignored like a record
+
+
+def test_leftover_temp_is_not_a_record_and_not_dirty(repo: Path) -> None:
+    _run(repo)
+    runs = repo / "results/runs"
+    (runs / ".E1-20250101T000000000000Z.json.123.tmp").write_text("{", encoding="utf-8")
+    assert check("E1", root=repo) == []
+    assert not is_dirty(repo)
