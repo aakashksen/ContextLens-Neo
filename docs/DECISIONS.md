@@ -209,3 +209,9 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Who:** The person.
 - **Chosen:** Commit messages carry no tool or assistant names, no co-author lines and no session lines. Old verdict hashes were stale after the rewrite, finished tasks stayed finished, and the T1.3 to T1.5 gates were rerun.
 - **Reason:** The person's rule. Further reason not recorded.
+
+## E2 and E3 rerun rule after the short-id citation bug (2026-11-03, T4.2, written before any new numbers)
+- **Chosen:** rerun E3's `cards` part, E2's four local strategies, and E2's cloud arm, because the citation guard dropped true findings that cited a short turn id such as `t0`. Same cases, same seeds, same config apart from the fix and an exclusive GPU. E2's cloud arm also moves to Sonnet, by the person's rule on Claude comparisons, on the same committed subset, and its record says so. The old records stay listed in `supersedes`, with this bug as the reason. Selection follows the written rule, whichever system it favours. The 8 s deadline doesn't change during these runs.
+- **Considered:** keeping the old records with a caveat. It lost because the bug hits systems unequally, the team most, so the comparison itself can't be read. Fixing the bug and moving on to E6 lost too, since `retrieval_memory` was chosen on the affected numbers.
+- **Evidence:** dropped citations with a short id, in E3-20261103T185316318532Z, counted from its saved rows, per `orchestration/evidence/cleanup-result-risks.md`.
+- **Would change it:** nothing in the new numbers. If the rerun can't reproduce the same cases and seeds, that gets stated, not worked around.
