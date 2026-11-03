@@ -253,8 +253,7 @@ def _suggest(
 
 
 def verify_card(card: Card, ctx: Context, conv_id: str) -> Card:
-    """The checks every system's findings pass: each quote is a real turn at or before the cut-off, and every
-    number in a statement is in its quotes. Raises on a store error."""
+    """Citation guard plus number rule, shared by all systems. Raises on a store error."""
     guarded = guard_card(card, ctx.store, ctx.as_of_seq, conv_id)
     kept = [f for f in guarded.findings if _numbers_supported(f)]
     dropped = len(guarded.findings) - len(kept)
