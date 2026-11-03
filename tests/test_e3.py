@@ -286,9 +286,10 @@ def comparison(metric, diff, lo, hi, p=None):
 
 def test_the_finding_says_so_when_the_team_loses():
     metrics = {"team": {"grounded_rate": 0.6}, "single": {"grounded_rate": 0.8}}
-    text = e3.plain_finding(metrics, [comparison("grounded_rate", -0.2, -0.3, -0.1, 0.01)])
+    text = e3.plain_finding(metrics, [comparison("grounded_rate", -0.2, -0.3, -0.1, 0.01)], "Dev labels are reviewed.")
     assert "loses to the single agent on grounded_rate" in text and "does not clearly beat" in text
-    text = e3.plain_finding(metrics, [comparison("grounded_rate", 0.2, 0.1, 0.3), comparison("latency_p50_ms", 500, 100, 900)])
+    assert "Dev labels are reviewed." in text and "unreviewed" not in text and "no person has reviewed a judge sample" in text
+    text = e3.plain_finding(metrics, [comparison("grounded_rate", 0.2, 0.1, 0.3), comparison("latency_p50_ms", 500, 100, 900)], "Dev labels are reviewed.")
     assert "beats the single agent on grounded_rate" in text and "loses to the single agent on latency_p50_ms" in text
 
 
@@ -751,3 +752,11 @@ def test_a_decode_row_holding_dropped_finding_text_fails_the_record_check(crepo)
     row_["drops"] = [{"reason": "number", "statement": "raw dataset words", "turn_ids": ["x"]}]
     rows.write_text("\n".join([json.dumps(row_), *rest]) + "\n", encoding="utf-8")
     assert any("dropped-finding text" in p or "ids and metrics only" in p for p in check("E3", root=crepo, split="dev"))
+
+
+def test_label_wording_follows_the_flag_and_the_source(monkeypatch, tmp_path):
+    from contextlens.eval import records
+
+    monkeypatch.setattr(records, "labels_reviewed", lambda root, source="scenarios": source != "scenarios")
+    assert "unreviewed" in records.label_text(tmp_path, "scenarios") and "label source: scenarios" in records.label_text(tmp_path, "scenarios")
+    assert "are reviewed" in records.label_text(tmp_path, "decode") and "label source: publisher" in records.label_text(tmp_path, "decode")

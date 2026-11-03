@@ -153,6 +153,15 @@ def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
     return kind == "publisher"
 
 
+def label_text(root: Path, scenario_source: str = "scenarios") -> str:
+    """The sentence about the labels that notes and analyses may print: it follows the flag a record gets from
+    `labels_reviewed` and names `label_source`, so a runner never hardcodes the answer."""
+    reviewed, source = labels_reviewed(root, scenario_source), label_source(scenario_source)
+    if reviewed:
+        return f"Dev labels are reviewed (`labels_reviewed` is true; label source: {source})."
+    return f"Dev labels are unreviewed (`labels_reviewed` is false; label source: {source}), so figures here are provisional."
+
+
 SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 

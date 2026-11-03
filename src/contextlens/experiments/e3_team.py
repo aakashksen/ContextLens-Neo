@@ -43,7 +43,9 @@ from contextlens.consistency import model as cm
 from contextlens.consistency import rescore, select_cascade
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, RUNS_REL, SCENARIO_SOURCES, is_dirty, load_verified, split_hash, write_run
+from contextlens.eval.records import (
+    ROOT, RUNS_REL, SCENARIO_SOURCES, is_dirty, label_text, load_verified, split_hash, write_run,
+)
 from contextlens.eval.row_report import before_after, row_report
 from contextlens.eval.series import base_name
 from contextlens.experiments import e2_context as e2
@@ -301,7 +303,7 @@ def judge_drops(judge: Judge, scenarios: list[Scenario], preds: list[Prediction]
     return {r: {"dropped": v[0], "judged_supported_by_the_turns": v[1]} for r, v in sorted(out.items())}
 
 
-def plain_finding(metrics: dict[str, dict[str, Any]], comparisons: list[dict[str, Any]]) -> str:
+def plain_finding(metrics: dict[str, dict[str, Any]], comparisons: list[dict[str, Any]], labels: str) -> str:
     """The result in plain words, built from the saved numbers, and saying so when the team does not win."""
     a, b = PRIMARY
     if a not in metrics or b not in metrics:
@@ -321,7 +323,7 @@ def plain_finding(metrics: dict[str, dict[str, Any]], comparisons: list[dict[str
                      f"(difference {c['diff']:+.3f}, 95% interval {lo:+.3f} to {hi:+.3f}{p}): {verdict}")
     head = ("The team " + ("beats the single agent on " + ", ".join(won) if won else "does not clearly beat the single agent on anything")
             + ("; it loses to the single agent on " + ", ".join(lost) if lost else "") + ". ")
-    return head + "; ".join(parts) + ". Dev labels are unreviewed and the judge is one local model, so these are provisional."
+    return head + "; ".join(parts) + f". {labels} The judge is one local model and no person has reviewed a judge sample, so the judged figures are provisional."
 
 
 # ---------------------------------------------------------------- the card systems
@@ -465,7 +467,7 @@ def _cards(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, c
         "guard_note": ("the guard's patterns were written after reading the dev injection turns, so its catch rate on them is "
                        "not a held-out figure; the false-drop rates are on dev turns and on a fixed list of look-alikes"),
         "prompt_note": f"prompts are unchanged, label {PROMPT_VERSION}; the checks, the guard and the respond rule changed in code",
-        "notes": [plain_finding(metrics, comparisons), conditions_note(run_conditions), deadline_sentence(report),
+        "notes": [plain_finding(metrics, comparisons, label_text(root, SCENARIO_SOURCE)), conditions_note(run_conditions), deadline_sentence(report),
                   "grounded_rate and unsupported_claim_rate come from one local judge; no person has reviewed a sample.",
                   "Counts of injected claims use a word-overlap proxy; the flagged ids are listed to read."],
         "claude_calls": 0, "started_at": started,
@@ -802,7 +804,7 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
         "alert_precision_note": select_cascade.PRECISION_NOTE,
         "provenance": provenance, "hand_read_file": hand_read.as_posix() if hand_read else None,
         "inference_input": "low-confidence speakers pass as unknown and every string is escaped before the trained model sees it",
-        "selection_data": "dev (selection data, not held out); dev labels are unreviewed (provisional)",
+        "selection_data": "dev (selection data, not held out)",
         "claude_calls": 0, "started_at": started,
     }
     paths = {}
@@ -819,7 +821,7 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
         comparisons = [{"a": a, "b": b, **c} for a, b in (("cascade", "trained"), ("trained_same_speaker", "trained"),
                                                         ("cascade_same_speaker", "cascade"))
                        for m in wanted if (c := recompute_comparison(scs, preds[a], preds[b], m))]
-        config = {**common, "source": src, "latency": {sy: latency_summary(outcomes[mode][src], sy) for sy in CHECKERS},
+        config = {**common, "source": src, "label_note": label_text(root, src), "latency": {sy: latency_summary(outcomes[mode][src], sy) for sy in CHECKERS},
                   "scored_cases": len(labelled[src])}
         attempts = [{"setting": sy, "kind": "system", "ok": True, "error": None} for sy in CHECKERS]
         paths[src] = write_run(EXPERIMENT, SPLIT, config, {"trained": "fine-tuned checkpoint (config.provenance)",

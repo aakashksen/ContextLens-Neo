@@ -49,6 +49,7 @@ from contextlens.eval.records import (
     git,
     head_commit,
     is_dirty,
+    label_text,
     split_hash,
     write_atomic,
     write_run,
@@ -533,14 +534,17 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
 
 
 STATED_LIMITS = [
-    "Dev labels are unreviewed (`labels_reviewed` is false), so every figure here is provisional.",
+    "{labels}",
     "Grounded rates rest on the local judge's unreviewed judgements; no person has checked a sample.",
     "recent, full and retrieval may see nearly the same turns in short dev conversations, so their differences are small.",
     "speaker_accuracy is high by construction: the citation guard rewrites the evidence speaker from the store.",
-    "E2's fixed rule picked `{winner}`. The coordinator decided afterward, having seen the dev results, to carry "
-    "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
-    "cases (see the answer rates below). That choice was made on dev results, not by the rule.",
+    "{winner_line}",
+    "{carry_line}",
 ]
+CARRY_LINE = (
+    "The coordinator decided afterward, having seen the dev results, to carry "
+    "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
+    "cases (see the answer rates below). That choice was made on dev results, not by the rule.")
 NUMBER_RULE_LIMITS = (
     "Known limits of the rule: a lone one, half, dozen and ordinals are not number tokens, and punctuation does not break "
     "a run of number tokens (`_runs` in `agents/single.py`). `docs/interview-notes.md` does not exist yet, so no "
@@ -556,16 +560,31 @@ NOT_MEASURED = [
 def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
                    winner: str, metrics: dict[str, dict[str, Any]] | None = None, records: list[str] | None = None,
                    cloud_done: bool = False, old_prompt: list[str] | None = None,
-                   respond: tuple[str, list[Prediction], dict[str, Any]] | None = None) -> str:
-    """`old_prompt` names the systems that ran on the prompt the code has now (None: leave the suggestion section
+                   respond: tuple[str, list[Prediction], dict[str, Any]] | None = None, labels_text: str | None = None,
+                   earlier: dict[str, list[Prediction]] | None = None, earlier_lines: list[str] | None = None,
+                   earlier_winner: str | None = None) -> str:
+    """`labels_text` is the sentence about the labels, from the records' flag (`records.label_text`); without it the
+    analysis says the status was not given. `earlier` holds the rows of superseded records (name -> rows), `earlier_lines`
+    names them and says why, and `earlier_winner` is the strategy the superseded local record's rule picked: what this
+    text says about the old winner, the carry-forward and the mode counts is then said of those records, not these.
+    `old_prompt` names the systems that ran on the prompt the code has now (None: leave the suggestion section
     out); `respond` is (run id, rows, metrics) of the one record that ran on the reverted mode-defining prompt."""
     by_id = {s.id: s for s in scenarios}
     lines = ["# E2 error analysis: context strategies on dev", "",
              "Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. Only scenario text is quoted.",
              "", f"Records: {', '.join(records) if records else 'this run'}. "
-             + ("" if cloud_done else "There is no cloud record yet; the cloud part is added when the cloud stage writes it."),
-             "", "## What this rests on", ""]
-    lines += [f"- {x.format(winner=winner)}" for x in STATED_LIMITS]
+             + ("" if cloud_done else "There is no cloud record yet; the cloud part is added when the cloud stage writes it.")]
+    if earlier:
+        lines += ["", "## Records and what they replace", ""] + [f"- {x}" for x in earlier_lines or []]
+        winner_line = (f"E2's fixed rule picks `{winner}` on the records above. The statements below about `{earlier_winner}`, "
+                       "about carrying `retrieval_memory` forward, and the respond-mode counts were true of the superseded "
+                       "records and are not statements about the current ones.")
+        carry_line = f"Of the superseded record: the fixed rule picked `{earlier_winner}`. " + CARRY_LINE
+    else:
+        winner_line = f"E2's fixed rule picked `{winner}`."
+        carry_line = CARRY_LINE
+    lines += ["", "## What this rests on", ""]
+    lines += [f"- {x.format(labels=labels_text or 'Dev label status was not given to this analysis.', winner_line=winner_line, carry_line=carry_line)}" for x in STATED_LIMITS]
     lines += ["", "## Not measured from the saved rows", ""] + [f"- {x}" for x in NOT_MEASURED]
     lines += ["", "## Answer rate on answerable cases", ""]
     for n, m in (metrics or {}).items():
@@ -598,7 +617,17 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
         lines += [f"    - {x['id']} {x['words']}: {x['suggestion']}" for x in r["flagged"]]
     lines += _injection_findings_section(scenarios, systems, respond)
     if old_prompt is not None:
-        lines += _suggestion_section(scenarios, systems, old_prompt, respond)
+        lines += _suggestion_section(scenarios, systems, old_prompt, respond, (earlier or {}).get(TRIED_PROMPT_SYSTEM))
+    if earlier:
+        lines += ["", "## Card modes on the current records", ""]
+        for name, preds in systems.items():
+            rep_ = mode_report(scenarios, preds)
+            rsp = rep_["categories"].get("respond_with_suggestion", {"n": 0, "modes": {}, "with_suggestion": 0})
+            lines.append(f"- {name}: respond mode on {rsp['modes'].get('respond', 0)} of {rsp['n']} respond_with_suggestion cards "
+                         f"({rsp['with_suggestion']} with a suggestion); recall cases moved to respond: "
+                         f"{rep_['recall_cases_to_respond']}; injection cases with a suggestion: {rep_['injection']['with_suggestion']}")
+        lines += ["", "## Card modes on the superseded records (the old-prompt claims below are about these)", ""]
+        lines += _suggestion_section(scenarios, earlier, list(earlier), None)[1:]
     return "\n".join(lines) + "\n"
 
 
@@ -677,7 +706,8 @@ def _old_prompt_lines(by_id: dict[str, Scenario], systems: dict[str, list[Predic
 
 
 def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Prediction]], old_prompt: list[str],
-                        respond: tuple[str, list[Prediction], dict[str, Any]] | None) -> list[str]:
+                        respond: tuple[str, list[Prediction], dict[str, Any]] | None,
+                        tried_against: list[Prediction] | None = None) -> list[str]:
     by_id = {s.id: s for s in scenarios}
     lines = ["", "## The suggestion step and the mode-defining prompt", "",
              "- A prompt that defines the card modes (recall, clarify, respond) was tried and reverted. The current code "
@@ -719,7 +749,7 @@ def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Predi
     shown = [f"{m} {metrics[m]:.3f}" for m in TRIED_PROMPT_METRICS if metrics.get(m) is not None]
     lines.append("- Metrics on these cases (judged by the local model alone; undefined ones left out): " + ", ".join(shown))
     if rm:
-        cmp_ = same_case_comparison(scenarios, rm, rows)
+        cmp_ = same_case_comparison(scenarios, tried_against or rm, rows)
         lines.append(f"- {TRIED_PROMPT_SYSTEM}, old prompt vs the reverted prompt, on the same {cmp_['n']} cases (from the saved rows):")
         for m, v in cmp_["metrics"].items():
             lines.append(f"    - {m}: " + " -> ".join("not defined" if v[k] is None else f"{v[k]:.3f}" for k in ("old", "new")))
@@ -1003,15 +1033,18 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
 def _write_analysis(root: Path, scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
                     winner: str, metrics: dict[str, dict[str, Any]], records: list[str], cloud_done: bool,
                     old_prompt: list[str] | None = None,
-                    respond: tuple[str, list[Prediction], dict[str, Any]] | None = None) -> Path:
+                    respond: tuple[str, list[Prediction], dict[str, Any]] | None = None, **earlier: Any) -> Path:
     out = root / ERROR_ANALYSIS_REL
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(out, error_analysis(scenarios, systems, health, winner, metrics, records, cloud_done, list(systems) if old_prompt is None else old_prompt, respond))
+    if old_prompt is None:
+        old_prompt = [] if earlier.get("earlier") else list(systems)  # with superseded records, the old-prompt claims are theirs
+    write_atomic(out, error_analysis(scenarios, systems, health, winner, metrics, records, cloud_done, old_prompt, respond,
+                                     labels_text=label_text(root, SCENARIO_SOURCE), **earlier))
     return out
 
 
 def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = None,
-                  tried_prompt_run: str | None = None) -> Path:
+                  tried_prompt_run: str | None = None, superseded: list[str] | None = None) -> Path:
     """Write the error analysis from the saved predictions of committed records, with no model call."""
     def load(run: str) -> dict[str, Any]:
         path = root / RUNS_REL / f"{run}.json"
@@ -1043,9 +1076,27 @@ def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = 
             raise RunBroken(f"{tried_prompt_run} is not the record of the mode-defining prompt")
         respond = (tried_prompt_run, rows(rec)[TRIED_PROMPT_SYSTEM], rec["metrics"][TRIED_PROMPT_SYSTEM])
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
+    extra: dict[str, Any] = {}
+    superseded = superseded or [e["run_id"] for rec in (local, *([cloud] if cloud_run else [])) for e in rec.get("supersedes", [])]
+    if superseded:
+        old = {r: load(r) for r in superseded}
+        earlier_rows: dict[str, list[Prediction]] = {}
+        old_local = next((r for r, rec in old.items() if "subset" not in rec), None)
+        lines = []
+        for rid, rec in old.items():
+            new = next((x for x in (local, *([cloud] if cloud_run else [])) if any(e.get("run_id") == rid for e in x["supersedes"])), None)
+            why = next((e["reason"] for e in new["supersedes"] if e.get("run_id") == rid), "no reason recorded") if new else "not listed by a new record"
+            models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
+            lines.append(f"{rid} (superseded{f' by {new['run_id']}' if new else ''}): {models}; {rec['n']} cases"
+                         f"{f', subset {rec['subset']}' if 'subset' in rec else ''}; reason: {why}")
+            earlier_rows |= {(n if "subset" not in rec else f"{n} (superseded cloud)"): r for n, r in rows(rec).items()}
+        for rid, rec in ((local_run, local), *(((cloud_run, cloud),) if cloud_run else ())):
+            models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
+            lines.append(f"{rid} (current): {models}; {rec['n']} cases{f', subset {rec['subset']}' if 'subset' in rec else ''}")
+        extra = {"earlier": earlier_rows, "earlier_lines": lines, "earlier_winner": old[old_local]["config"]["winner"] if old_local else "recent"}
     return _write_analysis(root, scenarios, systems, health, local["config"]["winner"], metrics,
                            [local_run, *([cloud_run] if cloud_run else []), *([tried_prompt_run] if tried_prompt_run else [])],
-                           bool(cloud_run), None, respond)
+                           bool(cloud_run), None, respond, **extra)
 
 
 def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,

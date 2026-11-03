@@ -15,7 +15,7 @@ keeps it useful: below half, it misses more real contradictions than it finds an
 higher floor would push the choice toward the many-false-alarms end the design warns against. The number comes from
 that reasoning, not from a result; the only results seen before fixing it were T5.2's headline scores, not any sweep.
 
-Dev is selection data here, so the chosen point's scores are not held out, and dev labels are unreviewed (provisional).
+Dev is selection data here, so the chosen point's scores are not held out, and whether the dev labels are reviewed is the records' labels_reviewed flag, not stated here.
 The test splits are never read.
 
 Run: python -m contextlens.consistency.select_cascade --data-root <folder with datasets/raw/>
@@ -137,7 +137,7 @@ def write_config(path: Path, point: Point, provenance: dict) -> None:
         "system": point.system, "flag_threshold": point.threshold, "catch_floor": CATCH_FLOOR,
         "selection_rule": "lowest mean false-alert rate over the sources among points with catch rate >= catch_floor on every "
                           "source; ties to higher catch, then the trained model alone, then the higher threshold",
-        "selection_data": "dev (selection data, not held out); dev labels are unreviewed",
+        "selection_data": "dev (selection data, not held out); the labels' review status is in each record's labels_reviewed",
         "provisional": True, "thresholds_swept": list(THRESHOLDS),
         "stage_two": {"model": PROMPTED_MODEL, "prompt": "consistency v1"}, **provenance,
     }
@@ -158,7 +158,7 @@ def _composed_ms(cases: list[Case], point: Point) -> str:
 
 
 def report(point: Point, points: list[Point], cases: list[Case] | None = None) -> str:
-    lines = ["# Operating point on dev (provisional: dev is selection data, labels unreviewed)", "",
+    lines = ["# Operating point on dev (dev is selection data; label status is the records' labels_reviewed flag)", "",
              f"Selected: system {point.system}, flag threshold {point.threshold}, catch floor {CATCH_FLOOR}.", "",
              "## Measured on dev (rate, with counts)", ""]
     for src in sorted(point.catch):
