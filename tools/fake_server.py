@@ -10,6 +10,7 @@ from contextlens.api.contract import (
     CardMessage,
     StatusMessage,
     TranscriptMessage,
+    TurnUpdateMessage,
     client_adapter,
 )
 from contextlens.schemas import Card, EvidenceRef, Finding, Turn
@@ -20,6 +21,9 @@ SCRIPT = [
     ("Ana", "I will send the budget sheet tomorrow morning."),
     ("Ben", "Actually, make that Monday, I am out tomorrow."),
 ]
+
+
+LABELLED_FROM = 4  # turns before this are sent with their speaker; from here on a turn_update follows
 
 
 def scripted_turn(conversation_id: str, i: int) -> Turn:
@@ -115,7 +119,12 @@ def create_app() -> FastAPI:
                     if not paused:
                         turn = scripted_turn(conversation_id, len(turns))
                         turns.append(turn)
-                        await send(TranscriptMessage(turn=turn))
+                        if turn.seq < LABELLED_FROM:
+                            await send(TranscriptMessage(turn=turn))
+                        else:  # like the real backend: sent unknown, the speaker follows
+                            unknown = turn.model_copy(update={"speaker": "unknown", "speaker_confidence": 0.0})
+                            await send(TranscriptMessage(turn=unknown))
+                            await send(TurnUpdateMessage(turn=turn))
                 elif msg.type == "press":
                     req = msg.request
                     if req.conversation_id != conversation_id:

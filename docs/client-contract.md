@@ -12,8 +12,8 @@ Every message is one JSON text frame with a `type` field. Payload types
 |---|---|---|
 | `audio` | `data` (string; intended as base64 of 16-bit mono PCM), `sample_rate` (integer, default 16000) | a chunk of speech |
 | `press` | `request`: `ButtonRequest` | the button was pressed; a `card` is returned |
-| `pause` | none | stop listening: `audio` is ignored (no reply) until `resume` |
-| `resume` | none | start listening again |
+| `pause` | none | stop listening: `audio` is ignored until `resume`; the server answers `status` `paused` |
+| `resume` | none | start listening again; the server answers `status` `recording` |
 | `delete` | none | delete the stored transcript; the server answers `deleted` and closes |
 
 The fake server does not decode `audio.data`; any string is accepted and the
@@ -28,8 +28,13 @@ always `recall`.
 | type | fields | meaning |
 |---|---|---|
 | `transcript` | `turn`: `Turn` | a new transcribed turn |
+| `turn_update` | `turn`: `Turn` | a turn already sent as `transcript` now has a (new) speaker. Same `id` and `seq`: replace the turn you hold, never append. A client that does not hold that turn ignores it |
 | `card` | `card`: `Card` (status `answered`, `partial`, or `abstained`) | the answer to a `press` |
 | `status` | `state`: `recording`, `paused`, `deleted`, `error`; optional `detail` | recording indicator and errors |
+
+A real backend sends each turn as `transcript` with speaker `unknown` and confidence 0, then a `turn_update`
+when its speaker is known, once per change. After `status` `deleted` nothing else is sent for that
+conversation, so a client may drop any transcript, turn update or card that still arrives after it.
 
 On connect the server sends `status` `recording`. A message that is not valid
 is answered with `status` `error` (with a `detail`) and the connection stays
@@ -69,7 +74,7 @@ with that turn's real speaker, text and start time.
 
 `python tools/fake_server.py` serves this contract on `127.0.0.1:8000` (needs
 `pip install -e .[server]`). Transcript text is invented. Each `audio` message
-returns the next scripted turn (the script has four turns and repeats).
+returns the next scripted turn (the script has four turns and repeats). From the fifth turn on it behaves like the real backend: the turn is sent with speaker `unknown`, and a `turn_update` with the scripted speaker follows at once.
 The card status depends only on how many valid presses this connection has had,
 not on the question: the 1st, 4th, 7th ... valid press returns `answered` (one
 finding, plus a `suggestion`), the 2nd, 5th ... returns `partial` (one finding,

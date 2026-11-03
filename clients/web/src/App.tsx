@@ -48,8 +48,9 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
   const root = useRef<HTMLElement>(null);
 
   const recording = state.connection === 'recording';
+  const capturing = recording && !state.fault;
   useEffect(() => {
-    if (!recording) return;
+    if (!capturing) return;
     let stop: StopMic | null = null;
     let cancelled = false;
     setCapture('starting');
@@ -69,7 +70,7 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
       stop?.();
       setCapture('off');
     };
-  }, [recording, session, startMic]);
+  }, [capturing, session, startMic]);
 
   // After the delete dialog closes, put focus back on its opener, or on the settings if that is disabled now.
   const wasConfirming = useRef(false);
@@ -85,7 +86,7 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
   const error = state.error ?? (capture === 'blocked' ? 'The microphone is not available.' : null);
   let indicator: IndicatorState = state.connection;
   if (state.connection === 'recording') {
-    if (state.error) indicator = 'error';
+    if (state.error || state.fault) indicator = 'error';
     else if (capture === 'on') indicator = 'recording';
     else if (capture === 'blocked') indicator = 'blocked';
     else if (capture === 'stopped') indicator = 'mic-stopped';

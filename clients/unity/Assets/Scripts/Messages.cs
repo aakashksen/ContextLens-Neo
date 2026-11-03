@@ -105,6 +105,13 @@ namespace ContextLens
     }
 
     [Serializable]
+    public class TurnUpdateMessage
+    {
+        public string type = "turn_update";
+        public Turn turn;
+    }
+
+    [Serializable]
     public class CardMessage
     {
         public string type = "card";

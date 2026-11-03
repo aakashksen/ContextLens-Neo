@@ -438,19 +438,42 @@
         ],
         "title": "Turn",
         "type": "object"
+      },
+      "TurnUpdateMessage": {
+        "description": "A turn already sent as `transcript` now has a (new) speaker. Same id and seq; replace, do not append.",
+        "properties": {
+          "turn": {
+            "$ref": "#/$defs/Turn"
+          },
+          "type": {
+            "const": "turn_update",
+            "default": "turn_update",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn"
+        ],
+        "title": "TurnUpdateMessage",
+        "type": "object"
       }
     },
     "discriminator": {
       "mapping": {
         "card": "#/$defs/CardMessage",
         "status": "#/$defs/StatusMessage",
-        "transcript": "#/$defs/TranscriptMessage"
+        "transcript": "#/$defs/TranscriptMessage",
+        "turn_update": "#/$defs/TurnUpdateMessage"
       },
       "propertyName": "type"
     },
     "oneOf": [
       {
         "$ref": "#/$defs/TranscriptMessage"
+      },
+      {
+        "$ref": "#/$defs/TurnUpdateMessage"
       },
       {
         "$ref": "#/$defs/CardMessage"

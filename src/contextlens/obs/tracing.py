@@ -49,6 +49,9 @@ class Telemetry:
         self._cost = Counter("contextlens_cost_usd", "Model cost in USD", registry=r)
         self._presses = Counter("contextlens_presses", "Presses", ["status", "mode"], registry=r)
         self._errors = Counter("contextlens_press_errors", "Presses that raised", ["error"], registry=r)
+        self.dropped = Counter(
+            "contextlens_dropped_presses", "Presses whose telemetry was dropped (backlog full)", registry=r
+        )
 
     def record(
         self, start_ns: int, end_ns: int, stages: dict[str, int], card: Card | None, error: BaseException | None
@@ -119,7 +122,7 @@ class TracedAssistant:
     def __init__(self, inner: Assistant, telemetry: Telemetry) -> None:
         self.inner, self.telemetry = inner, telemetry
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="telemetry")
-        self._pending: set[Future] = set()
+        self._pending: dict[Future, str] = {}  # job -> its conversation
         self._lock = threading.Lock()
 
     def _run(self, args: tuple) -> None:
@@ -128,18 +131,26 @@ class TracedAssistant:
         except Exception:
             log.warning("telemetry failed; the card is unaffected")
 
-    def _submit(self, args: tuple) -> None:
+    def _submit(self, args: tuple, conversation_id: str) -> None:
         with self._lock:
             if len(self._pending) >= MAX_PENDING:
                 log.warning("telemetry backlog full; dropping one press")
+                self.telemetry.dropped.inc()
                 return
             fut = self._pool.submit(self._run, args)
-            self._pending.add(fut)
+            self._pending[fut] = conversation_id
         fut.add_done_callback(self._forget)
 
     def _forget(self, fut: Future) -> None:
         with self._lock:
-            self._pending.discard(fut)
+            self._pending.pop(fut, None)
+
+    def discard(self, conversation_id: str) -> None:
+        """Drop this conversation's queued jobs, which hold its cards in memory. One already running finishes."""
+        with self._lock:
+            mine = [f for f, c in self._pending.items() if c == conversation_id]
+        for fut in mine:
+            fut.cancel()  # only succeeds for a job that has not started; its done callback forgets it
 
     def flush(self, timeout_s: float = 5.0) -> None:
         with self._lock:
@@ -161,7 +172,7 @@ class TracedAssistant:
             t1 = time.time_ns()
             stages = {k: v - before.get(k, 0) for k, v in ctx.stage_ms.items()}
             try:
-                self._submit((t0, t1, stages, card, error))
+                self._submit((t0, t1, stages, card, error), req.conversation_id)
             except Exception:
                 log.warning("telemetry failed; the card is unaffected")
 
