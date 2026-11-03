@@ -60,6 +60,7 @@ SCENARIO_SOURCES = {
     "scenarios": (MANIFEST_REL, Path("datasets/scenarios")),
     "qmsum": (Path("datasets/splits/qmsum-scenarios.json"), Path("datasets/raw/scenarios/qmsum")),
     "decode": (Path("datasets/splits/decode-scenarios.json"), Path("datasets/raw/scenarios/decode")),
+    "ami": (Path("datasets/splits/ami-scenarios.json"), Path("datasets/raw/scenarios/ami")),
 }
 # Prediction rows of these sources may hold ids and metrics data only (a bare label is fine): no quotes, cards or raw output.
 IDS_ONLY_SOURCES = {"qmsum", "decode"}
