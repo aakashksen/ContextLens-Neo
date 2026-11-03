@@ -1,0 +1,29 @@
+{
+  "task": "T2.2",
+  "commit": "deb74921cfd384f5efa464d689c5bcd689106957",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD = deb7492...; git status shows only orchestration/tasks.json and verdicts/T2.2.json"},
+    {"item": "Evidence log ran acceptance and passed; reran", "result": "pass", "evidence": "log: 12 passed, 1 deselected, RESULT PASS. Rerun pytest tests/test_retrieval.py: 12 passed. ruff check: all passed"},
+    {"item": "Previous failure: unused full-text index removed", "result": "pass", "evidence": "grep for fts/gin/tsvector in store.py: no matches; only index is turns_conv (conversation_id, seq), which the turns() query uses"},
+    {"item": "Plan items: PostgresTranscriptStore same interface, ScoredTurn(turn, score, parts), Retriever.search signature/modes, RRF k=60", "result": "pass", "evidence": "store.py and hybrid.py read; RRF_K=60, signature matches, modes dense/bm25/hybrid"},
+    {"item": "Named tests exist (future turns per mode, bm25 vs dense name, speaker filter, low-confidence unknown, delete, real Postgres marked)", "result": "pass", "evidence": "All present in tests/test_retrieval.py; real test marked and passed against docker pgvector (docker compose up -d db; pytest -m real: 1 passed). Db container stopped afterward, no volumes removed"},
+    {"item": "Mutation: as_of_seq cutoff in search", "result": "pass", "evidence": "replaced as_of_seq with 10**6 in store.turns call: 6 tests failed"},
+    {"item": "Mutation: low-confidence speaker rule", "result": "pass", "evidence": "threshold 0.0: 2 tests failed; '<=' instead of '<' (0.5 boundary): test_low_confidence_speaker_is_reported_as_unknown failed"},
+    {"item": "Mutation: delete behavior", "result": "pass", "evidence": "removing store.delete: test_delete_removes_text_and_vectors failed; removing cache pop: same test failed"},
+    {"item": "Mutation: cache key (id,text)", "result": "pass", "evidence": "keying lookup by id only: test_readding_same_id_with_new_text_does_not_reuse_stale_vector failed"},
+    {"item": "Files restored", "result": "pass", "evidence": "git checkout -- hybrid.py after each mutation; git status clean apart from orchestration"},
+    {"item": "No legacy/ changes, no weakened earlier tests, no secrets", "result": "pass", "evidence": "git diff aa7465f~1..HEAD touches only pyproject.toml, store.py, retrieval/*, tests/test_retrieval.py; DSN is the docker-compose default dev credential"}
+  ],
+  "own_tests": [
+    {"input": "Future turns for every as_of 0..4 and -1, all 3 modes, in-memory and Postgres stores", "result": "no turn beyond as_of ever returned; as_of=-1 returns []"},
+    {"input": "Delete then search, all modes, both stores", "result": "store.turns empty and search returns [] after Retriever.delete"},
+    {"input": "SQL injection strings in conv_id, query and speaker on Postgres and memory", "result": "all return [] or no crash; table intact afterward (parameterized queries)"},
+    {"input": "Empty query, empty/unknown conversation, k=1000 with 5 turns", "result": "no crash, at most 5 results, empty conversation returns []"},
+    {"input": "since_ms=2000 with turn at start_ms 2000", "result": "boundary inclusive (turn included), earlier turns excluded"},
+    {"input": "Low-confidence (0.3) speaker B on both stores, hybrid; also speaker='B' filter", "result": "reported as 'unknown'; excluded from speaker='B' results (never attributed by name)"},
+    {"input": "RRF by hand for query 'budget' hybrid", "result": "top turn has dense=bm25=1/61, score 2/61; every score equals sum of parts; dense-only parts of lower ranks <= 1/62"}
+  ],
+  "failures": [],
+  "notes": "since_ms has no test in the repo (mutating < to <= on the boundary passed all 12 tests), but it is not named in the plan's test list and my own boundary test passed. Postgres id is a global primary key, so the same turn id in two conversations would collide; not required by the plan. Postgres tests use a stub embedder padded to 768 dims; no Ollama used. A full pytest run was started but not awaited because it exceeded the timeout; acceptance command and ruff were verified."
+}
