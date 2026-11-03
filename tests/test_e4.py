@@ -675,3 +675,47 @@ def test_real_deberta_trains_finitely_on_cpu_at_the_real_settings() -> None:
         loss = ct.train_step(model, dict(batch), opt, weights)
         assert loss == loss and abs(loss) != float("inf")
         assert all(torch.isfinite(p).all() for p in model.parameters())
+
+
+# ---- per-class F1, the training balance and the DECODE caveat ----
+
+
+def test_per_class_f1_is_saved_by_source_recomputes_and_a_tampered_one_fails(repo: Repo) -> None:
+    repo.run()
+    recs = _records(repo.root)
+    for name in e4.SYSTEMS:
+        sc, dc = recs["scenarios"]["metrics"][name], recs["decode"]["metrics"][name]
+        assert {f"f1[label={x}]" for x in M.LABELS} <= set(sc)
+        assert {k for k in dc if k.startswith("f1[")} == {"f1[label=contradiction]", "f1[label=consistent]"}
+    # the fixture has no gold case for neither label of a missing kind: every label here has gold, so all are numbers
+    assert all(isinstance(recs["scenarios"]["metrics"]["trained"][f"f1[label={x}]"], float) for x in M.LABELS)
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+    run_json = next(p for p in (repo.root / "results/runs").glob("E4-*.json")
+                    if json.loads(p.read_text(encoding="utf-8"))["scenario_source"] == "scenarios")
+    rec = json.loads(run_json.read_text(encoding="utf-8"))
+    rec["metrics"]["trained"]["f1[label=update]"] = 0.123
+    run_json.write_text(json.dumps(rec), encoding="utf-8")
+    assert any("f1[label=update] does not recompute" in p for p in check("E4", root=repo.root, split="dev"))
+
+
+def test_the_config_states_the_train_only_counts_weights_ratio_and_the_few_examples_caveat(repo: Repo) -> None:
+    repo.run()
+    mine = ts.build_train_scenarios()
+    distinct = {x: sum(s.gold_label == x for s in mine) for x in M.LABELS}
+    for r in _records(repo.root).values():
+        tb = r["config"]["train_only_balance"]
+        assert tb["distinct_cases_per_label"] == distinct and tb["repeats"] == e4.SCENARIO_REPEAT
+        counts = r["config"]["training"]
+        weights = tb["class_weights"]
+        assert list(weights.values()) == pytest.approx(ct.class_weights(
+            [x for x in M.LABELS for _ in range(counts[f"label_{x}"])]))
+        assert tb["weight_ratio"] == pytest.approx(max(weights.values()) / min(w for w in weights.values() if w > 0))
+        assert "no new examples" in tb["note"] and "very few distinct" in tb["note"]
+
+
+def test_the_decode_record_says_its_score_is_binary_and_the_error_analysis_has_no_decode_accuracy(repo: Repo) -> None:
+    repo.run()
+    note = _records(repo.root)["decode"]["config"]["decode_note"]
+    assert "contradiction vs not only" in note and "not four-label performance" in note
+    md = (repo.root / "results/error-analysis-e4.md").read_text(encoding="utf-8")
+    assert "contradiction vs not only" in md and "accuracy" not in md.lower()

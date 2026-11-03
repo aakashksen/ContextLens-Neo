@@ -35,7 +35,7 @@ from contextlens.data.loaders import Pair
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
 from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_local_manifest, write_run
-from contextlens.eval.series import base_name, predicted_label
+from contextlens.eval.series import F1_LABELS, base_name, predicted_label
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import ButtonRequest, Card, Conversation, Finding, Scenario, Turn
 
@@ -80,9 +80,15 @@ RERUN_NOTE = ("rerun after a bug: pretrained weights were loaded in float16 (the
 SMOKE_STEPS = 24
 SMOKE_BATCHES = 4  # distinct real batches, cycled, so a falling loss means the model learns them
 SMOKE_LR = 3e-5
-DECODE_NOTE = ("DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are "
-               "accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used "
-               "for no training; DECODE test is untouched.")
+DECODE_NOTE = ("DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Its score "
+               "covers contradiction vs not only and is not four-label performance. Metrics are accuracy, false alert "
+               "rate and the F1 of contradiction and of non-contradiction; the four-label macro-F1 is not saved for it. "
+               "DECODE dev was used for no training; DECODE test is untouched.")
+DECODE_CAVEAT = ("DECODE's score covers contradiction vs not only and is not four-label performance; "
+                 "its cases appear here by id only.")
+BALANCE_NOTE = ("class weights change how much a label counts in the loss but add no new examples: `update` and "
+                "`insufficient` rest on very few distinct train-only cases (each repeated `repeats` times), so scores on "
+                "them should be read with that in mind")
 
 
 class SystemFailed(RuntimeError):
@@ -127,6 +133,7 @@ class TrainingData:
     examples: list[cm.Example]
     pairs: list[Pair]  # the same data as pairs, for the TF-IDF baseline
     counts: dict[str, int]
+    balance: dict[str, Any]
 
 
 def training_data(raw_root: Path, root: Path, dev_scenarios: list[Scenario]) -> TrainingData:
@@ -147,9 +154,15 @@ def training_data(raw_root: Path, root: Path, dev_scenarios: list[Scenario]) -> 
         raise RuntimeError("a dev conversation reached training")
     pairs = decode + own * SCENARIO_REPEAT
     examples = cm.examples_from_pairs(decode) + cm.examples_from_scenarios(mine, "scenarios_train") * SCENARIO_REPEAT
+    labels = [e.label for e in examples]
+    weights = dict(zip(cm.LABELS, ct.class_weights(labels)))
+    positive = [w for w in weights.values() if w > 0]
+    balance = {"distinct_cases_per_label": {x: sum(s.gold_label == x for s in mine) for x in cm.LABELS},
+               "repeats": SCENARIO_REPEAT, "class_weights": weights, "weight_ratio": max(positive) / min(positive),
+               "note": BALANCE_NOTE}
     return TrainingData(examples, pairs, {
         "decode_train_pairs": len(decode), "scenarios_train_pairs": len(own), "scenario_repeat": SCENARIO_REPEAT,
-        "examples": len(examples), **{f"label_{k}": v for k, v in sorted(Counter(e.label for e in examples).items())}})
+        "examples": len(examples), **{f"label_{k}": v for k, v in sorted(Counter(e.label for e in examples).items())}}, balance)
 
 
 def pick_winner(attempts: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -314,8 +327,10 @@ def _saved(fresh: dict[str, float | None], src: str) -> dict[str, float | None]:
     """The metrics a record keeps. Our scenarios keep the four-label set and accuracy per category; DECODE is binary,
     so it keeps accuracy, false alert rate and latency only."""
     if src == "decode":
-        return {k: v for k, v in fresh.items() if k in {"false_alert_rate", "label_accuracy", "latency_p50_ms", "latency_p95_ms"}}
-    return {k: v for k, v in fresh.items() if (base_name(k) in SAVED and "[" not in k) or k.startswith("label_accuracy[category=")}
+        return {k: v for k, v in fresh.items() if k in {"false_alert_rate", "label_accuracy", "latency_p50_ms", "latency_p95_ms",
+                                                         "f1[label=contradiction]", "f1[label=consistent]"}}
+    return {k: v for k, v in fresh.items()
+            if (base_name(k) in SAVED and "[" not in k) or k in F1_LABELS or k.startswith("label_accuracy[category=")}
 
 
 def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[Prediction]], limit: int = ERRORS_SHOWN) -> str:
@@ -343,7 +358,7 @@ def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[P
     total = sum(len(v) for v in wrong.values())
     lines = ["# E4 error analysis: the trained model's mistakes on dev", "",
              f"{total} mistakes among {scored} scored dev cases; {len(shown)} are listed, chosen by a fixed rule "
-             "(categories in alphabetical order, one at a time from each, by id). DECODE cases appear by id only.", "",
+             "(categories in alphabetical order, one at a time from each, by id). " + DECODE_CAVEAT, "",
              "## Mistakes by category", ""]
     lines += [f"- {c}: {len(v)}" for c, v in sorted(wrong.items())] or ["- none"]
     lines += ["", "## Listed mistakes", ""]
@@ -446,6 +461,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "settings_at_lower_batch_size": lowered, "winner_batch_size": winner["batch_size"],
             "batch_size_note": BATCH_NOTE, "num_workers": num_workers, "patience": PATIENCE,
             "threshold": cm.THRESHOLD, "freeze_word_embeddings": True, "training": train.counts,
+            "train_only_balance": train.balance,
             "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
             "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
             "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,

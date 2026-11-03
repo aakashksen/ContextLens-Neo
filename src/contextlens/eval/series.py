@@ -20,6 +20,7 @@ RESAMPLES = 10_000
 Unit = tuple[str, float]  # scenario id, 1.0 when correct
 
 BINARY = ("label_accuracy", "schema_valid_rate", "recall@")
+F1_LABELS = tuple(f"f1[label={x}]" for x in M.LABELS)  # per-label F1; undefined (None) without gold cases
 JUDGED = ("grounded_rate", "unsupported_claim_rate")
 GROUP_SUFFIX = re.compile(r"^(.*)\[(category|origin)=(.*)\]$")
 
@@ -178,11 +179,13 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
 
     out: Metrics = {}
     carded = [(s, p, p.card) for s, p in rows if p.card is not None]
-    if want("macro_f1", "false_alert_rate"):
+    if want("macro_f1", "false_alert_rate", *F1_LABELS):
         labelled = [(s.gold_label, q) for s, p in rows if s.gold_label and (q := predicted_label(p))]
         gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
         out["macro_f1"] = M.macro_f1(gold, pred)
         out["false_alert_rate"] = M.false_alert_rate(gold, pred)
+        for label, name in zip(M.LABELS, F1_LABELS):
+            out[name] = M.label_f1(gold, pred, label)
     if want("label_accuracy"):
         u = units(rows, "label_accuracy")
         out["label_accuracy"] = M.mean([v for _, v in u]) if u else None
