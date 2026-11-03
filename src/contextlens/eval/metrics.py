@@ -61,6 +61,20 @@ def false_alert_rate(gold: Sequence[str], pred: Sequence[str]) -> float | None:
     return sum(1 for p in negatives if p == "contradiction") / len(negatives)
 
 
+def ece(correct: Sequence[bool], probabilities: Sequence[float], bins: int = 10) -> float | None:
+    """Expected calibration error: equal-width probability bins, each bin's |accuracy - mean probability|
+    weighted by its share of the cases. A probability of 1 falls in the last bin. None when there are no cases."""
+    _same_length(correct, probabilities)
+    if not correct:
+        return None
+    grouped: list[list[tuple[bool, float]]] = [[] for _ in range(bins)]
+    for ok, p in zip(correct, probabilities):
+        grouped[min(int(p * bins), bins - 1)].append((ok, p))
+    total = len(correct)
+    return sum(len(g) / total * abs(sum(ok for ok, _ in g) / len(g) - sum(p for _, p in g) / len(g))
+               for g in grouped if g)
+
+
 def _finding_grounded(
     f: Finding,
     turn_seq: dict[str, int],
