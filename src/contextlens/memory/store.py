@@ -8,6 +8,8 @@ class TranscriptStore(Protocol):
 
     def turns(self, conv_id: str, as_of_seq: int, start_seq: int = 0) -> list[Turn]: ...
 
+    def relabel(self, conv_id: str, seq: int, speaker: str, confidence: float) -> None: ...
+
     def delete(self, conv_id: str) -> None: ...
 
 
@@ -21,6 +23,12 @@ class InMemoryTranscriptStore:
     def turns(self, conv_id: str, as_of_seq: int, start_seq: int = 0) -> list[Turn]:
         found = [t for t in self._by_conv.get(conv_id, []) if start_seq <= t.seq <= as_of_seq]
         return sorted(found, key=lambda t: t.seq)
+
+    def relabel(self, conv_id: str, seq: int, speaker: str, confidence: float) -> None:
+        turns = self._by_conv.get(conv_id, [])
+        for i, t in enumerate(turns):
+            if t.seq == seq:
+                turns[i] = t.model_copy(update={"speaker": speaker, "speaker_confidence": confidence})
 
     def delete(self, conv_id: str) -> None:
         self._by_conv.pop(conv_id, None)
@@ -68,6 +76,12 @@ class PostgresTranscriptStore:
             "SELECT id, embedding FROM turns WHERE conversation_id=%s AND id = ANY(%s)", (conv_id, ids)
         ).fetchall()
         return {i: [float(x) for x in v.to_list()] for i, v in rows}
+
+    def relabel(self, conv_id: str, seq: int, speaker: str, confidence: float) -> None:
+        self._conn.execute(
+            "UPDATE turns SET speaker=%s, speaker_confidence=%s WHERE conversation_id=%s AND seq=%s",
+            (speaker, confidence, conv_id, seq),
+        )
 
     def delete(self, conv_id: str) -> None:
         self._conn.execute("DELETE FROM turns WHERE conversation_id=%s", (conv_id,))

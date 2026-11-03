@@ -1,0 +1,22 @@
+[
+    {
+        "voice":  "Microsoft David Desktop",
+        "start_ms":  0,
+        "end_ms":  4310
+    },
+    {
+        "voice":  "Microsoft Zira Desktop",
+        "start_ms":  5310,
+        "end_ms":  9250
+    },
+    {
+        "voice":  "Microsoft David Desktop",
+        "start_ms":  10250,
+        "end_ms":  14765
+    },
+    {
+        "voice":  "Microsoft Zira Desktop",
+        "start_ms":  15765,
+        "end_ms":  19400
+    }
+]

@@ -439,3 +439,122 @@ def test_grpc_client_reports_a_service_that_is_not_there():
             await GrpcSpeech("127.0.0.1:1", 0.5).open()
 
     asyncio.run(scenario())
+
+
+SECOND = base64.b64encode(bytes(32000)).decode()  # one second of silence
+ONE_SECOND = {"type": "audio", "data": SECOND}
+
+
+class Spans:
+    """A stand-in for a diarization pipeline: second i of the window is spoken by X when i is even, else Y."""
+
+    def __init__(self):
+        self.lengths, self.hold, self.entered = [], None, threading.Event()
+        self.only_first = False
+
+    def spans(self, pcm):
+        first = not self.lengths
+        self.lengths.append(len(pcm))
+        self.entered.set()
+        if self.hold is not None:
+            assert self.hold.wait(10)
+        if self.only_first and not first:
+            return []
+        return [(i * 1000, i * 1000 + 900, "X" if i % 2 == 0 else "Y") for i in range(len(pcm) // 32000)]
+
+
+def speakers(svc, conv="c1"):
+    return [(t.speaker, t.speaker_confidence) for t in svc.store.turns(conv, 10**9)]
+
+
+def test_speakers_are_assigned_in_the_background_without_resending_turns():
+    spans = Spans()
+    client, svc = build(backend=spans)
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_json()
+        for t in hear_audio(ws, 2):
+            assert (t["speaker"], t["speaker_confidence"]) == ("unknown", 0.0)  # sent before any speaker is known
+        assert wait_for(lambda: speakers(svc) == [("speaker_1", 1.0), ("speaker_2", 1.0)])
+        ws.send_json(ONE_SECOND)
+        msg = ws.receive_json()  # the next frame is the next turn: no turn is sent twice
+        assert (msg["type"], msg["turn"]["seq"]) == ("transcript", 2)
+        assert wait_for(lambda: [s for s, _ in speakers(svc)] == ["speaker_1", "speaker_2", "speaker_1"])
+
+
+def hear_audio(ws, n):
+    out = []
+    for _ in range(n):
+        ws.send_json(ONE_SECOND)
+        out.append(ws.receive_json()["turn"])
+    return out
+
+
+def test_delete_during_background_diarization_brings_nothing_back():
+    spans = Spans()
+    spans.hold, spans.only_first = threading.Event(), True
+    client, svc = build(backend=spans)
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_json()
+        hear_audio(ws, 1)
+        assert spans.entered.wait(5)
+        ws.send_json({"type": "delete"})
+        assert ws.receive_json()["state"] == "deleted"
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_json()
+        hear_audio(ws, 1)  # the same turn id as the deleted conversation's first turn
+        spans.hold.set()  # the pre-delete run finishes now and must change nothing
+        assert wait_for(lambda: len(spans.lengths) >= 2)
+        time.sleep(0.3)
+        assert speakers(svc) == [("unknown", 0.0)]
+        assert max(spans.lengths) <= 32000  # no audio from before the delete
+
+
+def test_diarization_uses_only_the_retained_window_and_leaves_older_turns_alone():
+    d = Diarizer("c1", Spans())
+    d.new_stream()
+    d.feed(bytes(32000 * 130))  # 130 s; two minutes are kept
+    pcm, start = d.window()
+    assert (len(pcm), start) == (32000 * 120, 10_000)
+    old = Turn(id="c1-t0", conversation_id="c1", seq=0, speaker="unknown", speaker_confidence=0.0, text="a",
+               start_ms=5_000, end_ms=6_000, source="asr")  # fmt: skip
+    new = old.model_copy(update={"id": "c1-t1", "seq": 1, "start_ms": 20_000, "end_ms": 21_000})
+    got = d.speaker_updates([(0, 2_000, "X"), (10_000, 12_000, "Y")], start, start + 120_000, [old, new])  # times in the window
+    assert got == [(1, "speaker_1", 1.0)]  # the turn from before the window is not touched
+
+
+def test_speaker_names_stay_the_same_between_runs():
+    d = Diarizer("c1", Spans())
+    t0 = Turn(id="c1-t0", conversation_id="c1", seq=0, speaker="unknown", speaker_confidence=0.0, text="a",
+              start_ms=0, end_ms=1000, source="asr")  # fmt: skip
+    t1 = t0.model_copy(update={"id": "c1-t1", "seq": 1, "start_ms": 2000, "end_ms": 3000})
+    first = d.speaker_updates([(0, 1000, "P"), (2000, 3000, "Q")], 0, 3000, [t0, t1])
+    assert [(s, n) for s, n, _ in first] == [(0, "speaker_1"), (1, "speaker_2")]
+    t0, t1 = (t.model_copy(update={"speaker": n, "speaker_confidence": c}) for t, (_, n, c) in zip((t0, t1), first))
+    t2 = t0.model_copy(update={"id": "c1-t2", "seq": 2, "start_ms": 4000, "end_ms": 5000})
+    # the pipeline calls the same people by other names this time, and a third person speaks
+    second = d.speaker_updates([(0, 1000, "B"), (2000, 3000, "A"), (4000, 5000, "C")], 0, 5000, [t0, t1, t2])
+    assert [(s, n) for s, n, _ in second] == [(0, "speaker_1"), (1, "speaker_2"), (2, "speaker_3")]
+
+
+def test_a_turn_without_a_clear_speaker_stays_unknown_and_low_confidence_is_kept():
+    d = Diarizer("c1", Spans())
+    t = Turn(id="c1-t0", conversation_id="c1", seq=0, speaker="unknown", speaker_confidence=0.0, text="a",
+             start_ms=0, end_ms=1000, source="asr")  # fmt: skip
+    assert d.speaker_updates([(5000, 6000, "P")], 0, 1000, [t]) == []  # nobody spoke during it
+    [(seq, name, conf)] = d.speaker_updates([(0, 400, "P"), (400, 1000, "Q")], 0, 1000, [t])
+    assert (seq, name, conf) == (0, "speaker_1", pytest.approx(0.6))  # the larger share wins, with that share
+
+
+def test_hf_token_is_read_from_the_environment_or_dotenv_and_never_shown(tmp_path, monkeypatch):
+    from contextlens.speech.diarize import hf_token
+
+    secret = "hf_" + "x" * 30
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    (tmp_path / ".env").write_text(f"OTHER=1\nHF_TOKEN={secret}\n")
+    assert hf_token(tmp_path / ".env") == secret
+    monkeypatch.setenv("HF_TOKEN", "from-env")
+    assert hf_token(tmp_path / ".env") == "from-env"
+    monkeypatch.delenv("HF_TOKEN")
+    with pytest.raises(RuntimeError) as e:
+        hf_token(tmp_path / "missing.env")
+    assert secret not in str(e.value) and "HF_TOKEN" in str(e.value)

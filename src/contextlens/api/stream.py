@@ -26,7 +26,7 @@ from contextlens.replay.runner import Assistant, Context
 from contextlens.retrieval.hybrid import Retriever
 from contextlens.schemas import ButtonRequest, Card, Turn
 from contextlens.speech.client import Segment, SpeechService, SpeechStream, SpeechUnavailable
-from contextlens.speech.diarize import Diarizer, SpeakerBackend
+from contextlens.speech.diarize import BYTES_PER_MS, Diarizer, SpeakerBackend, WindowBackend
 
 log = logging.getLogger(__name__)  # never given transcript text
 ALL = 2**62
@@ -42,7 +42,7 @@ class Services:
     speech: SpeechService
     extractor: MemoryExtractor | None = None
     make_summary: Callable[[], RollingSummary] | None = None
-    make_backend: Callable[[], SpeakerBackend | None] | None = None
+    make_backend: Callable[[], SpeakerBackend | WindowBackend | None] | None = None
     speech_timeout_s: float = 3.0
     speech_retry_s: float = 10.0
     answer_timeout_s: float = 60.0
@@ -59,6 +59,9 @@ class _FrozenStore:
 
     def turns(self, conv_id: str, as_of_seq: int, start_seq: int = 0) -> list[Turn]:
         return self._inner.turns(conv_id, min(as_of_seq, self._limit), start_seq)
+
+    def relabel(self, conv_id: str, seq: int, speaker: str, confidence: float) -> None:
+        raise PermissionError("read only")
 
     def delete(self, conv_id: str) -> None:
         raise PermissionError("read only")
@@ -78,6 +81,8 @@ class ConversationState:
         self.memory_upto = -1
         self._memory_dirty = False
         self._memory_task: asyncio.Task | None = None
+        self._speaker_dirty = False
+        self._speaker_task: asyncio.Task | None = None
         existing = svc.store.turns(conv_id, ALL)
         self.last_sent_seq = existing[-1].seq if existing else -1
         self.diarizer.next_seq = self.last_sent_seq + 1
@@ -132,6 +137,40 @@ class ConversationState:
             svc.memory.add(items)
             self.memory_upto = new[-1].seq
 
+    # -- speakers, in the background --
+    # A turn is sent as "unknown". When the pipeline later names its speaker, only the stored turn changes: the
+    # contract has no message for updating a sent turn, and resending it would show twice in clients that append.
+    # Cards cite the stored turn, so they carry the speaker once it is known.
+
+    def schedule_speakers(self) -> None:
+        if not self.diarizer.background:
+            return
+        self._speaker_dirty = True
+        if self._speaker_task is None or self._speaker_task.done():
+            self._speaker_task = asyncio.get_running_loop().create_task(self._speaker_loop())
+
+    async def _speaker_loop(self) -> None:
+        while self._speaker_dirty:
+            self._speaker_dirty = False
+            try:
+                await asyncio.to_thread(self._speaker_step, self.epoch)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning("speaker assignment failed: %s", type(exc).__name__)
+
+    def _speaker_step(self, epoch: int) -> None:
+        pcm, start = self.diarizer.window()
+        if not pcm:
+            return
+        spans = self.diarizer.backend.spans(pcm)
+        with self.lock:
+            if epoch != self.epoch:
+                return  # deleted while the pipeline ran: its result is dropped
+            turns = self.svc.store.turns(self.conv_id, ALL)
+            for seq, speaker, confidence in self.diarizer.speaker_updates(spans, start, start + len(pcm) // BYTES_PER_MS, turns):
+                self.svc.store.relabel(self.conv_id, seq, speaker, confidence)
+
     # -- delete --
 
     def wipe(self) -> None:
@@ -146,9 +185,10 @@ class ConversationState:
             self.last_sent_seq = -1
 
     def stop_background(self) -> None:
-        self._memory_dirty = False
-        if self._memory_task is not None:
-            self._memory_task.cancel()
+        self._memory_dirty = self._speaker_dirty = False
+        for task in (self._memory_task, self._speaker_task):
+            if task is not None:
+                task.cancel()
 
 
 class Connection:
@@ -293,6 +333,7 @@ class Connection:
                         self.conv.last_sent_seq = max(self.conv.last_sent_seq, turn.seq)
                 if turns:
                     self.conv.schedule_memory()
+                    self.conv.schedule_speakers()
         except SpeechUnavailable as exc:
             if self.stream is stream:
                 await self._speech_failed(str(exc))
