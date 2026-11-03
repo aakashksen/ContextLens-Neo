@@ -73,7 +73,7 @@ DEADLINE_S = 8.0
 WRITER_MODEL = "qwen3.5:4b-q4_K_M"  # docs/model-choice.md
 JUDGE_MODEL = "gemma4:e4b-it-qat"  # a different local model from the writer, per docs/TESTING.md
 EMBED_MODEL = "nomic-embed-text"
-CLOUD_MODEL = "haiku"
+CLOUD_MODEL = "sonnet"
 
 # The cloud comparison.
 SUBSET = "e2-cloud-100"
