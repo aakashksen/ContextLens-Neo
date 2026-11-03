@@ -1,4 +1,6 @@
 """E4: trained consistency model. Tiny models, fixtures and invented text only; no GPU, no network."""
+import time
+
 import pytest
 
 from contextlens.eval import metrics as M
@@ -542,3 +544,134 @@ def test_another_error_is_not_retried(repo: Repo, monkeypatch: pytest.MonkeyPatc
     with pytest.raises(RuntimeError, match="no training run finished"):
         repo.run()
     assert calls == [8, 8]
+
+
+# ---- the NaN loss found by the first real run: fp16 weights, a non-finite loss that was recorded as ok ----
+
+
+def test_pretrained_weights_load_as_float32_even_from_a_float16_checkpoint(tmp_path: Path) -> None:
+    # The real DeBERTa checkpoint is stored in fp16 and transformers 5 loads the stored dtype; AdamW's eps (1e-8)
+    # underflows to 0 in fp16, so the first optimizer step turned the weights into NaN.
+    model, tok = _tiny(tmp_path)
+    model.half().save_pretrained(tmp_path / "half")
+    tok.save_pretrained(tmp_path / "half")
+    loaded, _ = cm.load_pretrained(str(tmp_path / "half"))
+    assert {p.dtype for p in loaded.parameters()} == {torch.float32}
+
+
+def _nan_loss(monkeypatch: pytest.MonkeyPatch, only_lr: float | None = None) -> None:
+    real = ct.batch_loss
+    real_fit = ct.fit
+    state: dict[str, float | None] = {"lr": None}
+
+    def fit(*a, **kw):
+        state["lr"] = kw["lr"]
+        return real_fit(*a, **kw)
+
+    def loss(model, batch, weights):
+        out = real(model, batch, weights)
+        return out * float("nan") if only_lr is None or state["lr"] == only_lr else out
+
+    monkeypatch.setattr(ct, "fit", fit)
+    monkeypatch.setattr(ct, "batch_loss", loss)
+
+
+def test_a_non_finite_loss_stops_training_at_once_and_leaves_the_weights_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.train_guard import NonFiniteLoss
+
+    model, tok = _tiny(tmp_path)
+    before = [p.clone() for p in model.parameters()]
+    _nan_loss(monkeypatch)
+    with pytest.raises(NonFiniteLoss, match="non-finite"):
+        ct.fit(model, tok, EXAMPLES, EXAMPLES, lr=1e-3, epochs=2, batch_size=4)
+    assert all(torch.equal(a, b) for a, b in zip(before, model.parameters()))
+
+
+def test_the_guard_helper_names_the_value_and_where() -> None:
+    from contextlens.train_guard import NonFiniteLoss, non_finite_epochs, require_finite
+
+    assert require_finite(0.5, "x") == 0.5
+    for bad in (float("nan"), float("inf"), -float("inf")):
+        with pytest.raises(NonFiniteLoss, match="step 3"):
+            require_finite(bad, "step 3")
+    assert non_finite_epochs([{"epoch": 1, "train_loss": 0.4}, {"epoch": 2, "train_loss": float("nan")},
+                              {"epoch": 3, "train_loss": None}, {"epoch": 4}]) == [2, 3, 4]
+
+
+def test_a_setting_with_a_nan_loss_is_listed_as_failed_never_ok(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    _nan_loss(monkeypatch, only_lr=1e-3)
+    result = repo.run()
+    assert result["winner"] == "lr0.003_ep2"
+    for rec in _records(repo.root).values():
+        att = {a["setting"]: a for a in rec["attempts"] if a["kind"] == "training"}
+        assert att["lr0.001_ep2"]["ok"] is False and "non-finite" in att["lr0.001_ep2"]["error"]
+        assert att["lr0.001_ep2"]["history"] == [] and att["lr0.003_ep2"]["ok"]
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+
+
+def test_when_every_setting_gives_a_nan_loss_nothing_is_written(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    _nan_loss(monkeypatch)
+    with pytest.raises(RuntimeError, match="no training run finished.*non-finite"):
+        repo.run()
+    assert not (repo.root / "results").exists()
+
+
+def test_a_rerun_supersedes_the_first_records_with_a_reason_and_says_what_changed(repo: Repo) -> None:
+    from contextlens.eval.check_run import superseded_by
+
+    repo.run()
+    olds = sorted((repo.root / "results/runs").glob("E4-*.json"))
+    old = {json.loads(p.read_text(encoding="utf-8"))["run_id"] for p in olds}
+    _git(repo.root, "add", "-A")
+    _git(repo.root, "commit", "-q", "-m", "first run")  # the first records are committed before a rerun, as in practice
+    time.sleep(0.01)
+    entries = [{"run_id": i, "reason": e4.RERUN_REASON} for i in sorted(old)]
+    repo.run(supersedes=entries)
+    new = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((repo.root / "results/runs").glob("E4-*.json"))
+           if p not in olds]
+    assert len(new) == 2 and all(len(r["supersedes"]) == 1 and r["supersedes"][0] in entries for r in new)
+    assert {r["supersedes"][0]["run_id"] for r in new} == old
+    assert all(p.is_file() for p in olds)  # the first records stay on disk
+    assert set(superseded_by("E4", repo.root)) == old
+    assert all("float32" in r["config"]["rerun_note"] for r in new)
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+
+
+def test_the_smoke_run_checks_a_finite_falling_loss_and_writes_nothing(repo: Repo) -> None:
+    out = e4.smoke(root=repo.root, raw_root=FIXTURE_RAW, base_model=str(repo.base), device="cpu", lr=3e-3, steps=24)
+    assert len(out["losses"]) == 24 and all(x == x for x in out["losses"]) and out["last"] < out["first"]
+    assert out["peak_gpu_memory_mb"] is None  # no GPU here: not measured, not zero
+    assert not (repo.root / "results").exists() and not (repo.root / "models").exists()
+
+
+def test_the_smoke_run_fails_on_a_loss_that_does_not_fall(repo: Repo) -> None:
+    with pytest.raises(RuntimeError, match="did not fall"):
+        e4.smoke(root=repo.root, raw_root=FIXTURE_RAW, base_model=str(repo.base), device="cpu", lr=0.0, steps=8)
+
+
+def test_the_smoke_run_stops_on_a_nan_loss(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.train_guard import NonFiniteLoss
+
+    _nan_loss(monkeypatch)
+    with pytest.raises(NonFiniteLoss):
+        e4.smoke(root=repo.root, raw_root=FIXTURE_RAW, base_model=str(repo.base), device="cpu", lr=1e-3, steps=4)
+
+
+@pytest.mark.real
+def test_real_deberta_trains_finitely_on_cpu_at_the_real_settings() -> None:
+    """Slow (loads DeBERTa-v3-base, a few CPU steps), so it runs only when asked:
+    `pytest -m real tests/test_e4.py -k deberta`. It is the check that would have caught the first real run's NaN
+    without a GPU."""
+    model, tok = cm.load_pretrained(cm.BASE_MODEL)
+    assert {p.dtype for p in model.parameters()} == {torch.float32}
+    for p in model.get_input_embeddings().parameters():
+        p.requires_grad = False
+    labels = ["consistent"] * 4129 + ["contradiction"] * 4079 + ["insufficient"] * 80 + ["update"] * 96
+    weights = torch.tensor(ct.class_weights(labels))
+    batch = ct.collate(tok, [_ex(lab, "we moved the deadline to wednesday") for lab in cm.LABELS] * 2)
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=1e-5, weight_decay=0.01)
+    model.train()
+    for _ in range(3):
+        loss = ct.train_step(model, dict(batch), opt, weights)
+        assert loss == loss and abs(loss) != float("inf")
+        assert all(torch.isfinite(p).all() for p in model.parameters())

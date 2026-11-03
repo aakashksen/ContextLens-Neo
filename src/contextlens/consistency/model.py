@@ -59,10 +59,13 @@ def render(ex: Example) -> tuple[str, str]:
 
 
 def load_pretrained(name_or_path: str, labels: tuple[str, ...] = LABELS) -> tuple[Any, Any]:
+    import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+    # dtype is explicit: the stored DeBERTa weights are fp16 and are otherwise loaded as fp16, where AdamW's eps
+    # underflows to 0 and the first optimizer step turns the weights into NaN. Training keeps fp32 weights.
     model = AutoModelForSequenceClassification.from_pretrained(
-        name_or_path, num_labels=len(labels), id2label=dict(enumerate(labels)),
+        name_or_path, dtype=torch.float32, num_labels=len(labels), id2label=dict(enumerate(labels)),
         label2id={n: i for i, n in enumerate(labels)})
     return model, AutoTokenizer.from_pretrained(name_or_path)
 

@@ -9,6 +9,7 @@ from typing import Any
 
 from contextlens.consistency import model as cm
 from contextlens.eval.metrics import macro_f1
+from contextlens.train_guard import require_finite
 
 Log = Callable[[dict[str, float], int], None]
 
@@ -46,13 +47,14 @@ def train_step(model: Any, batch: dict[str, Any], optimizer: Any, weights: Any, 
     import torch
 
     loss = batch_loss(model, batch, weights)
+    value = require_finite(float(loss.item()), "this training step")
     optimizer.zero_grad()
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step()
     if scheduler is not None:
         scheduler.step()
-    return float(loss.item())
+    return value
 
 
 @dataclass

@@ -281,3 +281,22 @@ def test_claim_on_none_metric_fails(repo: Path) -> None:
     path.write_text(json.dumps(rec), encoding="utf-8")
     _write_claims(repo, [{"id": "c1", "run_id": rec["run_id"], "metric": "false_alert_rate", "value": None}])
     assert any("c1" in p and "undefined" in p for p in claims.check_claims(repo))
+
+
+def _training_attempts(*losses: float, ok: bool = True) -> list[dict]:
+    return [{"kind": "training", "setting": "s1", "ok": ok,
+             "history": [{"epoch": i + 1, "train_loss": x, "dev_macro_f1": 0.5} for i, x in enumerate(losses)]}]
+
+
+def test_check_run_rejects_a_chosen_model_whose_training_loss_was_not_finite(repo: Path) -> None:
+    for bad in (float("nan"), float("inf")):
+        _run(repo, attempts=_training_attempts(0.7, bad), config={"labels_reviewed": True, "winner": "s1"})
+    problems = check("E1", root=repo)
+    assert sum("training loss" in p and "s1" in p for p in problems) == 2
+
+
+def test_check_run_accepts_a_finite_winner_and_ignores_a_failed_setting_that_has_no_history(repo: Path) -> None:
+    attempts = _training_attempts(0.7, 0.4) + [{"kind": "training", "setting": "s2", "ok": False, "history": [],
+                                                  "error": "NonFiniteLoss: non-finite loss"}]
+    _run(repo, attempts=attempts, config={"labels_reviewed": True, "winner": "s1"})
+    assert check("E1", root=repo) == []

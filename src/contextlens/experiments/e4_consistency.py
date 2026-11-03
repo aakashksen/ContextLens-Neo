@@ -70,6 +70,16 @@ TRAIN_SET_REVIEW_NOTE = ("an independent read of the invented train-only set, be
 BATCH_NOTE = ("on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more "
               "optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not "
               "adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like")
+RERUN_REASON = ("the first run's training loss was NaN in every epoch of all six settings, so its trained model was "
+                "untrained and its records are void; the weights had loaded as float16 and AdamW's epsilon underflowed")
+RERUN_NOTE = ("rerun after a bug: pretrained weights were loaded in float16 (the stored dtype), the first AdamW step made "
+              "them NaN, and every run was recorded ok. Fix: weights load as float32 (bf16 autocast on GPU is unchanged), a "
+              "non-finite loss now fails its setting, and check_run rejects a winner with a non-finite training loss. "
+              "The grid, winner rule, data and manifests are unchanged; the fix changes the weight precision of every "
+              "trained setting, so the first run's numbers cannot be compared with this one's")
+SMOKE_STEPS = 24
+SMOKE_BATCHES = 4  # distinct real batches, cycled, so a falling loss means the model learns them
+SMOKE_LR = 3e-5
 DECODE_NOTE = ("DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are "
                "accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used "
                "for no training; DECODE test is untouched.")
@@ -352,12 +362,20 @@ def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[P
     return "\n".join(lines)
 
 
+def _source_of(root: Path, run_id: str) -> str | None:
+    path = root / "results/runs" / f"{run_id}.json"
+    return json.loads(path.read_text(encoding="utf-8")).get("scenario_source") if path.is_file() else None
+
+
 def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cpu",
            grid=GRID, make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker],
-           prompted_model: str = PROMPTED_MODEL, say=_say, num_workers: int = 0) -> dict[str, Any]:
+           prompted_model: str = PROMPTED_MODEL, say=_say, num_workers: int = 0,
+           supersedes: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """Search, train the winner, score every system on both sources, and write two records and the error analysis.
     A search run or a baseline that errors is listed in `attempts` and left out. With no finished training run
-    nothing is written and the run raises. Any left-out system makes the result incomplete."""
+    nothing is written and the run raises. Any left-out system makes the result incomplete. `supersedes` lists earlier
+    records (run_id and reason); each new record lists the ones of its own scenario source, and the earlier files stay
+    on disk."""
     raw_root = raw_root or root / RAW_DIR
     if not committed_unchanged({"git_commit": head_commit(root)}, root, SCENARIO_SOURCES["decode"][0].as_posix()):
         raise RuntimeError("the decode manifest must be committed before the run (run with --prepare)")
@@ -421,6 +439,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
                     comparisons.append({"a": "trained", "b": other, **c})
         attempt_rows = [{**a, "kind": "training"} for a in attempts] + [
             {"setting": n, "kind": "system", "ok": n in systems, "error": failed.get(n)} for n in SYSTEMS if n != "trained"]
+        own_supersedes = [e for e in supersedes or [] if _source_of(root, e["run_id"]) == src]
         config = {
             "experiment": "E4", "source": src, "winner_rule": WINNER_RULE, "winner": winner["setting"],
             "grid": [list(g) for g in grid], "batch_size": BATCH_SIZE, "min_batch_size": MIN_BATCH_SIZE,
@@ -432,21 +451,73 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
             "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started, "labels_reviewed": False,
             "failed_systems": failed,
+            **({"rerun_note": RERUN_NOTE} if supersedes else {}),
         }
         paths[src] = write_run(
             "E4", SPLIT, config,
             {"trained": f"{base_model} fine-tuned", "tfidf": "tfidf-logreg", "zeroshot": ZERO_SHOT_MODEL,
              "prompted": prompted_model}, {"consistency": "v1"}, metrics, intervals, attempt_rows, preds, digest,
-            comparisons=comparisons, scenario_source=src, root=root)
+            comparisons=comparisons, scenario_source=src, root=root, supersedes=own_supersedes)
     out = root / ERROR_ANALYSIS_REL
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(error_md, encoding="utf-8")
     return {"winner": winner["setting"], "complete": not failed, "records": paths, "failed": failed}
 
 
+def smoke(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cuda",
+          lr: float = SMOKE_LR, steps: int = SMOKE_STEPS, say=_say) -> dict[str, Any]:
+    """A few minutes' check at the real settings (batch size, frozen embeddings, class weights, bf16 on a GPU): train
+    on a few real batches, cycled, and require every loss finite and the last cycle's mean below the first's.
+    Prints the peak GPU memory. Writes nothing under results/ or models/."""
+    import random
+
+    import torch
+    from transformers import get_linear_schedule_with_warmup
+
+    from contextlens.train_guard import require_finite
+
+    raw_root = raw_root or root / RAW_DIR
+    dev = load_scenarios(SPLIT, root / SCENARIO_SOURCES["scenarios"][1])
+    data = training_data(raw_root, root, dev)
+    say(f"smoke: training data {data.counts}")
+    model, tokenizer = cm.load_pretrained(base_model)
+    model.to(device)
+    for p in model.get_input_embeddings().parameters():
+        p.requires_grad = False
+    order = list(range(len(data.examples)))
+    random.Random(13).shuffle(order)
+    batches = [ct.collate(tokenizer, [data.examples[i] for i in order[k * BATCH_SIZE:(k + 1) * BATCH_SIZE]])
+               for k in range(SMOKE_BATCHES)]
+    weights = torch.tensor(ct.class_weights([e.label for e in data.examples]))  # type: ignore[misc]
+    optimizer = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=0.01)
+    scheduler = get_linear_schedule_with_warmup(optimizer, 0, steps)
+    on_gpu = device.startswith("cuda")
+    if on_gpu:
+        torch.cuda.reset_peak_memory_stats()
+    model.train()
+    losses = []
+    for i in range(steps):
+        loss = ct.train_step(model, dict(batches[i % SMOKE_BATCHES]), optimizer, weights, scheduler)
+        require_finite(loss, f"smoke step {i + 1}")
+        losses.append(loss)
+        say(f"  step {i + 1}/{steps} loss {loss:.4f}")
+    if not all(torch.isfinite(p).all() for p in model.parameters()):
+        raise RuntimeError("smoke: the weights are no longer finite after training")
+    first, last = (sum(losses[:SMOKE_BATCHES]) / SMOKE_BATCHES, sum(losses[-SMOKE_BATCHES:]) / SMOKE_BATCHES)
+    peak = torch.cuda.max_memory_allocated() / 2**20 if on_gpu else None
+    say(f"smoke: mean loss {first:.4f} -> {last:.4f}; peak GPU memory " + (f"{peak:.0f} MB" if peak is not None else "not measured: no GPU"))
+    if not last < first:
+        raise RuntimeError(f"smoke: the loss did not fall ({first:.4f} -> {last:.4f})")
+    return {"losses": losses, "first": first, "last": last, "peak_gpu_memory_mb": peak}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--prepare", action="store_true", help="write the DECODE dev sample and its manifest, then stop")
+    ap.add_argument("--smoke", action="store_true",
+                    help="train a few real batches on the GPU at the real settings, check the loss, write nothing")
+    ap.add_argument("--supersedes", nargs="+", metavar="RUN_ID", default=[],
+                    help="earlier E4 records this run replaces (RERUN_REASON is the stated reason)")
     args = ap.parse_args()
     if args.prepare:
         print(prepare_decode_dev())
@@ -456,10 +527,15 @@ def main() -> int:
     if not torch.cuda.is_available():
         print("no GPU: this run trains DeBERTa and needs a GPU turn", file=sys.stderr)
         return 3
+    if args.smoke:
+        smoke()
+        print("smoke ok")
+        return 0
     from contextlens.llm.client import OllamaClient
 
     result = run_e4(device="cuda", make_zeroshot=ZeroShotChecker,
-                    make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)), num_workers=NUM_WORKERS)
+                    make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)), num_workers=NUM_WORKERS,
+                    supersedes=[{"run_id": r, "reason": RERUN_REASON} for r in args.supersedes] or None)
     print(json.dumps({"winner": result["winner"], "complete": result["complete"], "failed": result["failed"],
                       "records": [p.as_posix() for p in result["records"].values()]}, indent=1))
     return 0 if result["complete"] else 2

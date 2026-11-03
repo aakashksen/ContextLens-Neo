@@ -12,6 +12,7 @@ from contextlens.eval.records import IDS_ONLY_SOURCES, ROOT, RUNS_REL, SCENARIO_
 from contextlens.eval.series import JUDGED, base_metrics, base_name
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
+from contextlens.train_guard import non_finite_epochs
 
 REQUIRED = (
     "run_id experiment git_commit dirty dataset_hash split scenario_source config models prompt_versions n metrics "
@@ -186,6 +187,17 @@ def subset_problems(rec: dict[str, Any], root: Path, split_ids: list[str]) -> tu
     return set(ids), []
 
 
+def training_loss_problems(rec: dict[str, Any]) -> list[str]:
+    """A record whose chosen model (config.winner) has a missing, NaN or infinite training loss in its history."""
+    config, attempts = rec.get("config"), rec.get("attempts")
+    winner = config.get("winner") if isinstance(config, dict) else None
+    if winner is None or not isinstance(attempts, list):
+        return []
+    return [f"the chosen model {winner} has a non-finite training loss in epoch {e}"
+            for a in attempts if isinstance(a, dict) and a.get("setting") == winner and a.get("kind") == "training"
+            for e in non_finite_epochs(a.get("history") or [])]
+
+
 def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     problems = [f"missing field {k}" for k in REQUIRED if k not in rec]
     if problems:
@@ -196,6 +208,7 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
         problems.append("a model name matches fake or stub")
     if not rec["attempts"]:
         problems.append("attempts is empty")
+    problems += training_loss_problems(rec)
     if git(root, "merge-base", "--is-ancestor", rec["git_commit"], "HEAD").returncode != 0:
         problems.append("git_commit is not an ancestor of HEAD")
     if min_n and rec["n"] < min_n:
