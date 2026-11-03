@@ -25,6 +25,7 @@ class Prediction(BaseModel):
     card: Card | None = None  # a retrieval-only row holds ranked turns instead of a card
     ranked_turn_ids: list[str] | None = None
     claim_supported: list[bool] | None = None  # rubric judgement per finding, in card order
+    cloud_supported: list[bool] | None = None  # the cloud grader's judgement per finding; set only by the judge check
     raw_output: str | None = None  # model text, kept so schema validity can be recomputed
     stage_latency_ms: dict[str, int] = Field(default_factory=dict)
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
