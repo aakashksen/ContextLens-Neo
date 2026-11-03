@@ -6,7 +6,7 @@ Standing rule (`CLAUDE.md`): a dataset is used only if a primary-source license 
 
 Summary:
 - DECODE: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (no data license stated).
-- QMSum: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
+- QMSum: yes, by the person, for local, non-commercial evaluation and for training the T6.2 adapter locally; never commit or redistribute its data, and never publish that adapter or examples derived from it (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
 - LongMemEval: yes (MIT).
 - AMI Meeting Corpus: yes (CC BY 4.0).
 - pyannote (diarization): yes, by the person, who accepted its terms on Hugging Face (gated model).
@@ -54,7 +54,7 @@ Size: 1,808 query-summary pairs over 232 meetings in three domains (paper abstra
 Format: JSON and JSONL under `data/ALL`, `data/Academic`, `data/Product`, `data/Committee`, with train, val and test splits (README). Each record has `topic_list` (topic with `relevant_text_span`), `general_query_list`, `specific_query_list` (query, answer, span), and `meeting_transcripts` (speaker, content).
 Labels: No classification labels. The gold items are the query-answer pairs and the topic spans in the transcript (README).
 Access: Public GitHub repo, no gate. Derived from the AMI, ICSI and parliamentary sources, so the terms of those sources also apply. Nothing was downloaded.
-Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation only. Its data must never be committed or redistributed. Original finding: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
+Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation, and for training the T6.2 adapter locally. Its data must never be committed or redistributed. That adapter, QMSum text, and examples derived from it must never be published. Original finding: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
 
 ## LongMemEval
 
