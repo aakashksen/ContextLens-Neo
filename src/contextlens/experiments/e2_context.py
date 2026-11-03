@@ -81,11 +81,9 @@ SUBSET_N = 100
 SUBSET_SEED = "e2-cloud-v1"
 SUBSETS_REL = Path("datasets/splits/subsets")
 PARTIAL_REL = Path("results/partial/e2-cloud-rows.jsonl")  # git-ignored; one line per paid cloud row
-RESPOND_SUBSET = "e2-respond-48"  # the suggestion-step check: local model only, no cloud calls
-RESPOND_CATEGORIES = ("respond_with_suggestion", "prompt_injection", "recall")
-RESPOND_PER_CATEGORY = 16
-RESPOND_PARTIAL_REL = Path("results/partial/e2-respond-rows.jsonl")  # git-ignored; one line per finished row
-RESPOND_SYSTEM = "retrieval_memory"
+NEW_PROMPT_SYSTEM = "retrieval_memory"  # the one strategy rerun on the prompt that defines the modes; local model, no cloud
+NEW_PROMPT_PARTIAL_REL = Path("results/partial/e2-new-prompt-rows.jsonl")  # git-ignored; one line per finished row
+NEW_PROMPT_KEY = "new-prompt"  # tags the saved rows, which `_saved_rows` keys by commit, subset name and strategy
 PROMPT_FIX_COMMIT = "c9fe70e"  # the commit whose prompt defines the card modes; records made before it ran on the old prompt
 CLOUD_SOURCES = frozenset({"synthetic", "longmemeval"})  # conversation sources whose text may go to a cloud model
 LOCAL_ONLY_SOURCES = frozenset({"qmsum", "decode"})  # scenario sources approved for local use only
@@ -188,31 +186,6 @@ def write_subset(root: Path = ROOT, name: str = SUBSET) -> Path:
         "rule": f"{SUBSET_N} cloud-safe dev cases, proportional by (category, origin), hash order inside a group, seed {SUBSET_SEED}",
         "sources": dict(sorted(_count(by_id[i].conversation.source for i in ids).items())),
         "categories": dict(sorted(_count(by_id[i].category for i in ids).items())),
-    }
-    path = root / SUBSETS_REL / f"{name}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(path, json.dumps(manifest, indent=1) + "\n")
-    return path
-
-
-def choose_respond_subset(scenarios: list[Scenario]) -> list[str]:
-    """The first 16 ids, sorted, of each of RESPOND_CATEGORIES. Fixed before any result was read."""
-    out: list[str] = []
-    for cat in RESPOND_CATEGORIES:
-        ids = sorted(s.id for s in scenarios if s.category == cat)
-        if len(ids) < RESPOND_PER_CATEGORY:
-            raise ValueError(f"only {len(ids)} {cat} cases for a subset of {RESPOND_PER_CATEGORY}")
-        out += ids[:RESPOND_PER_CATEGORY]
-    return out
-
-
-def write_respond_subset(root: Path = ROOT, name: str = RESPOND_SUBSET) -> Path:
-    """Write the manifest of the suggestion-step check from the committed dev file. Commit it before the run."""
-    scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
-    manifest = {
-        "name": name, "split": SPLIT, "ids": choose_respond_subset(scenarios),
-        "rule": f"the first {RESPOND_PER_CATEGORY} dev case ids, sorted, of each of {', '.join(RESPOND_CATEGORIES)}; "
-                "chosen without reading any result",
     }
     path = root / SUBSETS_REL / f"{name}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -530,8 +503,11 @@ def mode_report(scenarios: list[Scenario], preds: list[Prediction]) -> dict[str,
         c["n"] += 1
         c["modes"][mode] = c["modes"].get(mode, 0) + 1
         c["with_suggestion"] += bool(p.card and p.card.suggestion)
+    other = {c: v["modes"]["respond"] for c, v in sorted(cats.items())
+             if c not in ("recall", "respond_with_suggestion") and v["modes"].get("respond")}
     return {"categories": dict(sorted(cats.items())),
             "recall_cases_to_respond": cats.get("recall", {}).get("modes", {}).get("respond", 0),
+            "other_categories_to_respond": other,
             "injection": injection_report(scenarios, preds)}
 
 
@@ -590,7 +566,7 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
                    cloud_done: bool = False, old_prompt: list[str] | None = None,
                    respond: tuple[str, list[Prediction], dict[str, Any]] | None = None) -> str:
     """`old_prompt` names the systems whose records ran before PROMPT_FIX_COMMIT (None: leave the section out);
-    `respond` is (run id, rows, metrics) of the respond-subset record, if there is one."""
+    `respond` is (run id, rows, metrics) of the new-prompt record, if there is one."""
     by_id = {s.id: s for s in scenarios}
     lines = ["# E2 error analysis: context strategies on dev", "",
              "Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. Only scenario text is quoted.",
@@ -633,7 +609,22 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
     return "\n".join(lines) + "\n"
 
 
-RESPOND_METRICS = ("grounded_rate", "unsupported_claim_rate", "answer_when_answerable", "speaker_accuracy",
+SAME_CASE_METRICS = ("answer_when_answerable", "abstain_when_insufficient", "grounded_rate")
+
+
+def same_case_comparison(scenarios: list[Scenario], old: list[Prediction], new: list[Prediction]) -> dict[str, Any]:
+    """The same strategy on the same cases under two prompts, from saved rows: n cases both have, and each metric for
+    each (None where undefined)."""
+    ids = {p.scenario_id for p in old} & {p.scenario_id for p in new}
+    scs = [s for s in scenarios if s.id in ids]
+    out: dict[str, Any] = {"n": len(scs), "metrics": {}}
+    fresh = {k: recompute_metrics(scs, [p for p in rows if p.scenario_id in ids]) for k, rows in (("old", old), ("new", new))}
+    for m in SAME_CASE_METRICS:
+        out["metrics"][m] = {k: fresh[k].get(m) for k in ("old", "new")}
+    return out
+
+
+NEW_PROMPT_METRICS = ("grounded_rate", "unsupported_claim_rate", "answer_when_answerable", "speaker_accuracy",
                    "tokens_per_card", "latency_p50_ms")
 
 
@@ -654,34 +645,43 @@ def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Predi
                 f"cases, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in inj)}")
         lines.append("- So the \"0 injected\" counts in the prompt-injection section are not evidence that injected claims stay "
                      "out of suggestions: the step that could carry one did not run, and the count could not fail.")
-    rm = systems.get(RESPOND_SYSTEM)
+    rm = systems.get(NEW_PROMPT_SYSTEM)
     if rm:
         ins = [p for p in rm if by_id[p.scenario_id].gold_label == "insufficient"]
         kept = sum(bool(p.card and p.card.status == "abstained") for p in ins)
         if ins:
-            lines.append(f"- {RESPOND_SYSTEM} abstains on only {kept} of the {len(ins)} insufficient-evidence cases "
+            lines.append(f"- {NEW_PROMPT_SYSTEM} abstains on only {kept} of the {len(ins)} insufficient-evidence cases "
                          f"({100 * kept / len(ins):.0f}%); on the others it gives an answer where the evidence is not there.")
     if respond is None:
-        lines.append("- There is no respond-subset record yet. Nothing here is a result for the suggestion step, and the "
+        lines.append("- There is no new-prompt record yet. Nothing here is a result for the suggestion step, and the "
                      "injected-claim count is not a finding until one exists.")
         return lines
     run, rows, metrics = respond
     rep_ = mode_report(scenarios, rows)
-    lines += [f"- Respond-subset record {run} (the prompt that defines the modes; {RESPOND_SYSTEM}, local model, "
-              f"{len(rows)} cases; it does not replace the comparison records). Per category:"]
+    lines += [f"- New-prompt record {run} (the prompt that defines the modes; {NEW_PROMPT_SYSTEM}, local model, all "
+              f"{len(rows)} dev cases; it does not replace the comparison records, which stay the basis of the winner). "
+              "Per category:"]
     for cat, c in rep_["categories"].items():
         modes = ", ".join(f"{m} {k}" for m, k in sorted(c["modes"].items()))
         lines.append(f"    - {cat}: {c['n']} cards; modes: {modes}; with a suggestion: {c['with_suggestion']}")
     lines.append(f"- Recall cases that went to respond: {rep_['recall_cases_to_respond']} of "
                  f"{rep_['categories'].get('recall', {}).get('n', 0)}.")
+    moved = rep_["other_categories_to_respond"]
+    lines.append("- Other categories with cards in respond mode (respond_with_suggestion is expected to respond and is left "
+                 "out): " + (", ".join(f"{c} {n}" for c, n in moved.items()) or "none") + ".")
     inj = rep_["injection"]
     lines.append(f"- Injected claims in suggestions (word-overlap proxy): {inj['injected_words_in_suggestion']} of "
                  f"{inj['with_suggestion']} suggestions on {inj['cases']} injection cases.")
     if inj["with_suggestion"] == 0:
         lines.append("  No injection case produced a suggestion, so this count again could not fail.")
     lines += [f"    - {x['id']} {x['words']}: {x['suggestion']}" for x in inj["flagged"]]
-    shown = [f"{m} {metrics[m]:.3f}" for m in RESPOND_METRICS if metrics.get(m) is not None]
+    shown = [f"{m} {metrics[m]:.3f}" for m in NEW_PROMPT_METRICS if metrics.get(m) is not None]
     lines.append("- Metrics on these cases (judged by the local model alone; undefined ones left out): " + ", ".join(shown))
+    if rm:
+        cmp_ = same_case_comparison(scenarios, rm, rows)
+        lines.append(f"- {NEW_PROMPT_SYSTEM}, old prompt vs new prompt, on the same {cmp_['n']} cases (from the saved rows):")
+        for m, v in cmp_["metrics"].items():
+            lines.append(f"    - {m}: " + " -> ".join("not defined" if v[k] is None else f"{v[k]:.3f}" for k in ("old", "new")))
     return lines
 
 
@@ -924,7 +924,7 @@ def _write_analysis(root: Path, scenarios: list[Scenario], systems: dict[str, li
 
 
 def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = None,
-                  respond_run: str | None = None) -> Path:
+                  new_prompt_run: str | None = None) -> Path:
     """Write the error analysis from the saved predictions of committed records, with no model call."""
     def load(run: str) -> dict[str, Any]:
         path = root / RUNS_REL / f"{run}.json"
@@ -955,14 +955,14 @@ def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = 
         metrics |= cloud["metrics"]
         old += list(cloud_rows) if predates_fix(cloud) else []
     respond = None
-    if respond_run:
-        rec = load(respond_run)
-        if rec["config"].get("kind") != "respond_subset" or "subset" not in rec:
-            raise RunBroken(f"{respond_run} is not a respond-subset record")
-        respond = (respond_run, rows(rec)[RESPOND_SYSTEM], rec["metrics"][RESPOND_SYSTEM])
+    if new_prompt_run:
+        rec = load(new_prompt_run)
+        if rec["config"].get("kind") != "new_prompt" or "subset" in rec:
+            raise RunBroken(f"{new_prompt_run} is not a new-prompt record")
+        respond = (new_prompt_run, rows(rec)[NEW_PROMPT_SYSTEM], rec["metrics"][NEW_PROMPT_SYSTEM])
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
     return _write_analysis(root, scenarios, systems, health, local["config"]["winner"], metrics,
-                           [local_run, *([cloud_run] if cloud_run else []), *([respond_run] if respond_run else [])],
+                           [local_run, *([cloud_run] if cloud_run else []), *([new_prompt_run] if new_prompt_run else [])],
                            bool(cloud_run), old, respond)
 
 
@@ -1148,27 +1148,28 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
     return result
 
 
-# ---------------------------------------------------------------- the suggestion step, on a small subset
+# ---------------------------------------------------------------- the suggestion step, on the new prompt
 
-def run_e2_respond(*, root: Path = ROOT, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
-                   names: Models | None = None, retrieval_config: dict[str, Any], subset: str = RESPOND_SUBSET,
-                   gpu_mb: Callable[[], int | None] = gpu_used_mb, say: Callable[[str], None] = print) -> dict[str, Any]:
-    """Run retrieval_memory with the local writer on the named dev subset only, judge it, and write one E2 record with
-    `subset` set. No Claude call is made. It supersedes nothing. Rows are saved as they finish, so an interrupted run
-    resumes at the same commit. Raises RunBroken, before anything is written, when the setup or the system is broken."""
+def run_e2_new_prompt(*, root: Path = ROOT, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
+                      names: Models | None = None, retrieval_config: dict[str, Any],
+                      gpu_mb: Callable[[], int | None] = gpu_used_mb, say: Callable[[str], None] = print) -> dict[str, Any]:
+    """Run retrieval_memory with the local writer on every dev case, under the current prompt, judge it, and write one
+    E2 record with a single system. No Claude call is made. It supersedes nothing, so the comparison records stay the
+    ones E2's winner comes from. Rows are saved as they finish, so an interrupted run resumes at the same commit.
+    Raises RunBroken, before anything is written, when the setup or the system is broken."""
     names = names or Models()
     mine = [(names.writer, False), (names.judge, False), (names.embedder, True)]
     try:
-        return _respond(root, writer, judge_llm, embedder, ctl, names, retrieval_config, subset, gpu_mb, say)
+        return _new_prompt(root, writer, judge_llm, embedder, ctl, names, retrieval_config, gpu_mb, say)
     except LLMError as exc:
         raise RunBroken(f"a model server call failed: {exc}") from exc
     finally:
         _unload_models(ctl, mine, say)
 
 
-def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
-             retrieval_config: dict[str, Any], subset: str, gpu_mb: Callable[[], int | None],
-             say: Callable[[str], None]) -> dict[str, Any]:
+def _new_prompt(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
+                retrieval_config: dict[str, Any], gpu_mb: Callable[[], int | None],
+                say: Callable[[str], None]) -> dict[str, Any]:
     started = datetime.now(timezone.utc).isoformat()
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the record cannot be written")
@@ -1180,13 +1181,8 @@ def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
     if digest != entry["hash"]:
         raise RunBroken("the dev scenario file does not match its manifest")
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
-    sub_rel = (SUBSETS_REL / f"{subset}.json").as_posix()
-    if not committed_unchanged({"git_commit": head_commit(root)}, root, sub_rel):
-        raise RunBroken(f"the subset manifest {sub_rel} must be committed before the run")
-    ids = json.loads((root / sub_rel).read_text(encoding="utf-8"))["ids"]
-    sub_scs = [s for s in scenarios if s.id in set(ids)]
-    if len(sub_scs) != len(ids) or not sub_scs:
-        raise RunBroken("the subset names cases that are not in dev")
+    sub_scs = scenarios
+    ids = [s.id for s in scenarios]
     missing = [m for m in (names.writer, names.judge, names.embedder) if full_name(m) not in ctl.installed()]
     if missing:
         raise RunBroken(f"models not installed in Ollama: {missing}")
@@ -1225,21 +1221,21 @@ def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
         raise RunBroken(f"memory extraction failed on {memory_failed} of {len(sub_scs)} cases")
 
     commit = head_commit(root)
-    have, _ = _saved_rows(root / RESPOND_PARTIAL_REL, commit, subset, RESPOND_SYSTEM, set(ids))
+    have, _ = _saved_rows(root / NEW_PROMPT_PARTIAL_REL, commit, NEW_PROMPT_KEY, NEW_PROMPT_SYSTEM, set(ids))
     if have:
         say(f"reusing {len(have)} saved rows")
 
     def save(row: Prediction) -> None:
-        line = {"commit": commit, "subset": subset, "winner": RESPOND_SYSTEM, "calls": 0,
+        line = {"commit": commit, "subset": NEW_PROMPT_KEY, "winner": NEW_PROMPT_SYSTEM, "calls": 0,
                 "row": json.loads(row.model_dump_json())}
-        _append_durable(root / RESPOND_PARTIAL_REL, json.dumps(line))
+        _append_durable(root / NEW_PROMPT_PARTIAL_REL, json.dumps(line))
 
-    say(f"running {RESPOND_SYSTEM} on {len(sub_scs)} cases")
+    say(f"running {NEW_PROMPT_SYSTEM} on {len(sub_scs)} cases")
     rows = run_system(
-        RESPOND_SYSTEM, sub_scs,
-        lambda sc: make_assistant(RESPOND_SYSTEM, sc, writer, embedder, retrieval_config, memories.get(sc.id, MemoryStore()), DEADLINE_S),
+        NEW_PROMPT_SYSTEM, sub_scs,
+        lambda sc: make_assistant(NEW_PROMPT_SYSTEM, sc, writer, embedder, retrieval_config, memories.get(sc.id, MemoryStore()), DEADLINE_S),
         STREAK_LOCAL, say=say, have=have, on_row=save)
-    health = check_health(RESPOND_SYSTEM, rows)
+    health = check_health(NEW_PROMPT_SYSTEM, rows)
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
 
@@ -1249,19 +1245,19 @@ def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
     rows = judge_rows(judge, rows)
     if judge.calls == 0:
         raise JudgeFailed("no finding was judged, so no card made a claim")
-    systems = {RESPOND_SYSTEM: rows}
+    systems = {NEW_PROMPT_SYSTEM: rows}
     metrics, intervals, comparisons = _stats(sub_scs, systems)
     config: dict[str, Any] = {
-        "experiment": "E2", "kind": "respond_subset", "systems": [RESPOND_SYSTEM], "subset": subset,
+        "experiment": "E2", "kind": "new_prompt", "systems": [NEW_PROMPT_SYSTEM],
         "recent_n": RECENT_N, "deadline_s": DEADLINE_S,
         "retrieval": {k: retrieval_config.get(k) for k in ("winner", "mode", "k", "rerank", "chunk_turns", "run_ids")},
         "prompt_fix_commit": PROMPT_FIX_COMMIT,
-        "purpose": "the first E2 run where the single agent's prompt defines the card modes, on cases where a card "
-                   "should respond (or must not), to see whether the suggestion step is exercised and whether an "
-                   "injected claim reaches a suggestion; it does not replace the comparison records",
+        "purpose": "retrieval_memory on every dev case under the prompt that defines the card modes, to see whether "
+                   "the suggestion step is exercised and whether an injected claim reaches a suggestion; the earlier "
+                   "comparison records ran on the old prompt, and this record replaces none of them",
         "judge": {"model": names.judge, "rubric_version": RUBRIC_VERSION, "same_model_and_prompt_as_writer": False,
                   "calls": judge.calls, "share_supported": judge.yes / judge.calls},
-        "health": {RESPOND_SYSTEM: health}, "cold_start_s": cold, "gpu_memory_used_mb": gpu,
+        "health": {NEW_PROMPT_SYSTEM: health}, "cold_start_s": cold, "gpu_memory_used_mb": gpu,
         "memory_build": {"cases": len(sub_scs), "failed": memory_failed,
                          "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "mean_tokens": sum(c["tokens"] for c in memory_cost) / len(memory_cost) if memory_cost else None},
@@ -1272,12 +1268,12 @@ def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
         "claude_calls": 0, "labels_reviewed": False, "started_at": started,
     }
     models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
-    attempts = [{"setting": RESPOND_SYSTEM, "kind": "local strategy, subset only", "ok": True, "error": None, "health": health}]
+    attempts = [{"setting": NEW_PROMPT_SYSTEM, "kind": "local strategy, new prompt", "ok": True, "error": None, "health": health}]
     path = write_run("E2", SPLIT, config, models, {"recall": PROMPT_VERSION}, metrics, intervals, attempts, systems, digest,
-                     comparisons=comparisons, subset=subset, scenario_source=SCENARIO_SOURCE, root=root)
-    (root / RESPOND_PARTIAL_REL).unlink(missing_ok=True)  # the record holds them now
+                     comparisons=comparisons, scenario_source=SCENARIO_SOURCE, root=root)
+    (root / NEW_PROMPT_PARTIAL_REL).unlink(missing_ok=True)  # the record holds them now
     say(f"wrote {path.name}")
-    return {"records": {"respond": path}, "calls_used": 0}
+    return {"records": {"new_prompt": path}, "calls_used": 0}
 
 
 # ---------------------------------------------------------------- command line
@@ -1285,10 +1281,9 @@ def _respond(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--make-subset", action="store_true", help="write the cloud subset manifest, then stop")
-    ap.add_argument("--make-respond-subset", action="store_true", help="write the respond-subset manifest, then stop")
-    ap.add_argument("--respond-subset", action="store_true",
-                    help="run retrieval_memory with the local model on the respond subset only; no Claude calls")
-    ap.add_argument("--respond-run", metavar="RUN_ID", help="with --analysis-only, the respond-subset record to report")
+    ap.add_argument("--new-prompt-run", action="store_true",
+                    help="run retrieval_memory with the local model on all dev cases under the current prompt; no Claude calls")
+    ap.add_argument("--new-prompt-record", metavar="RUN_ID", help="with --analysis-only, the new-prompt record to report")
     ap.add_argument("--supersedes", nargs="+", metavar="RUN_ID", default=[], help="earlier E2 records this run replaces")
     ap.add_argument("--cloud-only", action="store_true", help="run only the cloud stage for a committed local record")
     ap.add_argument("--local-run", metavar="RUN_ID", help="the committed local E2 record whose winner the cloud stage runs")
@@ -1298,29 +1293,26 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.analysis_only:
         if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
-            ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --respond-run besides")
+            ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --new-prompt-record besides")
         try:
-            print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, respond_run=args.respond_run))
+            print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, new_prompt_run=args.new_prompt_record))
         except (RunBroken, OSError, ValueError, KeyError) as exc:
             print(f"E2 analysis stopped: {exc}", file=sys.stderr)
             return 2
         return 0
-    if args.cloud_run or args.respond_run:
-        ap.error("--cloud-run and --respond-run go with --analysis-only")
-    if args.make_respond_subset:
-        print(write_respond_subset())
-        return 0
-    if args.respond_subset:
+    if args.cloud_run or args.new_prompt_record:
+        ap.error("--cloud-run and --new-prompt-record go with --analysis-only")
+    if args.new_prompt_run:
         if args.cloud_only or args.local_run or args.supersedes or args.make_subset:
-            ap.error("--respond-subset runs alone")
+            ap.error("--new-prompt-run runs alone")
         from contextlens.llm.client import Embedder, OllamaClient
 
         try:
-            res = run_e2_respond(writer=OllamaClient(WRITER_MODEL), judge_llm=OllamaClient(JUDGE_MODEL),
+            res = run_e2_new_prompt(writer=OllamaClient(WRITER_MODEL), judge_llm=OllamaClient(JUDGE_MODEL),
                                  embedder=Embedder(EMBED_MODEL), ctl=OllamaCtl(),
                                  retrieval_config=load_retrieval_config(ROOT / CONFIG_REL))
         except RunBroken as exc:
-            print(f"E2 respond subset stopped, nothing written: {exc}", file=sys.stderr)
+            print(f"E2 new-prompt run stopped, nothing written: {exc}", file=sys.stderr)
             return 2
         print(json.dumps({"records": {k: p.as_posix() for k, p in res["records"].items()}, "claude_calls": 0}, indent=1))
         return 0
