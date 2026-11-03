@@ -249,7 +249,14 @@
         "{py} -m pytest tests/test_rerank.py -q",
         "{py} -c \"import torch; assert torch.cuda.is_available()\""
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T01:48:17+00:00",
+      "verified": {
+        "commit": "d55655b501441a3d64fe67e266483b4bf419478a",
+        "passed": true,
+        "at": "2026-11-03T01:55:50+00:00"
+      },
+      "done_at": "2026-11-03T01:56:43+00:00"
     },
     {
       "id": "T2.4",

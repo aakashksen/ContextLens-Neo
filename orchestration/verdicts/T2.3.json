@@ -1,0 +1,23 @@
+{
+  "task": "T2.3",
+  "commit": "d55655b501441a3d64fe67e266483b4bf419478a",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD matches; git status shows only M orchestration/tasks.json"},
+    {"item": "Evidence log and rerun of acceptance", "result": "pass", "evidence": "log shows 5 passed and torch cuda check exit 0 at this commit; I reran pytest tests/test_rerank.py: 5 passed; torch 2.11.0+cu128 cuda_available True"},
+    {"item": "Plan items: Reranker.rerank, NoReranker, lazy load, four named tests", "result": "pass", "evidence": "rerank.py loads model on first non-empty call; tests test_order_follows_scores, test_k_limits_output, test_empty_candidates, test_load_failure_falls_back_and_says_so present with concrete values; extra test confirms torch not imported at import"},
+    {"item": "README CUDA command matches driver", "result": "pass", "evidence": "README uses --index-url https://download.pytorch.org/whl/cu128; nvidia-smi driver 592.00, CUDA 13.1 (supports 12.8); installed torch is +cu128 and cuda is available"},
+    {"item": "Fallback visibility", "result": "pass", "evidence": "load failure sets Reranker.fallback_reason and logs a warning; test asserts both"},
+    {"item": "Default model license entry", "result": "pass", "evidence": "docs/datasets.md: Apache-2.0, Approved: yes"},
+    {"item": "No transcript/future-turn leakage", "result": "pass", "evidence": "only (query, turn.text) of supplied candidates go to the local model; no network code beyond sentence-transformers load"},
+    {"item": "git diff hygiene", "result": "pass", "evidence": "5 files changed (README, datasets.md, pyproject, rerank.py, test); no legacy/ files, no secrets, no earlier tests altered"}
+  ],
+  "own_tests": [
+    {"input": "all-tied scores, k=3", "result": "input order preserved (stable sort)"},
+    {"input": "k=0 and k=10 with 3 candidates", "result": "[] and 3 items"},
+    {"input": "model.predict raises RuntimeError at inference", "result": "exception propagates (loud, not silently unranked); fallback_reason not set"},
+    {"input": "loader raises OSError", "result": "returns input[:k] unchanged, fallback_reason='x', warning logged; result items carry no marker of being unranked"}
+  ],
+  "failures": [],
+  "notes": "Weaknesses, not failures. (1) Inference-time exception is not caught: it raises, which is not silent but also not a graceful fallback, and no test covers it. (2) After a load fallback the returned ScoredTurns are indistinguishable from reranked ones; a later experiment must read Reranker.fallback_reason and record it in the run record, otherwise 'hybrid + rerank' could really be unranked hybrid. The T-experiment task should assert fallback_reason is None. (3) Warning is logged once only (subsequent calls silent), and fallback_reason is permanent per instance. No real-model test was run, per the orchestrator's exclusion."
+}
