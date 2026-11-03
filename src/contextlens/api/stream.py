@@ -163,7 +163,10 @@ class ConversationState:
             return
         items = svc.extractor.update(new, existing)
         if summary is not None:
-            summary.update(new)
+            try:
+                summary.update(new)  # a recap only helps reading; its failure must not hold memory back
+            except Exception as exc:
+                log.warning("summary update failed: %s", type(exc).__name__)
         with self.lock:
             if epoch != self.epoch:
                 return
@@ -216,7 +219,6 @@ class ConversationState:
         with self.lock:
             self.epoch += 1
             self.svc.retriever.delete(self.conv_id)
-            self.svc.store.delete(self.conv_id)
             self.svc.memory.delete(self.conv_id)
             self.diarizer.reset()
             self.summary = self.svc.make_summary() if self.svc.make_summary else None
@@ -279,20 +281,7 @@ class Connection:
                 except ValidationError as e:
                     await self.error(e.errors()[0]["msg"])
                     continue
-                if msg.type == "audio":
-                    if not self.paused:
-                        await self._audio(msg)
-                elif msg.type == "press":
-                    await self._press(msg.request)
-                elif msg.type == "pause":
-                    self.paused = True
-                    await self._close_stream()  # audio already sent but not yet transcribed is dropped
-                    await self.send(StatusMessage(state="paused"))
-                elif msg.type == "resume":
-                    self.paused = False
-                    await self.send(StatusMessage(state="recording"))
-                elif msg.type == "delete":
-                    await self._delete()
+                if await self._dispatch(msg):
                     return
         except WebSocketDisconnect:
             return
@@ -303,6 +292,25 @@ class Connection:
             await self._close_stream()
             for t in list(self.answers):
                 t.cancel()
+
+    async def _dispatch(self, msg) -> bool:
+        """Acts on one client message. True when the connection is done (after a delete)."""
+        if msg.type == "audio":
+            if not self.paused:
+                await self._audio(msg)
+        elif msg.type == "press":
+            await self._press(msg.request)
+        elif msg.type == "pause":
+            self.paused = True
+            await self._close_stream()  # audio already sent but not yet transcribed is dropped
+            await self.send(StatusMessage(state="paused"))
+        elif msg.type == "resume":
+            self.paused = False
+            await self.send(StatusMessage(state="recording"))
+        elif msg.type == "delete":
+            await self._delete()
+            return True
+        return False
 
     # -- audio --
 
@@ -362,24 +370,28 @@ class Connection:
             except Exception:
                 pass
 
+    async def _take(self, seg: Segment, stream: SpeechStream, epoch: int) -> None:
+        """Stores one transcribed segment and tells the client."""
+        try:
+            turns = await asyncio.to_thread(
+                self.conv.ingest, [seg], epoch, lambda: not self.paused and self.stream is stream
+            )
+        except Exception as exc:
+            log.warning("could not store a turn: %s", type(exc).__name__)
+            await self.error("could not store the transcript", epoch)
+            return
+        for turn in turns:
+            if await self.send(TranscriptMessage(turn=turn), epoch):
+                self.conv.last_sent_seq = max(self.conv.last_sent_seq, turn.seq)
+                self.conv.told[turn.seq] = turn.speaker
+        if turns:
+            self.conv.schedule_memory()
+            self.conv.schedule_speakers()
+
     async def _read(self, stream: SpeechStream, epoch: int) -> None:
         try:
             async for seg in stream.segments():
-                try:
-                    turns = await asyncio.to_thread(
-                        self.conv.ingest, [seg], epoch, lambda: not self.paused and self.stream is stream
-                    )
-                except Exception as exc:
-                    log.warning("could not store a turn: %s", type(exc).__name__)
-                    await self.error("could not store the transcript", epoch)
-                    continue
-                for turn in turns:
-                    if await self.send(TranscriptMessage(turn=turn), epoch):
-                        self.conv.last_sent_seq = max(self.conv.last_sent_seq, turn.seq)
-                        self.conv.told[turn.seq] = turn.speaker
-                if turns:
-                    self.conv.schedule_memory()
-                    self.conv.schedule_speakers()
+                await self._take(seg, stream, epoch)
         except SpeechUnavailable as exc:
             if self.stream is stream:
                 await self._speech_failed(str(exc))

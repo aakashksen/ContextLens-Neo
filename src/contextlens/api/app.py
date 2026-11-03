@@ -12,17 +12,33 @@ from contextlens.api.stream import Connection, ConversationState, Services
 log = logging.getLogger(__name__)
 
 
+def _sweep(conversations: dict[str, ConversationState], idle_evict_s: float) -> None:
+    """Forget in-memory state of conversations nobody is connected to. Stored turns stay; a later
+    connection rebuilds its state from them."""
+    for cid, conv in list(conversations.items()):
+        if conv.idle(idle_evict_s):
+            conv.stop_background()
+            del conversations[cid]
+
+
+async def _shutdown(services: Services, conversations: dict[str, ConversationState]) -> None:
+    if services.warmup is not None:
+        services.warmup.stop()
+    for conv in conversations.values():
+        conv.stop_background()
+    if services.on_shutdown is not None:
+        try:
+            await asyncio.to_thread(services.on_shutdown)
+        except Exception as exc:
+            log.warning("shutdown step failed: %s", type(exc).__name__)
+
+
 def create_app(services: Services) -> FastAPI:
     conversations: dict[str, ConversationState] = {}
     guard = asyncio.Lock()
 
     def sweep() -> None:
-        """Forget in-memory state of conversations nobody is connected to. Stored turns stay; a later
-        connection rebuilds its state from them."""
-        for cid, conv in list(conversations.items()):
-            if conv.idle(services.idle_evict_s):
-                conv.stop_background()
-                del conversations[cid]
+        _sweep(conversations, services.idle_evict_s)
 
     async def sweeper() -> None:
         while True:
@@ -38,15 +54,7 @@ def create_app(services: Services) -> FastAPI:
             yield
         finally:
             task.cancel()
-            if services.warmup is not None:
-                services.warmup.stop()
-            for conv in conversations.values():
-                conv.stop_background()
-            if services.on_shutdown is not None:
-                try:
-                    await asyncio.to_thread(services.on_shutdown)
-                except Exception as exc:
-                    log.warning("shutdown step failed: %s", type(exc).__name__)
+            await _shutdown(services, conversations)
 
     app = FastAPI(title="ContextLens", lifespan=lifespan)
     app.state.conversations = conversations
