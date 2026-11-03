@@ -147,6 +147,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/experiments/e1_retrieval.py`, `tests/test_e1.py`.
 **Do:** On dev, using QMSum and our scenarios: compare `dense`, `bm25`, `hybrid`, and `hybrid` + rerank, with chunk sizes of one turn and a 3-turn window. Use the stats from `docs/TESTING.md`. Save the winner to `configs/retrieval.json`.
 **Tests:** the experiment on a tiny fixture with a stub embedder writes a valid record.
+**From phase review:** Before the experiment: (1) download QMSum into `datasets/raw/`, confirm its real format and span meaning against `load_gold`, correct the loader and its fixture to match, and save its split manifest. (2) `check_run` reads scenarios only from committed files, and QMSum text can't be committed, so add a way to score against a local, git-ignored scenario file pinned by a committed manifest of hash, ids, and count, without weakening any `check_run` rule or changing `datasets/scenarios/*.jsonl`. (3) A record must name which scenario source it ran on, and `check_run` must verify that against the manifest, so a run on our scenarios can't be labeled QMSum. (4) Add a test that fails if any tracked file holds text from `datasets/raw/qmsum` or `datasets/raw/decode`; prediction rows committed under `results/runs/` hold ids and metrics data only for these sources, with no quotes or raw output. (5) A retrieval-only record that saves `grounded_rate` or `unsupported_claim_rate` as `None` must not demand `config.judge`.
 **Accept:** `{py} -m pytest tests/test_e1.py -q`; `{py} -m contextlens.eval.check_run E1 --min-n 100 --split dev`.
 
 ---
@@ -178,6 +179,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/experiments/e2_context.py`, `tests/test_e2.py`.
 **Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Also run the best strategy on `ClaudeCodeClient` over at most 100 synthetic or benchmark cases, as the cloud comparison. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
+**From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
 
 ---
@@ -213,6 +215,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/consistency/data.py`, `src/contextlens/consistency/baselines.py`, `tests/test_consistency_baselines.py`.
 **Consumes:** `Pair`, `load_pairs` from T1.1. **Produces:** `build_pairs(split) -> list[Pair]`, merging DECODE (mapped per `docs/datasets.md`) with our scenarios and recording each source; `TfidfChecker`, `ZeroShotChecker`, implementing `ConsistencyChecker`.
 **Tests:** `test_conversation_split_preserved`; `test_label_map_matches_datasets_doc`; `test_tfidf_fits_and_predicts_all_four_labels` on a fixture; `test_sources_are_tracked`.
+**From phase review:** Before building on `load_pairs`: download DECODE into `datasets/raw/`, confirm its real format, replace the invented loader layout and fixture with it, write the label map into `docs/datasets.md`, and save its split manifest. Its text stays out of every tracked file, including error analysis and configs.
 **Accept:** `{py} -m pytest tests/test_consistency_baselines.py -q`.
 
 ### T5.2: Experiment E4, trained consistency model
@@ -230,6 +233,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/cards/dataset.py`, `src/contextlens/cards/train_lora.py`, `tests/test_cards_data.py`.
 **Do:** Build instruction examples: recent exchange + retrieved evidence → valid `Card` JSON, from QMSum and reviewed scenarios, split by conversation. Pipeline: 4-bit QLoRA with PEFT on Qwen3.5-4B, the same model the agents run (`docs/model-choice.md`), falling back to Qwen3-4B if its image-capable architecture blocks PEFT, and recording that. It must fit under 7 GB; if it can't, block the task and don't change the model class silently.
 **Tests:** `test_every_example_parses_as_card`; `test_every_citation_exists_in_its_input`; `test_no_conversation_in_two_splits`; `test_tokenized_labels_mask_the_prompt`; `test_dry_run_one_step_on_tiny_model`.
+**From phase review:** Training examples built from QMSum go only under a git-ignored path, and the tracked-text test from T2.5 must still pass.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
 ### T6.2: Experiment E5, fine-tuned vs prompted
@@ -287,6 +291,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **From phase review:** this task adds word error rate and diarization error to `metrics.py`, `check_run.py` and `series.py`, with row fields on `Prediction` for the speech and diarization output, so a saved `wer` or `der` recomputes from the predictions and `check_run` does not reject it.
 **Do:** Replay AMI audio through speech and diarization, then run the same questions as on the clean transcript. Report word error rate, diarization error, how much transcription and speaker errors change quality, button-to-card p50 and p95 by stage, and tokens per card. Optimize the top two bottlenecks, then rerun and report before and after.
 **Tests:** tiny fixture writes a valid record; `test_wer_on_known_strings`.
+**From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
 **Accept:** `{py} -m pytest tests/test_e7.py -q`; `{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev`.
 
 ### T8.6: Unity XR client
@@ -306,6 +311,7 @@ See `docs/HUMAN-GATES.md`.
 **Files:** `src/contextlens/experiments/e8_final.py`, `tests/test_e8.py`.
 **Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split, in one run record that holds every system: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
+**From phase review:** E8 reports each public benchmark separately, so it uses the local scenario manifests from T2.5 for sources whose text can't be committed. All of them go in the one test record.
 **Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test`.
 
 ### T9.2: User study kit
