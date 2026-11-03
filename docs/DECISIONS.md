@@ -210,13 +210,11 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Chosen:** Commit messages carry no tool or assistant names, no co-author lines and no session lines. Old verdict hashes were stale after the rewrite, finished tasks stayed finished, and the T1.3 to T1.5 gates were rerun.
 - **Reason:** The person's rule. Further reason not recorded.
 
-<<<<<<< HEAD
 ## E2 and E3 rerun rule after the short-id citation bug (2026-11-03, T4.2, written before any new numbers)
 - **Chosen:** rerun E3's `cards` part, E2's four local strategies, and E2's cloud arm, because the citation guard dropped true findings that cited a short turn id such as `t0`. Same cases, same seeds, same config apart from the fix and an exclusive GPU. E2's cloud arm also moves to Sonnet, by the person's rule on Claude comparisons, and its 100-case limit and per-stage call budget are removed by the same rule. It runs on all 148 dev cases, the same ones the local strategies use, so that is a wider set than the old record's, and its record says so. This changed before any new numbers existed. The old records stay listed in `supersedes`, with this bug as the reason. Selection follows the written rule, whichever system it favours. The 8 s deadline doesn't change during these runs.
 - **Considered:** keeping the old records with a caveat. It lost because the bug hits systems unequally, the team most, so the comparison itself can't be read. Fixing the bug and moving on to E6 lost too, since `retrieval_memory` was chosen on the affected numbers.
 - **Evidence:** dropped citations with a short id, in E3-20261103T185316318532Z, counted from its saved rows, per `orchestration/evidence/cleanup-result-risks.md`.
 - **Would change it:** nothing in the new numbers. If the rerun can't reproduce the same cases and seeds, that gets stated, not worked around.
-=======
 ## 26. DECODE and QMSum may go to Claude; their labels count as reviewed, said as "on published labels"
 - **Date / task:** 2026-11-03, cleanup (`labels_reviewed` and claims), passed on by the coordinator.
 - **Who:** The person, in the coordinator's session: "QMSum and DECODE may go to Claude through claude -p for grading and comparison. Publisher-provided labels (DECODE, QMSum) count as reviewed for claims, and the wording says 'on published labels'."
@@ -224,4 +222,3 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Chosen:** Their text may go to Claude through `claude -p` for grading and comparison. `write_run` sets `labels_reviewed` true for the `publisher` label source, and `claims check` decides from the record's `scenario_source` so older records (flag false, no `label_source`) are covered; a record whose source cannot be determined is not reviewed. A claim from such a record must say "on published labels" in its `text`. Our scenarios and AMI keep their sign-offs. The cloud rule changed for future runs only; records made before 2026-11-03 did not send this text to Claude.
 - **Still in force:** Raw text is never committed, published or redistributed. "Never publish" for the QMSum adapter and for examples derived from QMSum is unchanged, because the person has not changed it.
 - **Evidence:** `docs/datasets.md`, `docs/TESTING.md`, `tests/test_claims_publisher.py`.
->>>>>>> cleanup/part-eval
