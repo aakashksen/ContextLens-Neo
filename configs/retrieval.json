@@ -1,0 +1,105 @@
+{
+ "split": "dev",
+ "winner": "hybrid_t1",
+ "mode": "hybrid",
+ "rerank": false,
+ "chunk_turns": 1,
+ "k": 10,
+ "pool": 30,
+ "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+ "rule": "highest mean over the sources of recall@5; ties broken by higher mean mrr, then by the order of SYSTEMS (one-turn chunks before windows, then dense, bm25, hybrid, hybrid_rerank)",
+ "query_rule": "the question when there is one; otherwise the text of the last turn, searched over the turns before it",
+ "scores": {
+  "scenarios": {
+   "dense_t1": {
+    "recall@5": 1.0,
+    "mrr": 0.9236111111111112
+   },
+   "bm25_t1": {
+    "recall@5": 0.9242424242424242,
+    "mrr": 0.8478535353535354
+   },
+   "hybrid_t1": {
+    "recall@5": 1.0,
+    "mrr": 0.9229797979797979
+   },
+   "hybrid_rerank_t1": {
+    "recall@5": 0.9924242424242424,
+    "mrr": 0.8636363636363636
+   },
+   "dense_w3": {
+    "recall@5": 1.0,
+    "mrr": 0.9188131313131312
+   },
+   "bm25_w3": {
+    "recall@5": 0.946969696969697,
+    "mrr": 0.859469696969697
+   },
+   "hybrid_w3": {
+    "recall@5": 1.0,
+    "mrr": 0.9154040404040403
+   },
+   "hybrid_rerank_w3": {
+    "recall@5": 1.0,
+    "mrr": 0.9203282828282828
+   }
+  },
+  "qmsum": {
+   "dense_t1": {
+    "recall@5": 0.7318840579710145,
+    "mrr": 0.5518010505329346
+   },
+   "bm25_t1": {
+    "recall@5": 0.6811594202898551,
+    "mrr": 0.49973161567364466
+   },
+   "hybrid_t1": {
+    "recall@5": 0.7681159420289855,
+    "mrr": 0.564035541752933
+   },
+   "hybrid_rerank_t1": {
+    "recall@5": 0.7536231884057971,
+    "mrr": 0.5634422206885975
+   },
+   "dense_w3": {
+    "recall@5": 0.6014492753623188,
+    "mrr": 0.46517617513994325
+   },
+   "bm25_w3": {
+    "recall@5": 0.5120772946859904,
+    "mrr": 0.3729947856759451
+   },
+   "hybrid_w3": {
+    "recall@5": 0.5966183574879227,
+    "mrr": 0.4609960892569588
+   },
+   "hybrid_rerank_w3": {
+    "recall@5": 0.5942028985507246,
+    "mrr": 0.48587148224829385
+   }
+  }
+ },
+ "no_measurable_difference_from": {
+  "dense_t1": [
+   "scenarios",
+   "qmsum"
+  ],
+  "hybrid_rerank_t1": [
+   "scenarios",
+   "qmsum"
+  ],
+  "dense_w3": [
+   "scenarios"
+  ],
+  "hybrid_w3": [
+   "scenarios"
+  ],
+  "hybrid_rerank_w3": [
+   "scenarios"
+  ]
+ },
+ "run_ids": {
+  "scenarios": "E1-20261103T034100128807Z",
+  "qmsum": "E1-20261103T035342386305Z"
+ }
+}
