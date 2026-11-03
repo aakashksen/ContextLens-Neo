@@ -362,7 +362,8 @@ def test_build_ami_dev_cuts_each_meeting_at_the_question(tmp_path: Path, monkeyp
 
 
 def sized(sizes: dict, free: int) -> dict:
-    return e7.size_check(list(sizes), head=lambda url: sizes[url.split("/")[-3]], free=lambda: free)
+    return e7.size_check(list(sizes), head=lambda url: sizes[url.split("/")[-3]], free=lambda: free,
+                         sleep=lambda s: None)
 
 
 def test_size_check_stops_on_the_disk_rule() -> None:
@@ -379,16 +380,127 @@ def test_download_checks_size_first_and_fetches_only_what_is_missing(tmp_path: P
 
     def fetch(url: str, dest: Path) -> None:
         fetched.append(url)
-        dest.write_bytes(b"x")
+        dest.write_bytes(b"x" * 10)
 
+    kw = {"sleep": lambda s: None, "free": lambda: 900 * GB, "fetch": fetch}
     with pytest.raises(RuntimeError, match="stop"):
-        e7.download(["a"], tmp_path / "audio", head=lambda url: 20 * GB, free=lambda: 900 * GB, fetch=fetch)
+        e7.download(["a"], tmp_path / "audio", head=lambda url: 20 * GB, **kw)
     assert fetched == [] and not (tmp_path / "audio").exists()
     (tmp_path / "audio").mkdir()
-    (tmp_path / "audio/a.wav").write_bytes(b"old")
-    got = e7.download(["a", "b"], tmp_path / "audio", head=lambda url: 10**8, free=lambda: 900 * GB, fetch=fetch)
+    (tmp_path / "audio/a.wav").write_bytes(b"y" * 10)  # complete: the same size as the server gave
+    got = e7.download(["a", "b"], tmp_path / "audio", head=lambda url: 10, **kw)
     assert got == ["b"] and len(fetched) == 1 and "/b/audio/b.Mix-Headset.wav" in fetched[0]
+    assert (tmp_path / "audio/b.wav").read_bytes() == b"x" * 10
     assert sorted(p.name for p in (tmp_path / "audio").iterdir()) == ["a.wav", "b.wav"]
+
+
+def test_download_keeps_partial_files_out_of_the_way(tmp_path: Path) -> None:
+    audio = tmp_path / "audio"
+    audio.mkdir()
+    (audio / "a.wav").write_bytes(b"short")  # a partial left under the final name: the wrong size
+    (audio / ".b.wav.tmp").write_bytes(b"stale")  # a crashed fetch's leftover
+
+    def dies(url: str, dest: Path) -> None:
+        dest.write_bytes(b"half")
+        raise ConnectionError("cut off")
+
+    kw = {"sleep": lambda s: None, "free": lambda: 900 * GB, "head": lambda url: 10}
+    with pytest.raises(ConnectionError):
+        e7.download(["b", "a"], audio, fetch=dies, **kw)
+    assert sorted(p.name for p in audio.iterdir()) == ["a.wav"]  # no .wav appeared for b and no .tmp is left
+
+    def short(url: str, dest: Path) -> None:
+        dest.write_bytes(b"1234")  # ends cleanly but is not the size the server gave
+
+    with pytest.raises(OSError, match="server said 10"):
+        e7.download(["b"], audio, fetch=short, **kw)
+    assert not (audio / "b.wav").exists() and not (audio / ".b.wav.tmp").exists()
+
+    def whole(url: str, dest: Path) -> None:
+        dest.write_bytes(b"z" * 10)
+
+    assert e7.download(["a", "b"], audio, fetch=whole, **kw) == ["a", "b"]  # the wrong-size a.wav is fetched again
+    assert (audio / "a.wav").read_bytes() == b"z" * 10
+
+
+def test_requests_go_one_at_a_time_with_pauses_and_retry_after_a_403() -> None:
+    waits: list[float] = []
+    tries: dict[str, int] = {}
+
+    def head(url: str) -> int:
+        m = url.split("/")[-3]
+        tries[m] = tries.get(m, 0) + 1
+        if m == "b" and tries[m] < 3:
+            raise e7.RateLimited()  # 403 twice, then 200
+        if m == "c" and tries[m] == 1:
+            raise e7.RateLimited(retry_after=200)  # the server names its own wait
+        return 5
+
+    report = e7.size_check(["a", "b", "c"], head=head, free=lambda: 900 * GB, sleep=waits.append)
+    assert report["stop"] == [] and report["sizes"] == {"a": 5, "b": 5, "c": 5}
+    assert waits == [2.0, 30.0, 120.0, 2.0, 200.0]  # pause; 30 then 120 for b; pause, then the Retry-After for c
+    assert tries == {"a": 1, "b": 3, "c": 2}
+
+
+def test_a_file_still_refused_after_three_tries_stops_the_download() -> None:
+    waits: list[float] = []
+    calls: list[str] = []
+
+    def head(url: str) -> int:
+        calls.append(url)
+        if "/b/" in url:
+            raise e7.RateLimited()
+        return 5
+
+    report = e7.size_check(["a", "b"], head=head, free=lambda: 900 * GB, sleep=waits.append)
+    assert report["stop"] == ["size of b unknown"] and sum("/b/" in c for c in calls) == 3
+    assert waits == [2.0, 30.0, 120.0]  # no fourth try
+    fetched: list[str] = []
+    with pytest.raises(RuntimeError, match="unknown"):
+        e7.download(["a", "b"], Path("unused-audio-dir"), head=head, free=lambda: 900 * GB, sleep=lambda s: None,
+                    fetch=lambda url, dest: fetched.append(url))
+    assert fetched == []
+
+
+def test_a_refused_fetch_is_retried_then_raised(tmp_path: Path) -> None:
+    waits: list[float] = []
+    n = {"calls": 0}
+
+    def fetch(url: str, dest: Path) -> None:
+        n["calls"] += 1
+        if n["calls"] < 3:
+            raise e7.RateLimited()
+        dest.write_bytes(b"x" * 5)
+
+    kw = {"head": lambda url: 5, "free": lambda: 900 * GB, "sleep": waits.append}
+    assert e7.download(["a"], tmp_path / "audio", fetch=fetch, **kw) == ["a"] and waits == [30.0, 120.0]
+
+    def always(url: str, dest: Path) -> None:
+        raise e7.RateLimited()
+
+    with pytest.raises(e7.RateLimited):
+        e7.download(["z"], tmp_path / "audio", fetch=always, **kw)
+    assert not (tmp_path / "audio/z.wav").exists()
+
+
+def test_head_size_reads_403_429_and_retry_after(monkeypatch) -> None:
+    import io
+    import urllib.error
+
+    def raising(code, headers=None):
+        def urlopen(req, timeout):
+            raise urllib.error.HTTPError(req.full_url, code, "x", headers or {}, io.BytesIO())
+        return urlopen
+
+    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(429, {"Retry-After": "90"}))
+    with pytest.raises(e7.RateLimited) as err:
+        e7.head_size("http://x/y")
+    assert err.value.retry_after == 90
+    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(403))
+    with pytest.raises(e7.RateLimited):
+        e7.head_size("http://x/y")
+    monkeypatch.setattr(e7.urllib.request, "urlopen", raising(404))
+    assert e7.head_size("http://x/y") is None  # only 403 and 429 are retried
 
 
 # -- unloading the models at shutdown ---------------------------------------------------------------------------------

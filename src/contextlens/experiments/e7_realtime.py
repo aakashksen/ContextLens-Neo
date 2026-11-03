@@ -31,6 +31,7 @@ import json
 import shutil
 import sys
 import time
+import urllib.error
 import urllib.request
 import wave
 from collections.abc import Callable
@@ -118,23 +119,68 @@ def build_ami_dev(root: Path = ROOT, raw_root: Path | None = None) -> int:
 
 # -- the size check and the download -------------------------------------------------------------------------------
 
+class RateLimited(Exception):
+    """The server answered 403 or 429; `retry_after` is its Retry-After in seconds, if it sent one."""
+
+    def __init__(self, retry_after: float | None = None) -> None:
+        super().__init__("403 or 429 from the server")
+        self.retry_after = retry_after
+
+
+BACKOFF_S = (30.0, 120.0)  # waits before the second and third try of a file
+PAUSE_S = 2.0  # between requests; files are fetched one at a time
+
+
+def _rate_limited(exc: urllib.error.HTTPError) -> RateLimited | None:
+    if exc.code not in (403, 429):
+        return None
+    after = exc.headers.get("Retry-After") if exc.headers else None
+    return RateLimited(float(after) if after and after.strip().isdigit() else None)
+
+
 def head_size(url: str) -> int | None:
     req = urllib.request.Request(url, method="HEAD")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             length = resp.headers.get("Content-Length")
+    except urllib.error.HTTPError as exc:
+        if limited := _rate_limited(exc):
+            raise limited from None
+        return None
     except OSError:
         return None
     return int(length) if length and length.isdigit() else None
 
 
+def with_retries(call: Callable[[], Any], *, sleep: Callable[[float], None] = time.sleep,
+                 backoff: tuple[float, ...] = BACKOFF_S) -> Any:
+    """Try `call` once and again after each wait in `backoff` while it raises RateLimited, waiting at least the
+    Retry-After the server sent, if any. The last RateLimited is raised when the tries run out."""
+    for wait in (*backoff, None):
+        try:
+            return call()
+        except RateLimited as exc:
+            if wait is None:
+                raise
+            sleep(max(wait, exc.retry_after or 0.0))
+
+
 def size_check(meetings: list[str], *, head: Callable[[str], int | None] = head_size,
-               free: Callable[[], int] | None = None, audio_dir: Path | None = None) -> dict[str, Any]:
-    """Size of each meeting's audio file, the free disk, and the reasons to stop: a size that can't be read, one
-    file over 15 GB, or less than 40 GB free after the download. Fetches nothing."""
+               free: Callable[[], int] | None = None, audio_dir: Path | None = None,
+               sleep: Callable[[float], None] = time.sleep, pause_s: float = PAUSE_S) -> dict[str, Any]:
+    """Size of each meeting's audio file, the free disk, and the reasons to stop: a size that can't be read (after
+    the retries), one file over 15 GB, or less than 40 GB free after the download. Fetches nothing. Requests go one
+    at a time with a pause between them; a 403 or 429 is retried after a backoff and is never worked around."""
     target = audio_dir or ROOT / AUDIO_REL
     free_bytes = (free or (lambda: shutil.disk_usage(_existing(target)).free))()
-    sizes = {m: head(AUDIO_URL.format(m=m)) for m in meetings}
+    sizes: dict[str, int | None] = {}
+    for i, m in enumerate(meetings):
+        if i:
+            sleep(pause_s)
+        try:
+            sizes[m] = with_retries(lambda m=m: head(AUDIO_URL.format(m=m)), sleep=sleep)
+        except RateLimited:
+            sizes[m] = None
     known = [s for s in sizes.values() if s is not None]
     total = sum(known)
     stop = [f"size of {m} unknown" for m, s in sizes.items() if s is None]
@@ -152,26 +198,40 @@ def _existing(path: Path) -> Path:
 
 
 def _fetch(url: str, dest: Path) -> None:
-    with urllib.request.urlopen(url, timeout=60) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp, open(dest, "wb") as f:
+            shutil.copyfileobj(resp, f)
+    except urllib.error.HTTPError as exc:
+        if limited := _rate_limited(exc):
+            raise limited from None
+        raise
 
 
 def download(meetings: list[str], audio_dir: Path, *, head: Callable[[str], int | None] = head_size,
-             free: Callable[[], int] | None = None, fetch: Callable[[str, Path], None] = _fetch) -> list[str]:
-    """Fetch the meetings' audio that is not already there, after the size check; any stop reason means nothing
-    is fetched and RuntimeError is raised. Each file is written beside its target and renamed when whole."""
-    report = size_check(meetings, head=head, free=free, audio_dir=audio_dir)
+             free: Callable[[], int] | None = None, fetch: Callable[[str, Path], None] = _fetch,
+             sleep: Callable[[float], None] = time.sleep, pause_s: float = PAUSE_S) -> list[str]:
+    """Fetch the meetings' audio, after the size check; any stop reason means nothing is fetched and RuntimeError
+    is raised. One file at a time, with a pause between requests and the same retries as the size check. A file is
+    written to a hidden `.tmp` beside its target and renamed only when its size equals the size the server gave, so an
+    interrupted fetch leaves no `.wav`. A file already there is skipped only if its size matches; any other is fetched
+    again."""
+    report = size_check(meetings, head=head, free=free, audio_dir=audio_dir, sleep=sleep, pause_s=pause_s)
     if report["stop"]:
         raise RuntimeError("size check says stop: " + "; ".join(report["stop"]))
     audio_dir.mkdir(parents=True, exist_ok=True)
     got = []
     for m in meetings:
-        dest = audio_dir / f"{m}.wav"
-        if dest.exists():
+        dest, want = audio_dir / f"{m}.wav", report["sizes"][m]
+        if dest.is_file() and dest.stat().st_size == want:
             continue
+        if got:
+            sleep(pause_s)
         tmp = dest.with_name(f".{dest.name}.tmp")
+        tmp.unlink(missing_ok=True)
         try:
-            fetch(AUDIO_URL.format(m=m), tmp)
+            with_retries(lambda: fetch(AUDIO_URL.format(m=m), tmp), sleep=sleep)
+            if tmp.stat().st_size != want:
+                raise OSError(f"{m}: got {tmp.stat().st_size} bytes, the server said {want}")
             tmp.replace(dest)
         finally:
             tmp.unlink(missing_ok=True)
