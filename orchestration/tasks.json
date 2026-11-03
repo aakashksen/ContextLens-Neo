@@ -203,7 +203,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_llm.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T01:13:35+00:00",
+      "verified": {
+        "commit": "5b9a7a3f62b8f3ea8285af3a96c5853103d93b99",
+        "passed": true,
+        "at": "2026-11-03T01:21:40+00:00"
+      },
+      "attempts": 1,
+      "reason": "client.py:221-242 unlocked cap check lets 40 threads reach 1019 past 1000; corrupt claude_calls.json raises JSONDecodeError/KeyError instead of LLMError",
+      "done_at": "2026-11-03T01:23:21+00:00"
     },
     {
       "id": "T2.2",

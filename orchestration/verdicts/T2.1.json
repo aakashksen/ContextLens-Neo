@@ -1,0 +1,30 @@
+{
+  "task": "T2.1",
+  "commit": "5b9a7a3f62b8f3ea8285af3a96c5853103d93b99",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit; only orchestration/ dirty", "result": "pass", "evidence": "git rev-parse HEAD = 5b9a7a3f...; git status shows only orchestration/tasks.json and verdicts/T2.1.json"},
+    {"item": "Evidence log ran at this commit and passed; rerun", "result": "pass", "evidence": "evidence/T2.1.log commit matches, 19 passed; I reran pytest tests/test_llm.py -q: 19 passed, 2 deselected. ruff clean."},
+    {"item": "Every plan item has code and a test", "result": "pass", "evidence": "LLMClient/LLMResult/FakeLLM/OllamaClient/OpenAICompatClient/ClaudeCodeClient/Embedder/LLMError present in client.py; all 7 named tests present plus 2 real-marked tests (deselected); schema retry-once-then-raise, command flags, temp cwd, stdin prompt, shutil.which, usage recording, cap all in code"},
+    {"item": "Tests are meaningful", "result": "pass", "evidence": "Mutated the cap check in client.py: test_call_cap_refuses_and_makes_no_call, test_cap_holds_across_processes and test_cap_holds_across_threads failed; restored via git checkout of that file only"},
+    {"item": "Cap holds under heavy contention", "result": "pass", "evidence": "20 processes x 30 attempts at cap 200: exactly 200 started, count 200, tokens 200, cost 2.0. 100 threads x 1000 attempts at cap 300: exactly 300."},
+    {"item": "Killed lock holder releases lock on Windows; counter not corrupted", "result": "pass", "evidence": "Held lock in a subprocess: a second locker was blocked, then after kill it acquired in 0.01s. Killed 4 then 4 busy workers mid-run: counter still valid JSON, and the next caller proceeded."},
+    {"item": "Corrupt or invalid counter refuses with LLMError, starts no process; missing file is zero", "result": "pass", "evidence": "Repo tests (7 params) plus my own: null, [1], float count, string token, NaN, BOM, all raise LLMError with subprocess.run asserting not called. Missing file gives count 1 after one call."},
+    {"item": "Usage-limit error still an error", "result": "pass", "evidence": "is_error true with exit 0, is_error with exit 1, nonzero exit with usage-limit stderr, empty stdout, non-JSON stdout all raise LLMError. A reply merely mentioning 'usage limit' is not an error (tested)."},
+    {"item": "Timeouts and connection failures across Ollama, OpenAICompat, Embedder, Claude", "result": "pass", "evidence": "socket.timeout, TimeoutError, ConnectionRefused, URLError, ConnectionReset, and non-JSON HTML replies all raise LLMError for all three HTTP clients; subprocess.TimeoutExpired raises LLMError for Claude"},
+    {"item": "No fast test touches the real counter file", "result": "pass", "evidence": "All tests use tmp_path calls_path; results/claude_calls.json does not exist after the full run; grep shows no other test uses ClaudeCodeClient"},
+    {"item": "Prompt on stdin only; no transcript text in logs, counter file or error text", "result": "pass", "evidence": "Marker string absent from argv, caplog, stdout/stderr and claude_calls.json; present in input=; shell not used; the LLMError for a nonzero exit did not contain the prompt"},
+    {"item": "Diff hygiene", "result": "pass", "evidence": "Last 2 commits touch only llm/__init__.py, client.py and test_llm.py; no legacy/ files, no secrets seen"}
+  ],
+  "own_tests": [
+    {"input": "20 procs x 30 calls at cap 200 with token and cost accumulation", "result": "exactly 200 started, no lost updates"},
+    {"input": "100 threads x 1000 attempts at cap 300", "result": "exactly 300"},
+    {"input": "kill lock-holder process, then lock; kill busy workers mid-run", "result": "lock released immediately; counter valid; next call proceeds"},
+    {"input": "8 corrupt counter shapes", "result": "all LLMError, no process"},
+    {"input": "5 usage-limit/error shapes", "result": "all LLMError"},
+    {"input": "5 network exception types x 3 clients, plus garbage HTML body", "result": "all LLMError"},
+    {"input": "marker transcript text in logs, argv, counter", "result": "only in stdin"}
+  ],
+  "failures": [],
+  "notes": "Not checkable offline: the real claude CLI's JSON field names (result, is_error, usage.input_tokens/output_tokens, total_cost_usd) and the real usage-limit output; these belong to the real-marked tests, which I did not run. A process killed between the count reservation and the usage record leaves tokens and cost slightly behind the count (observed 218 vs 213). This is by design: a started call counts, so the cap stays conservative. Embedder timeout is a fixed 60s with no parameter."
+}
