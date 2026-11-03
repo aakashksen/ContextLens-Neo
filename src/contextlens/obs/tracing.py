@@ -1,11 +1,19 @@
 """Local traces and metrics for a button press. Nothing here reads transcript text.
 
+Span times are approximate. The assistant reports only how long each agent took, not when it started, so
+every agent span is given the press start as its start and ends after its own duration (agents run in
+parallel, so this is close for them, but a later stage is drawn earlier than it ran). Agent spans carry
+the attribute start_approximate=true; the durations are the true ones.
+
+Telemetry runs on a background thread after the card exists, so a slow exporter cannot delay the card.
 Only counts, durations, and a few bounded labels (agent, status, mode, exception type name) are recorded.
 No exporter is set up: spans go wherever the caller's TracerProvider sends them, and metrics sit in a
 Prometheus registry that stays in this process until something chooses to serve it."""
 
 import logging
+import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -16,7 +24,9 @@ from contextlens.schemas import ButtonRequest, Card
 
 log = logging.getLogger(__name__)
 
-AGENTS = ("memory", "consistency", "assistance")  # the only agent label values; anything else is "other"
+AGENTS = ("memory", "consistency", "assistance", "single")  # the only agent label values; else "other"
+SINGLE_STAGES = ("llm", "tools", "suggestion")  # SingleAgent's stage_ms keys; they are stages of agent "single"
+MAX_PENDING = 256  # telemetry jobs waiting for the background thread; beyond this they are dropped
 _BUCKETS = (0.1, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15)
 
 
@@ -62,20 +72,39 @@ class Telemetry:
         ctx = trace.set_span_in_context(root)
         tokens: dict[str, int] = {}
         ms: dict[str, int] = {}
+        single: dict[str, int] = {}
         for key, value in stages.items():
             if not isinstance(value, int | float):
                 continue
-            if key.endswith("_ms"):
+            if key in SINGLE_STAGES:
+                single[key] = int(value)
+                ms["single"] = ms.get("single", 0) + int(value)
+            elif key.endswith("_ms"):
                 a = _agent(key[:-3])
                 ms[a] = ms.get(a, 0) + int(value)
             elif key.endswith("_tokens"):
                 a = _agent(key[:-7])
                 tokens[a] = tokens.get(a, 0) + int(value)
+        if card is not None and card.tokens > sum(tokens.values()):
+            # an assistant that reports no per-agent tokens (SingleAgent): the rest of the card's total
+            rest = "single" if single else "other"
+            tokens[rest] = tokens.get(rest, 0) + card.tokens - sum(tokens.values())
         for a, v in ms.items():
             span = self.tracer.start_span(f"agent.{a}", context=ctx, start_time=start_ns)
             span.set_attribute("agent", a)
             span.set_attribute("duration_ms", v)
             span.set_attribute("tokens", tokens.get(a, 0))
+            span.set_attribute("start_approximate", True)
+            if a == "single":
+                actx = trace.set_span_in_context(span)
+                at = start_ns
+                for name, d in single.items():
+                    st = self.tracer.start_span(f"stage.{name}", context=actx, start_time=at)
+                    st.set_attribute("stage", name)
+                    st.set_attribute("duration_ms", d)
+                    st.set_attribute("start_approximate", True)
+                    at += d * 1_000_000
+                    st.end(end_time=at)
             span.end(end_time=start_ns + v * 1_000_000)
             self._agent_s.labels(a).observe(v / 1000)
         for a, v in tokens.items():
@@ -84,10 +113,38 @@ class Telemetry:
 
 
 class TracedAssistant:
-    """Wraps any Assistant. Telemetry runs after the card exists and can never change it or raise."""
+    """Wraps any Assistant. Telemetry runs on a background thread after the card exists, so it can never
+    change the card, raise, or hold it up. Call flush() to wait for it (tests, shutdown)."""
 
     def __init__(self, inner: Assistant, telemetry: Telemetry) -> None:
         self.inner, self.telemetry = inner, telemetry
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="telemetry")
+        self._pending: set[Future] = set()
+        self._lock = threading.Lock()
+
+    def _run(self, args: tuple) -> None:
+        try:
+            self.telemetry.record(*args)
+        except Exception:
+            log.warning("telemetry failed; the card is unaffected")
+
+    def _submit(self, args: tuple) -> None:
+        with self._lock:
+            if len(self._pending) >= MAX_PENDING:
+                log.warning("telemetry backlog full; dropping one press")
+                return
+            fut = self._pool.submit(self._run, args)
+            self._pending.add(fut)
+        fut.add_done_callback(self._forget)
+
+    def _forget(self, fut: Future) -> None:
+        with self._lock:
+            self._pending.discard(fut)
+
+    def flush(self, timeout_s: float = 5.0) -> None:
+        with self._lock:
+            futs = list(self._pending)
+        wait(futs, timeout=timeout_s)
 
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         before = dict(ctx.stage_ms)
@@ -104,7 +161,7 @@ class TracedAssistant:
             t1 = time.time_ns()
             stages = {k: v - before.get(k, 0) for k, v in ctx.stage_ms.items()}
             try:
-                self.telemetry.record(t0, t1, stages, card, error)
+                self._submit((t0, t1, stages, card, error))
             except Exception:
                 log.warning("telemetry failed; the card is unaffected")
 

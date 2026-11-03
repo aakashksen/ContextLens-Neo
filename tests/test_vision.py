@@ -82,3 +82,25 @@ def test_image_bytes_reach_only_the_model_call(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
     assert "images" in llm.calls[0][-1]
     assert "PNG" not in repr(note)
+
+
+def test_scene_store_delete_removes_the_note():
+    store = SceneStore()
+    note = SceneNoter(FakeLLM(["a desk"]), enabled=True).note(IMG, "c1")
+    store.put("c1", note)
+    store.put("c2", note)
+    store.delete("c1")
+    store.delete("c1")  # deleting twice, or something never stored, is fine
+    store.delete("never")
+    assert store.latest("c1") is None and store.latest("c2") == note
+
+
+def test_scene_prefix_is_reserved_for_turn_ids():
+    """A real turn whose id starts with the prefix is never citable; the prefix belongs to scene notes."""
+    store = InMemoryTranscriptStore()
+    store.add(Turn(id=f"{SCENE_PREFIX}real", conversation_id="c1", seq=1, speaker="A", text="hello there",
+                   start_ms=0, end_ms=1, source="synthetic"))  # fmt: skip
+    ev = EvidenceRef(turn_id=f"{SCENE_PREFIX}real", quote="hello", speaker="x", start_ms=0)
+    card = Card(mode="recall", status="answered", findings=[
+        Finding(agent="memory", kind="recall", statement="s", evidence=[ev], confidence=0.9)])  # fmt: skip
+    assert guard_card(card, store, 1, "c1").findings == []

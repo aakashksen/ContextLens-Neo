@@ -43,6 +43,10 @@ class SceneStore:
     def latest(self, conversation_id: str) -> SceneNote | None:
         return self._latest.get(conversation_id)
 
+    def delete(self, conversation_id: str) -> None:
+        """Forget the note. T8.2's delete calls this next to the transcript store's delete; T8.7 wires it."""
+        self._latest.pop(conversation_id, None)
+
 
 class SceneNoter:
     def __init__(

@@ -4,7 +4,7 @@ from contextlens.llm.untrusted import effective_speaker
 from contextlens.memory.store import TranscriptStore
 from contextlens.schemas import Card, EvidenceRef, Finding
 
-SCENE_PREFIX = "scene:"  # a vision scene note is context, never citable evidence
+SCENE_PREFIX = "scene:"  # reserved: scene notes only. Never use it for a turn id; guard_card drops such citations
 
 
 def _norm(text: str) -> str:
