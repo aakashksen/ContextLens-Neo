@@ -5,11 +5,11 @@ Checked 2026-11-02 from primary sources: official repos, dataset and model cards
 Standing rule (`CLAUDE.md`): a dataset is used only if a primary-source license allows non-commercial research use with no signed agreement. Otherwise `Approved: no, needs the person`. The same test is applied to the model candidates below, by analogy.
 
 Summary:
-- DECODE: no, needs the person (data license not stated).
-- QMSum: no, needs the person (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
+- DECODE: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (no data license stated).
+- QMSum: yes, by the person, for local, non-commercial evaluation only; never commit or redistribute its data (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
 - LongMemEval: yes (MIT).
 - AMI Meeting Corpus: yes (CC BY 4.0).
-- pyannote (diarization): no, needs the person (gated model; terms not readable).
+- pyannote (diarization): yes, by the person, who accepted its terms on Hugging Face (gated model).
 - NVIDIA Sortformer v2 (diarization alternative): yes (CC BY 4.0).
 - microsoft/deberta-v3-base (consistency base): yes (MIT).
 - Qwen3-4B (small LLM): yes on license; 4-bit fit under 7 GB couldn't be confirmed.
@@ -24,7 +24,7 @@ Size: 6 groups of dialogues (README and parl.ai): Train 27,184; Dev 4,026; Test 
 Format: Couldn't confirm. The pages read do not describe the file format. Access is through ParlAI (`parlai display_data -t decode -dt train|valid|test`, with `--test_type vanilla|human-bot|a2t|rct`) or by raw S3 download (`projects/contradiction/download_with_raw_format.md` in the ParlAI repo, not read).
 Labels: Confirmed binary, not three-way. Paper (render at https://ar5iv.labs.arxiv.org/html/2012.13391): "y can be 0 or 1 corresponding to the non-contradiction and the contradiction label respectively." Splits are balanced between the two labels. In the Human-Bot set, half of the 764 dialogues end with a bot utterance that contradicts itself, and the labels were checked by three extra annotators. Every A2T example is "contradiction", and every RCT example is "non-contradiction". The paper maps entailment and neutral from other NLI data to non-contradiction when that data is used for training. So the assumption "DECODE only labels contradiction vs not" is correct.
 Access: ParlAI loader or the S3 raw download above. No registration or signed agreement was found in the pages read. Nothing was downloaded.
-Approved: no, needs the person. Reason: no primary source states a license or terms for the DECODE data, so the standing rule cannot be met. The person can decide whether to accept the ParlAI distribution as it is.
+Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation only. Its data must never be committed or redistributed. Original finding: no primary source states a license or terms for the DECODE data, so the standing rule cannot be met. The person can decide whether to accept the ParlAI distribution as it is.
 
 ## QMSum
 
@@ -37,7 +37,7 @@ Size: 1,808 query-summary pairs over 232 meetings in three domains (paper abstra
 Format: JSON and JSONL under `data/ALL`, `data/Academic`, `data/Product`, `data/Committee`, with train, val and test splits (README). Each record has `topic_list` (topic with `relevant_text_span`), `general_query_list`, `specific_query_list` (query, answer, span), and `meeting_transcripts` (speaker, content).
 Labels: No classification labels. The gold items are the query-answer pairs and the topic spans in the transcript (README).
 Access: Public GitHub repo, no gate. Derived from the AMI, ICSI and parliamentary sources, so the terms of those sources also apply. Nothing was downloaded.
-Approved: no, needs the person. Reason: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
+Approved: yes, by the person on 2026-11-02, for local, non-commercial evaluation only. Its data must never be committed or redistributed. Original finding: the QMSum data itself has no stated license. Its meetings come from four sources, and two of those have terms I could not confirm. The AMI approval below does not cover QMSum's copy of the AMI transcripts.
 
 ## LongMemEval
 
@@ -64,7 +64,7 @@ Approved: yes. Reason: CC BY 4.0 allows non-commercial research, no signed agree
 URL: https://huggingface.co/pyannote/speaker-diarization-3.1 (model); code https://github.com/pyannote/pyannote-audio.
 License: The code is MIT (https://github.com/pyannote/pyannote-audio/blob/develop/LICENSE, "Copyright (c) 2020 CNRS"). The model's HF metadata (https://huggingface.co/api/models/pyannote/speaker-diarization-3.1) says `license: mit` and `gated: auto`. The model card text couldn't be read unauthenticated (HTTP 401), so the terms that the user accepts on HF are unconfirmed. The segmentation model it uses (https://huggingface.co/api/models/pyannote/segmentation-3.0) is also MIT and gated.
 Access: Gated. Accept the terms on HF and use a read token, which is the person's step in `docs/HUMAN-GATES.md`.
-Approved: no, needs the person. Reason: the access gate requires accepting model terms I could not read, so the license cannot be confirmed from the model card. The person can accept the terms and decide.
+Approved: yes, by the person on 2026-11-02, who accepted the model's terms on Hugging Face. Original finding: the access gate requires accepting model terms I could not read, so the license cannot be confirmed from the model card. The person can accept the terms and decide.
 
 ## Diarization alternative: NVIDIA Sortformer (diar_streaming_sortformer_4spk-v2)
 
@@ -106,5 +106,6 @@ Size: 3,085,938,688 parameters, BF16 (API metadata).
 Approved: no, needs the person. Reason: it is a custom research agreement the user accepts by use, which the standing rule does not clearly allow. The person should decide. Its 4-bit fit is also unconfirmed.
 
 ## Notes
-- No dataset or model was downloaded or installed. `docs/datasets.md` is the only file written.
-- The `Approved:` lines above follow the standing rule. Only `yes` entries may be used by T1.1 (datasets) or T9.1 (small LLM). The DECODE and QMSum entries stay blocked until the person decides.
+- This review downloaded and installed nothing. Later tasks download only `yes` entries.
+- The `Approved:` lines above follow the standing rule. Only `yes` entries may be used by T1.1 (datasets) or T9.1 (small LLM). Qwen2.5-3B-Instruct stays unapproved.
+- DECODE and QMSum rest on the person's decision, not on a stated license, so the standing rule's license test is not what approves them. Nothing containing their text may enter git or leave this machine: not scenario files, predictions or run records with quotes, fixtures copied from them, or docs. Keep their data under the git-ignored `datasets/raw/`. Committed files may hold only their ids, hashes, and counts, plus metrics computed from them.
