@@ -21,3 +21,10 @@ linked, so `recall@k` here means "a linked turn was cited". Evidence is the dial
 
 Attribution: AMI Meeting Corpus, manual annotations v1.6.2, CC BY 4.0, https://groups.inf.ed.ac.uk/ami/corpus/. The
 questions and gold answers are derived from its abstractive summaries and summary links.
+
+## Limits, from an independent read of the sample
+The reader checked all 33 questions mechanically and judged the 15 in the sample by hand: the evidence fully supports the gold answer in 10, partly in 5, and in none not at all. Bottom line: usable with these limits.
+- These questions support recall of a linked turn. They don't support a bare "answered correctly" score, because the three question strings repeat across meetings and the gold is one annotator's selection. Any answer score needs item-by-item scoring against the gold's items.
+- Evidence ids can be fragment turns, with the real statement in an uncited neighbour, so recall partly depends on how the transcript was split. 17 of 283 evidence turns have fewer than 6 words.
+- Some gold answers are broad or loose, and a correct but wider answer could be marked wrong. One sampled gold relies on a turn after the cut, and another may.
+- Cuts sit late in meetings, at a median of 0.91 of the way through.
