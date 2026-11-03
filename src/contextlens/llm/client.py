@@ -1,0 +1,280 @@
+"""Model clients: Ollama, an OpenAI-compatible server (vLLM), Claude Code, and a fake for tests."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Protocol
+
+from pydantic import BaseModel, ValidationError
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CLAUDE_CALLS_PATH = REPO_ROOT / "results" / "claude_calls.json"
+CLAUDE_CALL_CAP = 1000
+
+
+class LLMError(Exception):
+    pass
+
+
+class LLMResult(BaseModel):
+    text: str
+    parsed: BaseModel | None = None
+    model: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    latency_ms: float = 0.0
+    cost_usd: float = 0.0
+
+
+class LLMClient(Protocol):
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        schema: type[BaseModel] | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+        timeout_s: float = 10.0,
+    ) -> LLMResult: ...
+
+
+def _parse(text: str, schema: type[BaseModel]) -> BaseModel:
+    body = text.strip()
+    if body.startswith("```"):
+        body = body.strip("`").removeprefix("json").strip()
+    return schema.model_validate_json(body)
+
+
+class _Base:
+    """Shared schema validation: one retry that shows the model its error."""
+
+    model = ""
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
+        raise NotImplementedError
+
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        schema: type[BaseModel] | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.0,
+        timeout_s: float = 10.0,
+    ) -> LLMResult:
+        res = self._raw(messages, schema, max_tokens, temperature, timeout_s)
+        if schema is None:
+            return res
+        try:
+            res.parsed = _parse(res.text, schema)
+            return res
+        except (ValidationError, ValueError) as err:
+            note = (
+                f"That was not valid for the required JSON schema: {err}\n"
+                "Reply again with only valid JSON."
+            )
+        retry = [
+            *messages,
+            {"role": "assistant", "content": res.text},
+            {"role": "user", "content": note},
+        ]
+        res2 = self._raw(retry, schema, max_tokens, temperature, timeout_s)
+        try:
+            res2.parsed = _parse(res2.text, schema)
+        except (ValidationError, ValueError) as err:
+            raise LLMError(f"output failed schema validation twice: {err}") from err
+        return res2
+
+
+class FakeLLM(_Base):
+    def __init__(self, responses: list[str | BaseModel | dict]):
+        self._responses = list(responses)
+        self.calls: list[list[dict]] = []
+        self.model = "fake"
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
+        self.calls.append(messages)
+        if not self._responses:
+            raise LLMError("FakeLLM has no responses left")
+        r = self._responses.pop(0)
+        if isinstance(r, BaseModel):
+            r = r.model_dump_json()
+        elif isinstance(r, dict):
+            r = json.dumps(r)
+        return LLMResult(text=r, model=self.model)
+
+
+def _post_json(url: str, payload: dict, timeout_s: float) -> dict:
+    req = urllib.request.Request(
+        url, json.dumps(payload).encode(), {"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as err:
+        raise LLMError(f"request to {url} failed: {err}") from err
+
+
+class OllamaClient(_Base):
+    def __init__(self, model: str, base_url: str = "http://localhost:11434"):
+        self.model, self.base_url = model, base_url.rstrip("/")
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "think": False,
+            "options": {"num_predict": max_tokens, "temperature": temperature},
+        }
+        if schema is not None:
+            payload["format"] = schema.model_json_schema()
+        t0 = time.perf_counter()
+        data = _post_json(f"{self.base_url}/api/chat", payload, timeout_s)
+        try:
+            text = data["message"]["content"]
+        except (KeyError, TypeError) as err:
+            raise LLMError(f"unexpected Ollama reply: {data}") from err
+        return LLMResult(
+            text=text,
+            model=self.model,
+            prompt_tokens=data.get("prompt_eval_count", 0),
+            completion_tokens=data.get("eval_count", 0),
+            latency_ms=(time.perf_counter() - t0) * 1000,
+        )
+
+
+class OpenAICompatClient(_Base):
+    def __init__(self, base_url: str, model: str):
+        self.base_url, self.model = base_url.rstrip("/"), model
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
+            }
+        t0 = time.perf_counter()
+        data = _post_json(f"{self.base_url}/chat/completions", payload, timeout_s)
+        try:
+            text = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as err:
+            raise LLMError(f"unexpected reply: {data}") from err
+        usage = data.get("usage") or {}
+        return LLMResult(
+            text=text,
+            model=self.model,
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            latency_ms=(time.perf_counter() - t0) * 1000,
+        )
+
+
+class Embedder:
+    def __init__(self, model: str = "nomic-embed-text", base_url: str = "http://localhost:11434"):
+        self.model, self.base_url = model, base_url.rstrip("/")
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        data = _post_json(f"{self.base_url}/api/embed", {"model": self.model, "input": texts}, 60.0)
+        vectors = data.get("embeddings")
+        if not isinstance(vectors, list) or len(vectors) != len(texts):
+            raise LLMError(f"unexpected embedding reply: {str(data)[:200]}")
+        return vectors
+
+
+def _load_calls(path: Path) -> dict:
+    if path.exists():
+        return json.loads(path.read_text())
+    return {"count": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+
+
+class ClaudeCodeClient(_Base):
+    def __init__(
+        self,
+        model: str = "haiku",
+        calls_path: Path = CLAUDE_CALLS_PATH,
+        cap: int = CLAUDE_CALL_CAP,
+    ):
+        self.model, self.calls_path, self.cap = model, Path(calls_path), cap
+
+    def _save(self, calls: dict) -> None:
+        self.calls_path.parent.mkdir(parents=True, exist_ok=True)
+        self.calls_path.write_text(json.dumps(calls, indent=2))
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s) -> LLMResult:
+        exe = shutil.which("claude")
+        if exe is None:
+            raise LLMError("claude command not found")
+        calls = _load_calls(self.calls_path)
+        if calls["count"] >= self.cap:
+            raise LLMError(f"Claude Code call cap of {self.cap} reached; only the person can raise it")
+        prompt = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
+        if schema is not None:
+            prompt += "\n\nReply with only JSON matching this schema:\n" + json.dumps(
+                schema.model_json_schema()
+            )
+        cmd = [
+            exe,
+            "-p",
+            "--model", self.model,
+            "--output-format", "json",
+            "--tools", "",
+            "--setting-sources", "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
+            "--no-session-persistence",
+            "--max-turns", "1",
+        ]  # fmt: skip
+        calls["count"] += 1  # a started call counts even if it fails
+        self._save(calls)
+        t0 = time.perf_counter()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                proc = subprocess.run(
+                    cmd,
+                    input=prompt,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=timeout_s,
+                    cwd=tmp,
+                )
+        except (subprocess.TimeoutExpired, OSError) as err:
+            raise LLMError(f"claude call failed: {err}") from err
+        if proc.returncode != 0:
+            raise LLMError(f"claude exited {proc.returncode}: {(proc.stderr or proc.stdout)[:300]}")
+        try:
+            data = json.loads(proc.stdout)
+        except ValueError as err:
+            raise LLMError(f"claude output was not JSON: {proc.stdout[:200]}") from err
+        text = str(data.get("result", ""))
+        if data.get("is_error") or "usage limit" in text.lower():
+            raise LLMError(f"claude reported an error: {text[:300]}")
+        usage = data.get("usage") or {}
+        res = LLMResult(
+            text=text,
+            model=self.model,
+            prompt_tokens=usage.get("input_tokens", 0),
+            completion_tokens=usage.get("output_tokens", 0),
+            latency_ms=(time.perf_counter() - t0) * 1000,
+            cost_usd=float(data.get("total_cost_usd", 0.0)),
+        )
+        calls = _load_calls(self.calls_path)
+        calls["input_tokens"] += res.prompt_tokens
+        calls["output_tokens"] += res.completion_tokens
+        calls["cost_usd"] += res.cost_usd
+        self._save(calls)
+        return res
