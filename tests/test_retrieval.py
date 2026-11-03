@@ -86,12 +86,42 @@ def test_low_confidence_speaker_is_reported_as_unknown():
 
 def test_delete_removes_text_and_vectors():
     store, r = make()
-    r.search("c", "budget", 4)
-    assert r._cache
+    for mode in ("dense", "bm25", "hybrid"):
+        assert r.search("c", "budget", 4, mode=mode)
     r.delete("c")
     assert store.turns("c", 99) == []
     assert not r._cache
-    assert r.search("c", "budget", 4) == []
+    for mode in ("dense", "bm25", "hybrid"):
+        assert r.search("c", "budget", 4, mode=mode) == []
+
+
+def test_readding_same_id_with_new_text_does_not_reuse_stale_vector():
+    store, r = make()
+    assert r.search("c", "budget", 4, k=1, mode="dense")[0].turn.id == "t2"
+    store.delete("c")
+    for i, text in enumerate(["x", "y", "the station is far", "z", "w"]):
+        store.add(Turn(id=f"t{i}", conversation_id="c", seq=i, speaker="A", text=text,
+                       start_ms=i, end_ms=i + 1, source="synthetic"))  # fmt: skip
+    hits = r.search("c", "station", 4, k=1, mode="dense")
+    assert hits[0].turn.id == "t2" and hits[0].parts["dense"] > 0
+    assert r.search("c", "budget", 4, k=1, mode="dense")[0].turn.id != "t2"
+
+
+@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid"])
+def test_turn_added_after_vectors_cached_is_not_returned_past_as_of(mode):
+    store, r = make()
+    r.search("c", "budget", 4, mode=mode)
+    store.add(Turn(id="t9", conversation_id="c", seq=9, speaker="A", text="budget budget",
+                   start_ms=9, end_ms=10, source="synthetic"))  # fmt: skip
+    assert "t9" not in {h.turn.id for h in r.search("c", "budget", 4, k=10, mode=mode)}
+    assert "t9" in {h.turn.id for h in r.search("c", "budget", 9, k=10, mode=mode)}
+
+
+def test_filtering_by_real_name_of_low_confidence_speaker_returns_nothing():
+    _, r = make(speakers=["A", "B", "A", "B", "A", "B"], confs=[1.0, 0.2, 1.0, 1.0, 1.0, 1.0])
+    hits = r.search("c", "sister", 4, k=10, speaker="B", mode="bm25")
+    assert "t1" not in {h.turn.id for h in hits}
+    assert {h.turn.id for h in r.search("c", "sister", 4, k=10, speaker="unknown", mode="bm25")} == {"t1"}
 
 
 @pytest.mark.real

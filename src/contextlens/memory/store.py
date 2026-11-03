@@ -45,9 +45,6 @@ class PostgresTranscriptStore:
                 source text NOT NULL, embedding vector({dim}) NOT NULL)"""
         )
         self._conn.execute("CREATE INDEX IF NOT EXISTS turns_conv ON turns (conversation_id, seq)")
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS turns_fts ON turns USING gin (to_tsvector('simple', text))"
-        )
 
     def add(self, turn: Turn) -> None:
         vec = self.embedder.embed([turn.text])[0]

@@ -49,11 +49,11 @@ def _bm25(query: str, docs: list[Turn], k1: float = 1.5, b: float = 0.75) -> lis
 class Retriever:
     def __init__(self, store: TranscriptStore, embedder) -> None:
         self.store, self.embedder = store, embedder
-        self._cache: dict[str, list[float]] = {}
+        self._cache: dict[tuple[str, str], list[float]] = {}
 
     def delete(self, conv_id: str) -> None:
         for t in self.store.turns(conv_id, 2**62):
-            self._cache.pop(t.id, None)
+            self._cache.pop((t.id, t.text), None)
         self.store.delete(conv_id)
 
     def _vectors(self, conv_id: str, turns: list[Turn]) -> list[list[float]]:
@@ -61,11 +61,11 @@ class Retriever:
         if stored is not None:
             have = stored(conv_id, [t.id for t in turns])
         else:
-            have = {t.id: self._cache[t.id] for t in turns if t.id in self._cache}
+            have = {t.id: self._cache[t.id, t.text] for t in turns if (t.id, t.text) in self._cache}
             missing = [t for t in turns if t.id not in have]
             if missing:
                 for t, v in zip(missing, self.embedder.embed([t.text for t in missing])):
-                    self._cache[t.id] = have[t.id] = v
+                    self._cache[t.id, t.text] = have[t.id] = v
         return [have[t.id] for t in turns]
 
     def search(
