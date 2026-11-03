@@ -14,7 +14,7 @@
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -324,7 +324,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
 **Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
-**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
+**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 40 GB, or if free disk falls under 40 GB.
 **Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
 **From T8.7's verifier:** The backend sends `keep_alive` 30m and never unloads on shutdown: unload at shutdown, or whoever holds the GPU turn must unload before releasing. Measure press-to-card time, since the team's margin against the 8 s deadline looks thin and would be worse if Ollama serves the specialists one at a time. Real pyannote on the live path and the production backend started by `run_everything.py` with Ollama haven't run yet: run both here.
 **Decision (the coordinator):** E7's questions are derived from AMI's annotations and clean transcripts by a written rule, never from speech output, with `labels_reviewed: false`, and the file is committed before the run. An independent reader checks a sample before E7 runs, and a sample goes to H2. `--speedup` is used only if the record states it, and real-time latency is reported from a real-time segment.

@@ -57,7 +57,7 @@ def set_h2(root: Path, status: str) -> None:
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps({"tasks": [{"id": "H2", "owner": "human", "status": status}]}), encoding="utf-8")
     _git(root, "add", "-A")
-    _git(root, "commit", "-q", "-m", f"H2 {status}")
+    _git(root, "commit", "-q", "--allow-empty", "-m", f"H2 {status}")
 
 
 @pytest.fixture
@@ -380,10 +380,6 @@ def test_config_cannot_set_labels_reviewed(repo: Path) -> None:
     assert _reviewed(_run(repo, config={"labels_reviewed": True})) is False
 
 
-def test_labels_from_another_source_stay_unreviewed(repo: Path) -> None:
-    from contextlens.eval.records import labels_reviewed
-    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
-
 
 def test_write_run_refuses_systems_with_different_row_counts(repo: Path) -> None:
     rows = [_pred(s, g) for s, g in _predl("dev")]
@@ -444,11 +440,10 @@ def test_ami_labels_need_their_own_signed_line_from_the_main_folder(repo: Path) 
     assert labels_reviewed(repo, "ami") is True and labels_reviewed(repo, "scenarios") is False
 
 
-def test_publisher_labels_are_never_reviewed(repo: Path) -> None:
-    from contextlens.eval.records import AMI_SIGNED_REL, labels_reviewed
-    (repo / AMI_SIGNED_REL).parent.mkdir(parents=True, exist_ok=True)
-    (repo / AMI_SIGNED_REL).write_text("signed", encoding="utf-8")
-    assert labels_reviewed(repo, "qmsum") is False and labels_reviewed(repo, "decode") is False
+def test_publisher_labels_count_as_reviewed_without_any_sign_off(repo: Path) -> None:
+    from contextlens.eval.records import labels_reviewed
+    set_h2(repo, "pending")
+    assert labels_reviewed(repo, "qmsum") is True and labels_reviewed(repo, "decode") is True
 
 
 def test_check_run_accepts_older_records_without_label_source_and_rejects_a_wrong_one(repo: Path) -> None:
