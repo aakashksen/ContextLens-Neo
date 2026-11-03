@@ -295,7 +295,8 @@
         "{py} -m pytest tests/test_e1.py -q",
         "{py} -m contextlens.eval.check_run E1 --min-n 100 --split dev"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "started_at": "2026-11-03T02:15:29+00:00"
     },
     {
       "id": "T3.1",
