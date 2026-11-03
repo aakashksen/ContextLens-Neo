@@ -387,6 +387,89 @@ def test_production_uses_local_models_only():
     assert "ClaudeCodeClient" not in Path(production.__file__).read_text("utf-8")
 
 
+# -- warming the local models --
+
+
+def test_not_ready_until_warm_and_cold_start_is_recorded():
+    from contextlens.llm.warm import Warmup
+
+    gate, seen = threading.Event(), {}
+    reg = CollectorRegistry()
+    warm = Warmup({"chat": gate.wait, "embed": lambda: None}, on_loaded=lambda n, s: prod.telemetry.record_warmup(n, s))
+    prod, client = make(backend=Spans(), registry=reg, warmup=warm)
+    with client:
+        assert client.get("/ready").status_code == 503
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/c1") as ws:
+            ws.receive_json()
+        gate.set()
+        assert wait_for(lambda: client.get("/ready").status_code == 200, 5)
+        body = client.get("/ready").json()
+        seen.update(body)
+        with client.websocket_connect("/ws/c1") as ws:
+            assert ws.receive_json()["state"] == "recording"
+    assert seen["ready"] is True and set(seen["cold_start_ms"]) == {"chat", "embed"}
+    assert reg.get_sample_value("contextlens_warmup_seconds", {"model": "chat"}) is not None
+
+
+def test_a_failed_warmup_retries_and_stays_not_ready():
+    from contextlens.llm.warm import Warmup
+
+    tries = []
+
+    def flaky():
+        tries.append(1)
+        if len(tries) < 3:
+            raise OSError("ollama is not up")
+
+    warm = Warmup({"chat": flaky}, retry_s=0.01)
+    warm.start()
+    assert wait_for(warm.ready.is_set, 5) and len(tries) == 3
+    assert warm.status()["errors"] == {}
+
+    def never():
+        raise OSError("down")
+
+    down = Warmup({"chat": never}, retry_s=0.01)
+    down.start()
+    assert wait_for(lambda: down.status()["errors"].get("chat") == "OSError", 5)
+    assert not down.ready.is_set()
+    down.stop()
+
+
+def test_ollama_requests_ask_it_to_keep_the_models_loaded(monkeypatch):
+    from contextlens.llm import client as llm_client
+    from contextlens.llm.client import Embedder, OllamaClient
+
+    sent = []
+
+    def post(url, payload, timeout_s):
+        sent.append((url, payload))
+        return {"message": {"content": "{}"}, "embeddings": [[0.0]]}
+
+    monkeypatch.setattr(llm_client, "_post_json", post)
+    chat = OllamaClient("m", keep_alive="30m")
+    chat.load()
+    chat.complete([{"role": "user", "content": "x"}])
+    Embedder(keep_alive="30m").embed(["x"])
+    assert [p["keep_alive"] for _, p in sent] == ["30m"] * 3
+    assert sent[0][1]["messages"] == []  # loading a model sends no prompt
+    sent.clear()
+    OllamaClient("m").complete([{"role": "user", "content": "x"}])
+    assert "keep_alive" not in sent[0][1]
+
+
+def test_fast_paths_never_warm_a_model():
+    prod, client = make()
+    assert prod.services.warmup is None
+    with client:
+        assert client.get("/ready").json() == {"ready": True, "cold_start_ms": {}, "errors": {}}
+
+
+def test_production_warms_both_local_models():
+    warm = production.local_warmup(production.local_llms()["memory"], production.local_embedder())
+    assert set(warm.loaders) == {"chat", "embed"} and not warm.ready.is_set()
+
+
 # -- real services; run only when asked (-m real) --
 
 PHRASE = ROOT / "tests" / "fixtures" / "speech" / "phrase.wav"
@@ -472,27 +555,58 @@ def test_audio_reaches_a_transcript_through_real_speech_postgres_and_pyannote():
 
 
 @pytest.mark.real
-def test_press_end_to_end_returns_a_cited_card():
+def test_press_end_to_end_returns_a_cited_card(monkeypatch):
     """audio -> transcript -> press -> card with everything real and local: the speech service, Postgres,
-    Ollama (qwen3.5:4b-q4_K_M and nomic-embed-text), pyannote on the CPU. Needs a GPU turn; see docs/run-everything.md."""
+    Ollama (qwen3.5:4b-q4_K_M and nomic-embed-text), pyannote on the CPU. Needs a GPU turn; see docs/run-everything.md.
+    On failure it prints the card's status and missing notes and the time spent in each stage."""
     conv = f"it-{uuid.uuid4().hex[:8]}"
+    stages: list[dict] = []
+
+    class Recording(production.TeamAssistant):
+        def answer(self, req, ctx):
+            card = super().answer(req, ctx)
+            stages.append(dict(ctx.stage_ms))
+            return card
+
+    monkeypatch.setattr(production, "TeamAssistant", Recording)
+    t = {"start": time.monotonic()}
+    report: dict = {}
     app = production.create_production_app()
-    with TestClient(app) as client, client.websocket_connect(f"/ws/{conv}") as raw:
-        fr = Frames(raw)
-        assert fr.wait(is_type("status"), 10)["state"] == "recording"
-        speak(raw)
-        fr.wait(lambda m: m["type"] == "transcript" and "thursday" in m["turn"]["text"].lower(), 90)
-        turns = {m["turn"]["id"]: m["turn"] for m in fr.log if m["type"] == "transcript"}
-        last = max(t["seq"] for t in turns.values())
-        raw.send_json(press(conv=conv, as_of=last, question="When is the budget review?"))
-        card = fr.wait(lambda m: m["type"] in ("card", "closed") or (m["type"] == "status" and m["state"] == "error"), 120)
-        assert card["type"] == "card", card
-        jsonschema.validate(card, SCHEMA["server_to_client"])
-        body = card["card"]
-        assert body["status"] in ("answered", "partial") and body["findings"]
-        for f in body["findings"]:
-            for e in f["evidence"]:
-                assert e["turn_id"] in turns and e["quote"].lower() in turns[e["turn_id"]]["text"].lower()
-        assert "thursday" in json.dumps(body).lower()
-        raw.send_json({"type": "delete"})
-        fr.wait(lambda m: m["type"] == "status" and m["state"] == "deleted", 30)
+    try:
+        with TestClient(app) as client:
+            assert wait_for(lambda: client.get("/ready").status_code == 200, 600), client.get("/ready").json()
+            report["warmup"] = client.get("/ready").json()
+            t["ready"] = time.monotonic()
+            with client.websocket_connect(f"/ws/{conv}") as raw:
+                fr = Frames(raw)
+                assert fr.wait(is_type("status"), 10)["state"] == "recording"
+                speak(raw)
+                fr.wait(lambda m: m["type"] == "transcript" and "thursday" in m["turn"]["text"].lower(), 90)
+                t["transcript"] = time.monotonic()
+                turns = {m["turn"]["id"]: m["turn"] for m in fr.log if m["type"] == "transcript"}
+                last = max(t_["seq"] for t_ in turns.values())
+                raw.send_json(press(conv=conv, as_of=last, question="When is the budget review?"))
+                t["pressed"] = time.monotonic()
+                card = fr.wait(
+                    lambda m: m["type"] in ("card", "closed") or (m["type"] == "status" and m["state"] == "error"), 120
+                )
+                t["card"] = time.monotonic()
+                assert card["type"] == "card", card
+                jsonschema.validate(card, SCHEMA["server_to_client"])
+                body = card["card"]
+                report["card"] = {"status": body["status"], "missing": body["missing"], "findings": len(body["findings"])}
+                assert body["status"] in ("answered", "partial") and body["findings"]
+                for f in body["findings"]:
+                    for e in f["evidence"]:
+                        assert e["turn_id"] in turns and e["quote"].lower() in turns[e["turn_id"]]["text"].lower()
+                assert "thursday" in json.dumps(body).lower()
+                raw.send_json({"type": "delete"})
+                fr.wait(lambda m: m["type"] == "status" and m["state"] == "deleted", 30)
+    except BaseException:
+        report["press_stage_ms"] = stages
+        report["seconds"] = {k: round(v - t["start"], 2) for k, v in t.items()}
+        if "pressed" in t and "card" in t:
+            report["press_to_card_s"] = round(t["card"] - t["pressed"], 2)
+        print("\nEND-TO-END REPORT (no transcript text beyond the fixture's):\n" + json.dumps(report, indent=2), flush=True)
+        raise
+    print("\nEND-TO-END TIMINGS:", json.dumps({"warmup": report["warmup"], "stage_ms": stages}), flush=True)

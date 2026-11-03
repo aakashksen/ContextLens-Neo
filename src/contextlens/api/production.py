@@ -13,6 +13,7 @@ from contextlens.agents.tools import Tools
 from contextlens.api.app import create_app
 from contextlens.api.stream import Services
 from contextlens.llm.client import Embedder, LLMClient, OllamaClient
+from contextlens.llm.warm import Warmup
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
 from contextlens.memory.store import TranscriptStore
 from contextlens.memory.summary import RollingSummary
@@ -29,6 +30,7 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
 SHUTDOWN_FLUSH_S = 5.0
+KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
 
 def database_url() -> str:
@@ -36,12 +38,19 @@ def database_url() -> str:
 
 
 def local_llms() -> dict[str, LLMClient]:
-    llm = OllamaClient(MODEL, OLLAMA_URL)
+    llm = OllamaClient(MODEL, OLLAMA_URL, keep_alive=KEEP_ALIVE)
     return {"memory": llm, "consistency": llm, "assistance": llm}
 
 
 def local_embedder() -> Embedder:
-    return Embedder(base_url=OLLAMA_URL)
+    return Embedder(base_url=OLLAMA_URL, keep_alive=KEEP_ALIVE)
+
+
+def local_warmup(llm: OllamaClient, embedder: Embedder, telemetry: Telemetry | None = None) -> Warmup:
+    return Warmup(
+        {"chat": llm.load, "embed": lambda: embedder.embed(["warm up"])},
+        on_loaded=telemetry.record_warmup if telemetry else None,
+    )
 
 
 @dataclass
@@ -96,8 +105,10 @@ def create_production_app() -> FastAPI:
 
     embedder = local_embedder()
     llms = local_llms()
+    telemetry = Telemetry()
     prod = build_services(
         store=PostgresTranscriptStore(database_url(), embedder), embedder=embedder, llms=llms,
+        telemetry=telemetry, warmup=local_warmup(llms["memory"], embedder, telemetry),
         background_llm=llms["memory"], speech=GrpcSpeech(os.environ.get("SPEECH_ADDR", "localhost:50051")),
         make_backend=SharedSpeakerModel(PyannoteBackend),
     )  # fmt: skip

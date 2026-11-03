@@ -5,7 +5,7 @@ import contextlib
 import logging
 import time
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Response, WebSocket
 
 from contextlens.api.stream import Connection, ConversationState, Services
 
@@ -32,10 +32,14 @@ def create_app(services: Services) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI):
         task = asyncio.get_running_loop().create_task(sweeper())
+        if services.warmup is not None:
+            services.warmup.start()
         try:
             yield
         finally:
             task.cancel()
+            if services.warmup is not None:
+                services.warmup.stop()
             for conv in conversations.values():
                 conv.stop_background()
             if services.on_shutdown is not None:
@@ -47,8 +51,18 @@ def create_app(services: Services) -> FastAPI:
     app = FastAPI(title="ContextLens", lifespan=lifespan)
     app.state.conversations = conversations
 
+    @app.get("/ready")
+    def ready(response: Response) -> dict:
+        """200 once the models are loaded (or when there is nothing to warm); 503 before, with what each load took."""
+        body = services.warmup.status() if services.warmup else {"ready": True, "cold_start_ms": {}, "errors": {}}
+        response.status_code = 200 if body["ready"] else 503
+        return body
+
     @app.websocket("/ws/{conversation_id}")
     async def ws(websocket: WebSocket, conversation_id: str) -> None:
+        if services.warmup is not None and not services.warmup.ready.is_set():
+            await websocket.close(code=1013)  # try again later: a press now would race a cold model load
+            return
         async with guard:
             sweep()
             conv = conversations.get(conversation_id)

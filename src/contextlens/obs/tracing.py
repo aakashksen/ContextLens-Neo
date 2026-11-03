@@ -17,7 +17,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
-from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram, start_http_server
 
 from contextlens.replay.runner import Assistant, Context
 from contextlens.schemas import ButtonRequest, Card
@@ -52,6 +52,11 @@ class Telemetry:
         self.dropped = Counter(
             "contextlens_dropped_presses", "Presses whose telemetry was dropped (backlog full)", registry=r
         )
+
+        self._warmup_s = Gauge("contextlens_warmup_seconds", "Cold-start load time", ["model"], registry=r)
+
+    def record_warmup(self, model: str, seconds: float) -> None:
+        self._warmup_s.labels(model).set(seconds)
 
     def record(
         self, start_ns: int, end_ns: int, stages: dict[str, int], card: Card | None, error: BaseException | None

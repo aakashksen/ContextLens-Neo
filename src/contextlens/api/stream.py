@@ -20,6 +20,7 @@ from contextlens.api.contract import (
     TurnUpdateMessage,
     client_adapter,
 )
+from contextlens.llm.warm import Warmup
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
 from contextlens.memory.store import TranscriptStore
 from contextlens.memory.summary import RollingSummary
@@ -49,6 +50,7 @@ class Services:
     answer_timeout_s: float = 60.0
     forget: Callable[[str], None] | None = None  # called with the conversation id when its data is deleted
     on_shutdown: Callable[[], None] | None = None
+    warmup: Warmup | None = None  # when set, no connection is accepted until the models are loaded
     idle_evict_s: float = 900.0  # a conversation nobody is connected to for this long is dropped from memory
 
 
