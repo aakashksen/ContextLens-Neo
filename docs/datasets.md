@@ -109,3 +109,11 @@ Approved: no, needs the person. Reason: it is a custom research agreement the us
 - This review downloaded and installed nothing. Later tasks download only `yes` entries.
 - The `Approved:` lines above follow the standing rule. Only `yes` entries may be used by T1.1 (datasets) or T9.1 (small LLM). Qwen2.5-3B-Instruct stays unapproved.
 - DECODE and QMSum rest on the person's decision, not on a stated license, so the standing rule's license test is not what approves them. Nothing containing their text may enter git or leave this machine: not scenario files, predictions or run records with quotes, fixtures copied from them, or docs. Keep their data under the git-ignored `datasets/raw/`. Committed files may hold only their ids, hashes, and counts, plus metrics computed from them.
+
+## Local serving and fine-tuning model: Qwen3.5-4B
+
+URL: https://huggingface.co/Qwen/Qwen3.5-4B
+License: Apache-2.0 (Hugging Face API: `apache-2.0`, not gated).
+Classes: none; it's a language and vision model.
+Use: the local model through Ollama, as `qwen3.5:4b-q4_K_M`. See `docs/model-choice.md`.
+Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.

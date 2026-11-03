@@ -14,7 +14,7 @@
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 300 Claude Code calls, on Haiku, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 1,000 Claude Code calls, on Haiku, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -120,7 +120,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 ### T2.1: Model clients
 **Files:** `src/contextlens/llm/client.py`, `tests/test_llm.py`.
 **Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model)` for vLLM; `ClaudeCodeClient(model="haiku")`; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
-**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 300 Claude Code calls.
+**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 1,000 Claude Code calls.
 **Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_call_cap_refuses_and_makes_no_call`; `test_claude_client_builds_expected_command_with_no_tools` (stubbed process); `test_usage_limit_raises_llm_error`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama, and one to Claude on Haiku.
 **Accept:** `{py} -m pytest tests/test_llm.py -q`.
 
@@ -228,7 +228,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ### T6.1: Card training data and QLoRA pipeline
 **Files:** `src/contextlens/cards/dataset.py`, `src/contextlens/cards/train_lora.py`, `tests/test_cards_data.py`.
-**Do:** Build instruction examples: recent exchange + retrieved evidence → valid `Card` JSON, from QMSum and reviewed scenarios, split by conversation. Pipeline: 4-bit QLoRA with PEFT on the small LLM chosen in `docs/datasets.md`. It must fit under 7 GB; if it can't, block the task and don't change the model class silently.
+**Do:** Build instruction examples: recent exchange + retrieved evidence → valid `Card` JSON, from QMSum and reviewed scenarios, split by conversation. Pipeline: 4-bit QLoRA with PEFT on Qwen3.5-4B, the same model the agents run (`docs/model-choice.md`), falling back to Qwen3-4B if its image-capable architecture blocks PEFT, and recording that. It must fit under 7 GB; if it can't, block the task and don't change the model class silently.
 **Tests:** `test_every_example_parses_as_card`; `test_every_citation_exists_in_its_input`; `test_no_conversation_in_two_splits`; `test_tokenized_labels_mask_the_prompt`; `test_dry_run_one_step_on_tiny_model`.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
@@ -278,7 +278,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 
 ### T8.4: Observability and optional vision
 **Files:** `src/contextlens/obs/tracing.py`, `deploy/prometheus.yml`, `deploy/grafana/`, `docker-compose.yml`, `src/contextlens/vision/local.py`, `tests/test_obs.py`, `tests/test_vision.py`.
-**Do:** OpenTelemetry spans for each stage and agent, Prometheus metrics for latency, tokens, cost, errors, and a Grafana dashboard. Transcript text never goes into telemetry. Vision: a local multimodal model (if `gemma4` as installed supports images; otherwise block and say so) gives a short scene note, off by default, stored as context and never as citable evidence.
+**Do:** OpenTelemetry spans for each stage and agent, Prometheus metrics for latency, tokens, cost, errors, and a Grafana dashboard. Transcript text never goes into telemetry. Vision: a local multimodal model (`qwen3.5:4b-q4_K_M`, which accepts images) gives a short scene note, off by default, stored as context and never as citable evidence.
 **Tests:** `test_press_creates_span_per_agent`; `test_no_transcript_text_in_spans_or_metrics`; `test_vision_off_by_default`; `test_vision_failure_does_not_affect_card`; `test_scene_note_is_not_citable`.
 **Accept:** `{py} -m pytest tests/test_obs.py tests/test_vision.py -q`; `docker compose config -q`.
 

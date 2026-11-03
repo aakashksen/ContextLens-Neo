@@ -54,7 +54,7 @@ The project also exists to demonstrate specific skills for the resume (`docs/RES
 | Hackathon services | Deepgram, Gemini and Vercel removed; old code kept in `legacy/` | Use only what's available to us |
 | Speech | whisper.cpp, in a C++ service built in Docker, over gRPC | Local and private, and real C++ work |
 | Speakers | Local diarization (pyannote, or another local option if its terms don't fit) | Removes the Deepgram dependency |
-| Models | Ollama by default (`gemma4`, `nomic-embed-text` are installed); vLLM behind the same interface; Claude through the `claude -p` CLI as the cloud comparison, using the person's Claude Code plan with no API key | Available now and free locally, with an option to compare |
+| Models | Ollama by default with `qwen3.5:4b-q4_K_M` (tested on this GPU, see `docs/model-choice.md`) and `nomic-embed-text`; vLLM behind the same interface; Claude through the `claude -p` CLI as the cloud comparison, using the person's Claude Code plan with no API key | Available now and free locally, with an option to compare |
 | Vision | Optional local vision, off by default | Multimodal input, but not core to the card |
 | Backend | Python 3.12 and FastAPI | Same language as the agents and training |
 | Agents | LangGraph | Asked for by roles, and suits parallel work and follow-ups |
@@ -66,7 +66,7 @@ The project also exists to demonstrate specific skills for the resume (`docs/RES
 
 ## Limits
 - **Hardware:** RTX 4070 laptop GPU with 8 GB VRAM. Only one GPU job at a time. If a run can't fit, block the task; don't quietly shrink what the bullet says.
-- **Claude usage:** 300 Claude Code calls from the product across the whole project, on Haiku, counted in `results/claude_calls.json`. `ClaudeCodeClient` refuses past the cap, since these calls share the plan's limits with the agents building this. Only the person can raise it. No API keys are used. Renting a GPU requires their approval.
+- **Claude usage:** 1,000 Claude Code calls from the product across the whole project, on Haiku, counted in `results/claude_calls.json`. `ClaudeCodeClient` refuses past the cap, since these calls share the plan's limits with the agents building this. Only the person can raise it. No API keys are used. Renting a GPU requires their approval.
 - **Data leaving the machine:** only benchmark text and synthetic scenarios may go to a cloud model. Live audio, transcripts, and study data stay local.
 
 ## Agents
