@@ -117,3 +117,10 @@ License: Apache-2.0 (Hugging Face API: `apache-2.0`, not gated).
 Classes: none; it's a language and vision model.
 Use: the local model through Ollama, as `qwen3.5:4b-q4_K_M`. See `docs/model-choice.md`.
 Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.
+
+## Reranker: cross-encoder/ms-marco-MiniLM-L6-v2
+
+URL: https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2 (model card); API https://huggingface.co/api/models/cross-encoder/ms-marco-MiniLM-L6-v2.
+License: Apache-2.0 (model card header and API tag `license:apache-2.0`). Not gated.
+Use: local cross-encoder for `Reranker` in `src/contextlens/retrieval/rerank.py`, loaded lazily. Weights were not downloaded in T2.3.
+Approved: yes. Reason: Apache-2.0, ungated, no signed agreement.

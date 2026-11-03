@@ -12,6 +12,7 @@ dependencies = ["pydantic>=2"]
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "scikit-learn"]
 postgres = ["psycopg[binary]", "pgvector"]
+rerank = ["sentence-transformers"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

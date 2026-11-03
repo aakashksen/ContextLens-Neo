@@ -62,3 +62,12 @@ taskctl next ──> implementer builds it, test first, and commits
 | `results/runs/` | Experiment records, the only source of numbers |
 | `results/claims.json` | Numbers allowed onto the resume, each tied to a run |
 | `.claude/` | The orchestrator skill, agents and permissions |
+
+## GPU PyTorch (reranker and training)
+
+The default Windows wheel is CPU-only. This machine's driver (592.00, RTX 4070 Laptop) supports CUDA 12.8 wheels:
+
+```
+.venv\Scripts\python -m pip install torch --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\python -m pip install sentence-transformers
+```
