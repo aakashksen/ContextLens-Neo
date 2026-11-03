@@ -93,6 +93,10 @@ class Diarizer:
         self._audio_start_ms = 0
         self._offset_ms = 0  # stream times restart at 0 on each new stream; turn times keep running
 
+    def set_backend(self, backend: SpeakerBackend | WindowBackend) -> None:
+        self.backend = backend
+        self.background = hasattr(backend, "spans")
+
     def new_stream(self) -> None:
         with self._mu:
             self._audio.clear()
@@ -100,9 +104,10 @@ class Diarizer:
         self._offset_ms = self.last_end_ms
 
     def feed(self, pcm: bytes) -> None:
-        if self.backend is None:
-            return
         with self._mu:
+            if self.backend is None:  # not loaded (yet): keep no audio, but keep the clock
+                self._audio_start_ms += len(pcm) // BYTES_PER_MS
+                return
             self._audio += pcm
             extra = len(self._audio) - KEEP_MS * BYTES_PER_MS
             if extra > 0:

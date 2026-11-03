@@ -558,3 +558,43 @@ def test_hf_token_is_read_from_the_environment_or_dotenv_and_never_shown(tmp_pat
     with pytest.raises(RuntimeError) as e:
         hf_token(tmp_path / "missing.env")
     assert secret not in str(e.value) and "HF_TOKEN" in str(e.value)
+
+
+def test_a_backend_that_fails_to_load_leaves_the_connection_and_turns_unknown(caplog):
+    calls = []
+
+    def broken():
+        calls.append(1)
+        raise RuntimeError("token hf_secret123 refused")
+
+    client, svc = build()
+    svc.make_backend = broken
+    with caplog.at_level("WARNING"), client.websocket_connect("/ws/c1") as ws:
+        assert ws.receive_json()["state"] == "recording"
+        for t in hear_audio(ws, 2):
+            assert (t["speaker"], t["speaker_confidence"]) == ("unknown", 0.0)
+        assert wait_for(lambda: bool(calls))
+        time.sleep(0.2)
+    assert calls == [1]  # one attempt, no retry loop
+    assert speakers(svc) == [("unknown", 0.0), ("unknown", 0.0)]
+    assert "RuntimeError" in caplog.text and "hf_secret123" not in caplog.text
+
+
+def test_a_slow_backend_load_does_not_hold_up_the_transcript():
+    gate = threading.Event()
+    spans = Spans()
+
+    def slow():
+        assert gate.wait(10)
+        return spans
+
+    client, svc = build()
+    svc.make_backend = slow
+    with client.websocket_connect("/ws/c1") as ws:
+        assert ws.receive_json()["state"] == "recording"  # not waiting for the load
+        assert hear_audio(ws, 1)[0]["speaker"] == "unknown"
+        gate.set()
+        time.sleep(0.3)
+        hear_audio(ws, 1)
+        assert wait_for(lambda: [s for s, _ in speakers(svc)][-1] != "unknown")
+        assert spans.lengths[0] <= 32000  # audio heard before the load is not in the window

@@ -20,6 +20,7 @@ def create_app(services: Services) -> FastAPI:
                 conv = conversations[conversation_id] = await asyncio.to_thread(
                     ConversationState, conversation_id, services
                 )
+        conv.start_backend_load()
         await Connection(websocket, conv).run()
 
     return app

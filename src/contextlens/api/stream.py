@@ -75,8 +75,8 @@ class ConversationState:
         self.conv_id, self.svc = conv_id, svc
         self.lock = threading.Lock()
         self.epoch = 0
-        backend = svc.make_backend() if svc.make_backend else None
-        self.diarizer = Diarizer(conv_id, backend)
+        self.diarizer = Diarizer(conv_id)  # gets its backend from load_backend(), off the connection's path
+        self._backend_task: asyncio.Task | None = None
         self.summary = svc.make_summary() if svc.make_summary else None
         self.memory_upto = -1
         self._memory_dirty = False
@@ -87,6 +87,26 @@ class ConversationState:
         self.last_sent_seq = existing[-1].seq if existing else -1
         self.diarizer.next_seq = self.last_sent_seq + 1
         self.diarizer.last_end_ms = existing[-1].end_ms if existing else 0
+
+    # -- diarizer backend, loaded once in the background --
+    # Until it is loaded, or if it fails, turns stay "unknown". Clients are not told: the contract has no
+    # message for it, and "unknown" is already the honest label.
+
+    def start_backend_load(self) -> None:
+        if self.svc.make_backend is None or self._backend_task is not None:
+            return
+        self._backend_task = asyncio.get_running_loop().create_task(self._load_backend())
+
+    async def _load_backend(self) -> None:
+        try:
+            backend = await asyncio.to_thread(self.svc.make_backend)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # one attempt only; the type, never the message
+            log.warning("speaker model not loaded, speakers stay unknown: %s", type(exc).__name__)
+            return
+        if backend is not None:
+            self.diarizer.set_backend(backend)
 
     # -- ingest --
 
