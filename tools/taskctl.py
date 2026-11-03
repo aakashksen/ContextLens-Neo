@@ -8,6 +8,7 @@ import contextlib
 import datetime as dt
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -324,6 +325,22 @@ def verdict_commit(task_id):
     return verdict.get("commit")
 
 
+def decisions_problem(task, base):
+    """Why this task may not close yet, or None. Reads docs/DECISIONS.md under `base`: the folder holding the
+    copy that will be closed (the main folder for done, the task's worktree for land, so an entry the task
+    wrote on its own branch counts). Any mention of the id counts, including a line `<id>: no new decisions`,
+    and so does a mention inside another task's entry. The id must stand alone, so T1.1 is not found in T1.10."""
+    if task["owner"] != "agent" or task["status"] == "done":
+        return None
+    path = Path(base) / "docs" / "DECISIONS.md"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    task_id = task["id"]
+    if re.search(rf"(?<![A-Za-z0-9]){re.escape(task_id)}(?![A-Za-z0-9]|\.[0-9])", text):
+        return None
+    return (f"refused: docs/DECISIONS.md in {base} does not mention {task_id}. Add an entry for each choice made "
+            f"in the task, or a line `{task_id}: no new decisions`, and commit it.")
+
+
 def cmd_done(args):
     plan = load()
     task = find(plan, args.id)
@@ -331,6 +348,9 @@ def cmd_done(args):
         sys.exit(f"{args.id} belongs to the person; use human-done")
     if task.get("worktree"):
         sys.exit(f"refused: {args.id} is in a worktree; use land")
+    problem = decisions_problem(task, ROOT)
+    if problem:
+        sys.exit(problem)
     commit = head()
     if dirty():
         sys.exit("refused: uncommitted changes")
@@ -353,6 +373,9 @@ def cmd_land(args):
     worktree = task.get("worktree")
     if not worktree:
         sys.exit(f"refused: {args.id} has no worktree; use done")
+    problem = decisions_problem(task, worktree)
+    if problem:
+        sys.exit(problem)
     if dirty(worktree):
         sys.exit("refused: uncommitted changes in the worktree")
     verified = task.get("verified") or {}
