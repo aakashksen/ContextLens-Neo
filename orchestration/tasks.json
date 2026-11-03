@@ -339,16 +339,12 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "in_progress",
+      "status": "pending",
       "worktree": "<local path>",
       "started_at": "2026-11-03T05:41:55+00:00",
-      "verified": {
-        "commit": "4efc114f83d3771ae2d38ed8337d826729f2c764",
-        "passed": true,
-        "at": "2026-11-03T06:06:45+00:00"
-      },
-      "attempts": 2,
-      "reason": "suggestion rule drops 6 of 16 good dev suggestions yet paraphrased injected claims pass, drops unmarked; baselines have no deadline (20s invalid-reply path); no test for dropping suggestion on a findingless card"
+      "attempts": 0,
+      "reason": "number rule keeps wrong numbers against spelled-out compounds: '5 dollars' vs 'five hundred dollars', '20 dollars' vs 'twenty-five dollars'; number words in statements unchecked",
+      "note": "one more attempt, decided by the coordinator: simple token-run number rule"
     },
     {
       "id": "T3.3",
@@ -427,7 +423,9 @@
         "{py} -m pytest tests/test_e4.py -q",
         "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:47:48+00:00"
     },
     {
       "id": "T7.1",
@@ -470,7 +468,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T06:23:49+00:00"
+      "started_at": "2026-11-03T06:23:49+00:00",
+      "verified": {
+        "commit": "314bab5a64f9574b002bb5b0c90031ba30ae7793",
+        "passed": true,
+        "at": "2026-11-03T06:41:24+00:00"
+      },
+      "attempts": 1,
+      "reason": "44 of 148 abstained examples still show gold turns because MAX_GOLD=4 cuts spans and leftovers stay in the pool; answered examples quote only 4 turns of a span; no test covers it"
     },
     {
       "id": "T6.2",
@@ -480,7 +485,8 @@
       "deps": [
         "T6.1",
         "T3.3",
-        "T7.1"
+        "T7.1",
+        "T5.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_e5.py -q",
@@ -602,9 +608,9 @@
       "worktree": "<local path>",
       "started_at": "2026-11-03T06:00:09+00:00",
       "verified": {
-        "commit": "816f34e98ae73c8236c4d9626b4d68e4ffe38ab0",
+        "commit": "f4b243aed5dff77942db5aaf21ca3250a1739cf7",
         "passed": true,
-        "at": "2026-11-03T06:08:23+00:00"
+        "at": "2026-11-03T06:40:55+00:00"
       },
       "attempts": 1,
       "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
