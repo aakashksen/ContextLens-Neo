@@ -153,6 +153,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (d / "dev.jsonl").write_text("".join(s.model_dump_json() + "\n" for s in _cases()), encoding="utf-8")
     write_scenarios_manifest(tmp_path)
     _manifest(tmp_path, "e2-tiny", SUBSET_IDS)
+    (tmp_path / ".gitignore").write_text("results/claude_calls.json*" + chr(10) + "results/partial/" + chr(10), encoding="utf-8")
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "init")
@@ -512,5 +513,144 @@ def test_the_command_refuses_to_start_without_claude_or_with_too_few_calls_left(
     monkeypatch.setattr(e2.shutil, "which", lambda name: None)
     assert e2.main([]) == 3  # no claude command
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    counter.write_text(json.dumps({"count": 250, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
-    assert e2.main([]) == 3  # 300 - 250 = 50 calls left, below the 100 cases
+    counter.write_text(json.dumps({"count": 950, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+    assert e2.main([]) == 3  # 1000 - 950 = 50 calls left, below the 100 cases
+
+
+def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.llm import client
+
+    seen = []
+
+    def fake_run(**kw):
+        seen.append((kw["cloud"].budget, kw["cloud"].client.cap))
+        return {"winner": "recent", "calls_used": 0, "records": {}}
+
+    monkeypatch.setattr(e2, "run_e2", fake_run)
+    counter = tmp_path / "claude_calls.json"
+    monkeypatch.setattr(client, "CLAUDE_CALLS_PATH", counter)
+    monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
+    for count in (0, 700, 900):
+        counter.write_text(json.dumps({"count": count, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+        assert e2.main([]) == 0
+    assert seen == [(250, 250), (250, 950), (100, 1000)]
+    assert not hasattr(e2, "CLOUD_CALL_CAP")
+
+
+# ---------------------------------------------------------------- the tree is checked before money is spent
+
+def test_a_tree_that_would_refuse_the_cloud_record_stops_the_run_before_any_call(repo: Path) -> None:
+    llm = Scripted("test-cloud")
+    cloud = e2.Cloud(llm, lambda: llm.raw_calls, 50, touch=lambda: (repo / "stray.txt").write_text("x", encoding="utf-8"))
+    writer = Scripted()
+    with pytest.raises(e2.RunBroken, match="cloud record"):
+        _go(repo, writer=writer, cloud=cloud)
+    assert llm.raw_calls == 0 and writer.raw_calls == 0 and _nothing_written(repo)
+
+
+def test_a_file_that_appears_after_the_local_stage_stops_the_cloud_before_its_first_call(repo: Path) -> None:
+    llm, touched = Scripted("test-cloud"), []
+
+    def touch() -> None:
+        touched.append(1)
+        if len(touched) > 1:  # the second look is the one right before the cloud step
+            (repo / "stray.txt").write_text("x", encoding="utf-8")
+
+    with pytest.raises(e2.RunBroken, match="no cloud record"):
+        _go(repo, cloud=e2.Cloud(llm, lambda: llm.raw_calls, 50, touch=touch))
+    assert llm.raw_calls == 0
+    assert len(list((repo / "results/runs").glob("E2-*Z.json"))) == 1  # the local record only
+
+
+# ---------------------------------------------------------------- paid rows survive a failure at the end
+
+def _fail_cloud_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = e2.write_run
+
+    def write_run(*a, **kw):
+        if kw.get("subset") is not None:
+            raise RuntimeError("working tree has uncommitted changes; commit first")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(e2, "write_run", write_run)
+
+
+def test_cloud_rows_are_saved_as_they_arrive_and_a_matching_rerun_reuses_them(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(e2, "pick_winner", lambda metrics: "retrieval")  # ties are broken by timing, which varies
+    llm, cloud = _cloud()
+    with monkeypatch.context() as m:
+        _fail_cloud_write(m)
+        with pytest.raises(RuntimeError, match="uncommitted"):
+            _go(repo, cloud=cloud)
+    paid = llm.raw_calls
+    assert paid > 0 and len(list((repo / "results/runs").glob("E2-*Z.json"))) == 1  # no cloud record from a partial run
+    assert len((repo / e2.PARTIAL_REL).read_text(encoding="utf-8").splitlines()) == len(SUBSET_IDS)
+    again, cloud2 = _cloud()
+    result, _ = _go(repo, cloud=cloud2)
+    assert again.raw_calls == 0  # nothing was paid for twice
+    cl = json.loads(result["records"]["cloud"].read_text(encoding="utf-8"))
+    assert cl["claude_calls"] == paid and cl["n"] == len(SUBSET_IDS)
+    assert check("E2", root=repo, min_n=6, split="dev") == []
+    assert not (repo / e2.PARTIAL_REL).exists()
+
+
+def test_saved_rows_from_another_commit_or_subset_are_not_reused(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(e2, "pick_winner", lambda metrics: "retrieval")  # ties are broken by timing, which varies
+    llm, cloud = _cloud()
+    with monkeypatch.context() as m:
+        _fail_cloud_write(m)
+        with pytest.raises(RuntimeError):
+            _go(repo, cloud=cloud)
+    saved = (repo / e2.PARTIAL_REL).read_text(encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "local record")  # a new commit
+    other, cloud2 = _cloud()
+    _go(repo, cloud=cloud2)
+    assert other.raw_calls > 0
+    (repo / e2.PARTIAL_REL).parent.mkdir(parents=True, exist_ok=True)
+    (repo / e2.PARTIAL_REL).write_text(saved, encoding="utf-8")
+    _manifest(repo, "e2-two", SUBSET_IDS[:2])
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "second subset")
+    commit = e2.head_commit(repo)
+    rows = [json.loads(ln) for ln in saved.splitlines()]
+    (repo / e2.PARTIAL_REL).write_text("".join(json.dumps({**r, "commit": commit}) + "\n" for r in rows), encoding="utf-8")
+    third, cloud3 = _cloud()
+    _go(repo, cloud=cloud3, subset="e2-two")  # right commit, other subset
+    assert third.raw_calls > 0
+
+
+# ---------------------------------------------------------------- the cloud stage on its own
+
+def _alone(repo: Path, local_id: str, cloud: e2.Cloud, *, writer=None, wire=None):
+    return e2.run_e2_cloud_only(root=repo, local_run=local_id, writer=writer or Scripted(), judge_llm=Scripted("test-judge:1"),
+                                embedder=HashEmbedder(), ctl=OllamaCtl(request=wire or Wire()), names=NAMES,
+                                retrieval_config=RETRIEVAL, cloud=cloud, subset="e2-tiny", gpu_mb=lambda: None,
+                                say=lambda text: None)
+
+
+def test_the_cloud_stage_alone_reads_the_winner_from_a_committed_local_record(repo: Path) -> None:
+    first, _ = _go(repo)
+    local_id = first["records"]["local"].stem
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "local record")
+    writer, wire = Scripted(), Wire()
+    llm, cloud = _cloud()
+    result = _alone(repo, local_id, cloud, writer=writer, wire=wire)
+    cl = json.loads(result["records"]["cloud"].read_text(encoding="utf-8"))
+    assert set(result["records"]) == {"cloud"} and result["winner"] == first["winner"]
+    assert cl["config"]["local_run"] == local_id and cl["config"]["winner"] == first["winner"]
+    assert cl["config"]["cloud_strategy"]["chosen_by"] == "winner_rule"
+    assert cl["claude_calls"] == llm.raw_calls > 0 and cl["subset"] == "e2-tiny"
+    assert (writer.raw_calls == 0) == (first["winner"] != "retrieval_memory")  # the writer only builds memory
+    assert check("E2", root=repo, min_n=6, split="dev") == []
+    loaded = {c[2]["model"] for c in wire.calls if c[2] and c[2].get("keep_alive") not in (None, 0)}
+    assert "test-judge:1" in loaded
+
+
+def test_the_cloud_stage_alone_needs_a_committed_unchanged_local_record(repo: Path) -> None:
+    first, _ = _go(repo)
+    llm, cloud = _cloud()
+    with pytest.raises(e2.RunBroken, match="committed"):
+        _alone(repo, first["records"]["local"].stem, cloud)  # the local record is only on disk
+    assert llm.raw_calls == 0
