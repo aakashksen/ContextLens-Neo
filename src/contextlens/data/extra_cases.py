@@ -160,5 +160,33 @@ def write_extra(root: Path) -> Path:
     return write_local_manifest(SOURCE, {"dev": build_extra()}, root)
 
 
+def write_review(root: Path, n: int = 15, seed: int = 13) -> Path:
+    """A sample of n pairs for a reader: one pair of every shape, then random ones, each shown in full."""
+    by_id = {s.id: s for s in build_extra()}
+    ins_ids = [i for i in by_id if i.endswith("-ins")]
+    rng = random.Random(seed)
+    picked = [rng.choice([i for i in ins_ids if i.startswith(f"syn-xtra-{shape}-")]) for shape in SHAPES]
+    picked += rng.sample([i for i in ins_ids if i not in picked], n - len(picked))
+    lines = [f"# Extra dev cases review sample ({n} pairs, seed {seed})", "",
+             "Each pair is an insufficient-evidence case and its answerable twin. Check that the first really has no",
+             "answer up to as_of_seq (by reading or by inference), that the twin's answer is stated, and that the",
+             "gold fields are right. Mark any that are not.", ""]
+    for k, iid in enumerate(picked, 1):
+        for sc in (by_id[iid], by_id[iid.removesuffix("-ins") + "-ans"]):
+            lines += [f"## {k}. {sc.id}", f"- shape: {_shape_of(sc.id)} ({SHAPE_NOTE[_shape_of(sc.id)]}); category: {sc.category}"]
+            lines += [f"- t{t.seq} [{t.speaker}]: {t.text}" for t in sc.conversation.turns]
+            lines += [f"- as_of_seq: {sc.request.as_of_seq}", f"- question: {sc.request.question}",
+                      f"- gold_label: {sc.gold_label}", f"- gold_answer: {sc.gold_answer}",
+                      f"- gold_evidence: {sc.gold_evidence_turn_ids}", ""]
+    path = root / "datasets/scenarios/dev-extra-review.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _shape_of(sid: str) -> str:
+    return sid.removeprefix("syn-xtra-").rsplit("-", 2)[0]
+
+
 if __name__ == "__main__":
     print(write_extra(Path(".")))
+    print(write_review(Path(".")))

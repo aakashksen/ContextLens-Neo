@@ -154,3 +154,12 @@ def test_check_run_validates_a_record_of_the_new_source(tmp_path: Path):
     rec = json.loads(path.read_text(encoding="utf-8"))
     assert rec["labels_reviewed"] is False and rec["label_source"] == "unreviewed_extra"
     assert check("E1", root=tmp_path) == []
+
+
+def test_review_sample_has_15_pairs_one_of_each_shape():
+    text = (ROOT / "datasets/scenarios/dev-extra-review.md").read_text(encoding="utf-8")
+    ids = [ln.split(". ", 1)[1] for ln in text.splitlines() if ln.startswith("## ")]
+    assert len(ids) == 30 and len(set(ids)) == 30
+    ins = [i for i in ids if i.endswith("-ins")]
+    assert len(ins) == 15 and all(i.removesuffix("-ins") + "-ans" in ids for i in ins)
+    assert {_shape(i) for i in ins} == set(extra_cases.SHAPES)
