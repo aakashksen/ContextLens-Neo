@@ -35,6 +35,14 @@ def build_pairs(split: str, raw_root: Path = RAW_DIR, scenarios_root: Path = SCE
     return _decode_pairs(split, raw_root) + _scenario_pairs(split, scenarios_root)
 
 
+def assert_trainable(pairs: list[Pair], raw_root: Path = RAW_DIR, scenarios_root: Path = SCENARIOS_DIR) -> None:
+    """Stop if any pair's conversation is also in the dev or test split. Every training path calls this."""
+    for split in ("dev", "test"):
+        held = {p.conversation_id for p in build_pairs(split, raw_root, scenarios_root)}
+        if held & {p.conversation_id for p in pairs}:
+            raise RuntimeError(f"a {split} conversation reached training")
+
+
 def source_counts(pairs: list[Pair]) -> dict[str, dict[str, int]]:
     """Per source, how many pairs carry each label."""
     out: dict[str, Counter[str]] = {}

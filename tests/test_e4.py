@@ -719,3 +719,100 @@ def test_the_decode_record_says_its_score_is_binary_and_the_error_analysis_has_n
     assert "contradiction vs not only" in note and "not four-label performance" in note
     md = (repo.root / "results/error-analysis-e4.md").read_text(encoding="utf-8")
     assert "contradiction vs not only" in md and "accuracy" not in md.lower()
+
+
+# ---- phase 5 review fixes: portable checkpoint pointer, Ollama unload, shared leakage guard, caveats ----
+
+import threading  # noqa: E402
+from http.server import BaseHTTPRequestHandler, HTTPServer  # noqa: E402
+
+from contextlens.consistency.data import assert_trainable, build_pairs  # noqa: E402
+from contextlens.eval.checkpoints import chosen_checkpoint  # noqa: E402
+from contextlens.llm import client as llm_client  # noqa: E402
+
+
+def test_new_records_store_the_checkpoint_relative_and_the_helper_verifies_its_hash(repo: Repo) -> None:
+    repo.run()
+    rec = _records(repo.root)["scenarios"]
+    training = [a for a in rec["attempts"] if a["kind"] == "training"]
+    assert all(a["checkpoint"] == f"models/e4/{a['setting']}" for a in training)
+    path = chosen_checkpoint(rec, repo.root)
+    assert path == repo.root / "models/e4" / rec["config"]["winner"]
+    (path / "model.safetensors").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="sha256"):
+        chosen_checkpoint(rec, repo.root)
+
+
+def test_the_helper_finds_a_checkpoint_from_an_old_absolute_path_and_fails_loudly_when_missing(tmp_path: Path) -> None:
+    ckpt = tmp_path / "models/e4/lr1e-05_ep2"
+    ckpt.mkdir(parents=True)
+    (ckpt / "model.safetensors").write_bytes(b"weights")
+    import hashlib
+    rec = {"config": {"winner": "lr1e-05_ep2", "checkpoint_sha256": hashlib.sha256(b"weights").hexdigest()},
+           "attempts": [{"kind": "training", "setting": "lr1e-05_ep2",
+                         "checkpoint": "C:/Users/someone/Work/_worktrees/Gone/T5.2/models/e4/lr1e-05_ep2"}]}
+    assert chosen_checkpoint(rec, tmp_path) == ckpt
+    with pytest.raises(FileNotFoundError):
+        chosen_checkpoint(rec, tmp_path / "elsewhere")
+
+
+class _OllamaStub(BaseHTTPRequestHandler):
+    seen: list[tuple[str, dict]] = []
+
+    def do_POST(self) -> None:
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        _OllamaStub.seen.append((self.path, body))
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"{}")
+
+    def log_message(self, *a) -> None:
+        pass
+
+
+def test_unload_ollama_posts_keep_alive_zero() -> None:
+    _OllamaStub.seen = []
+    server = HTTPServer(("127.0.0.1", 0), _OllamaStub)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        assert llm_client.unload_ollama("m:1", f"http://127.0.0.1:{server.server_port}")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+    assert _OllamaStub.seen == [("/api/generate", {"model": "m:1", "keep_alive": 0})]
+    assert llm_client.unload_ollama("m:1", "http://127.0.0.1:9") is False  # nothing listening: reported, not raised
+
+
+def test_the_runner_unloads_the_ollama_model_even_when_the_run_fails(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    monkeypatch.setattr(e4, "unload_ollama", lambda model, *a, **k: calls.append(model))
+    with pytest.raises(RuntimeError, match="no training run finished"):
+        e4.run_and_unload(root=repo.root, raw_root=FIXTURE_RAW, base_model=str(repo.base / "missing"), device="cpu",
+                          grid=((1e-3, 2),), make_zeroshot=lambda: ZeroShotChecker(scorer=_scorer),
+                          make_prompted=lambda: PromptedChecker(_stub_llm()))
+    assert calls == [e4.PROMPTED_MODEL]
+
+
+def test_a_dev_or_test_conversation_cannot_reach_training() -> None:
+    mine = ROOT / "datasets/scenarios_train"
+    for split in ("dev", "test"):
+        held = build_pairs(split, FIXTURE_RAW, mine)
+        assert held
+        with pytest.raises(RuntimeError, match=f"{split}"):
+            assert_trainable(held[:1] + build_pairs("train", FIXTURE_RAW, mine), FIXTURE_RAW, mine)
+    assert_trainable(build_pairs("train", FIXTURE_RAW, mine), FIXTURE_RAW, mine)
+
+
+def test_training_stops_when_a_train_scenario_repeats_a_test_scenario(repo: Repo) -> None:
+    mine = ts.load_train_scenarios(repo.root / "datasets/scenarios_train")
+    (repo.root / "datasets/scenarios/test.jsonl").write_text(mine[0].model_dump_json() + "\n", encoding="utf-8")
+    dev = load_scenarios("dev", repo.root / "datasets/scenarios")
+    with pytest.raises(RuntimeError, match="held-out"):
+        e4.training_data(FIXTURE_RAW, repo.root, dev)
+
+
+def test_the_error_analysis_states_the_style_and_selection_caveats() -> None:
+    text = e4.error_analysis({"scenarios": []}, {"scenarios": []})
+    assert e4.STYLE_NOTE in text and e4.SELECTION_NOTE in text
