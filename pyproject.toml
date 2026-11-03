@@ -14,10 +14,9 @@ dev = ["pytest", "opentelemetry-api", "opentelemetry-sdk", "prometheus-client", 
 server = ["fastapi", "uvicorn", "websockets"]
 postgres = ["psycopg[binary]", "pgvector"]
 rerank = ["sentence-transformers"]
-train = ["torch", "transformers", "mlflow-skinny", "tiktoken", "sentencepiece"]
 speech = ["grpcio", "grpcio-tools"]
 diarize = ["pyannote.audio==4.0.7"]
-train = ["peft", "accelerate", "bitsandbytes"]
+train = ["torch", "transformers", "mlflow-skinny", "tiktoken", "sentencepiece", "peft", "accelerate", "bitsandbytes"]
 obs = ["opentelemetry-api", "opentelemetry-sdk", "prometheus-client"]
 
 [tool.setuptools.packages.find]
