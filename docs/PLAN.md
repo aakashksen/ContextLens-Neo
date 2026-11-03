@@ -14,7 +14,7 @@
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 1,000 Claude Code calls, on Haiku, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -120,7 +120,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 ### T2.1: Model clients
 **Files:** `src/contextlens/llm/client.py`, `tests/test_llm.py`.
 **Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model)` for vLLM; `ClaudeCodeClient(model="haiku")`; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
-**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 1,000 Claude Code calls.
+**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 5,000 Claude Code calls.
 **Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_call_cap_refuses_and_makes_no_call`; `test_claude_client_builds_expected_command_with_no_tools` (stubbed process); `test_usage_limit_raises_llm_error`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama, and one to Claude on Haiku.
 **Accept:** `{py} -m pytest tests/test_llm.py -q`.
 

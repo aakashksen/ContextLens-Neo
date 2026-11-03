@@ -35,7 +35,7 @@ def shared_root(repo_root: Path) -> Path:
 
 
 CLAUDE_CALLS_PATH = shared_root(REPO_ROOT) / "results" / "claude_calls.json"  # one counter for every worktree
-CLAUDE_CALL_CAP = 1000
+CLAUDE_CALL_CAP = 5000  # a runaway guard, not a budget
 
 
 _caller = threading.local()
@@ -357,7 +357,7 @@ def carry_over_counter(local: Path, shared: Path) -> None:
 class ClaudeCodeClient(_Base):
     def __init__(
         self,
-        model: str = "haiku",
+        model: str = "sonnet",
         calls_path: Path = CLAUDE_CALLS_PATH,
         cap: int = CLAUDE_CALL_CAP,
     ):
@@ -410,6 +410,8 @@ class ClaudeCodeClient(_Base):
             data = json.loads(proc.stdout)
         except ValueError as err:
             raise LLMError(f"claude output was not JSON: {proc.stdout[:200]}") from err
+        if not isinstance(data, dict):
+            raise LLMError(f"claude output was not an object: {proc.stdout[:200]}")
         text = str(data.get("result", ""))
         if data.get("is_error"):
             raise LLMError(f"claude reported an error: {text[:300]}")
@@ -420,7 +422,7 @@ class ClaudeCodeClient(_Base):
             prompt_tokens=usage.get("input_tokens", 0),
             completion_tokens=usage.get("output_tokens", 0),
             latency_ms=(time.perf_counter() - t0) * 1000,
-            cost_usd=float(data.get("total_cost_usd", 0.0)),
+            cost_usd=float(data.get("total_cost_usd") or 0.0),
         )
         with _locked(self.calls_path, LOCK_TIMEOUT_S):
             calls = _load_calls(self.calls_path)
