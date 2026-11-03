@@ -63,6 +63,15 @@ def grounded_per_card(rows: Rows) -> list[list[bool]] | None:
     return out
 
 
+def reference_text(s: Scenario) -> str:
+    """The clean transcript the question can see, in turn order."""
+    return " ".join(t.text for t in sorted(s.conversation.turns, key=lambda t: t.seq) if t.seq <= s.request.as_of_seq)
+
+
+def reference_spans(s: Scenario) -> list[M.Span]:
+    return [(t.start_ms, t.end_ms, t.speaker) for t in s.conversation.turns if t.seq <= s.request.as_of_seq]
+
+
 def base_name(name: str) -> str:
     return name.split("[", 1)[0]
 
@@ -213,6 +222,12 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
                     pred_sp.append(ev.speaker)
                     gold_sp.append(speaker_of[ev.turn_id])
         out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
+
+    # Speech and speaker error need the speech output on every row; with it on only some rows they are left out.
+    if want("wer") and all(p.asr_text is not None for _, p in rows) and rows:
+        out["wer"] = M.word_error_rate([reference_text(s) for s, _ in rows], [p.asr_text or "" for _, p in rows])
+    if want("der") and all(p.speaker_spans is not None for _, p in rows) and rows:
+        out["der"] = M.diarization_error_rate([reference_spans(s) for s, _ in rows], [p.speaker_spans or [] for _, p in rows])
 
     # "supports the claim" is a saved rubric judgement; without one per finding the metric is omitted
     flags = grounded_per_card(rows) if want(*JUDGED) else None
