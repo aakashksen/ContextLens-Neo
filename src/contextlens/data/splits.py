@@ -41,5 +41,5 @@ def write_manifest(name: str, root: Path = RAW_DIR, out_dir: Path = SPLITS_DIR) 
 
 
 if __name__ == "__main__":
-    for ds in ("longmemeval", "ami"):
+    for ds in ("longmemeval", "ami", "qmsum"):
         print(write_manifest(ds))

@@ -74,8 +74,10 @@ def test_qmsum_loader():
     (c,) = load_dataset("qmsum", FIX)
     assert [t.speaker for t in c.turns] == ["Alice", "Bob", "Alice"]
     assert c.split == "dev"
-    (s,) = load_gold("qmsum", FIX)
-    assert s.origin == "dataset"
+    general, s = load_gold("qmsum", FIX)
+    # the real data gives general queries no span, and a specific query's spans may overlap
+    assert general.gold_evidence_turn_ids == [] and general.request.question == "Summarize the meeting."
+    assert s.origin == "dataset" and s.id == f"{c.id}-q1"
     assert s.gold_evidence_turn_ids == [f"{c.id}:t1", f"{c.id}:t2"]
     assert s.gold_answer == "Ship on Friday."
     assert s.request.question == "What did Alice decide?" and s.request.as_of_seq == 2

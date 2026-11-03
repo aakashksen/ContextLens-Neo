@@ -124,11 +124,10 @@ def _gold_qmsum(root: Path) -> list[Scenario]:
         queries = [("general", q) for q in rec.get("general_query_list", [])]
         queries += [("specific", q) for q in rec.get("specific_query_list", [])]
         for n, (kind, q) in enumerate(queries):
-            evidence = [
-                f"{cid}:t{i}"
-                for start, end in q.get("relevant_text_span", [])
-                for i in range(int(start), int(end) + 1)
-            ]
+            # Spans are [start, end] as strings, both ends inclusive, and may overlap (checked on the real data);
+            # general queries have no span.
+            indices = [i for start, end in q.get("relevant_text_span", []) for i in range(int(start), int(end) + 1)]
+            evidence = [f"{cid}:t{i}" for i in dict.fromkeys(indices)]
             out.append(Scenario(
                 id=f"{cid}-q{n}", conversation=conv, category=f"qmsum-{kind}",
                 request=ButtonRequest(conversation_id=cid, as_of_seq=len(conv.turns) - 1, question=q["query"]),
