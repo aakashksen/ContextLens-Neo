@@ -88,7 +88,7 @@ def test_wrong_interval_fails(repo: Path) -> None:
 
 
 def test_interval_that_cannot_be_recomputed_fails(repo: Path) -> None:
-    _two(repo, intervals={"single": {"macro_f1": (0.1, 0.9)}})
+    _two(repo, intervals={"single": {"word_error_rate": (0.1, 0.9)}})
     assert any("interval" in p and "cannot be recomputed" in p for p in check("E1", root=repo))
     _two(repo, intervals={"ghost": {"label_accuracy": (0.1, 0.9)}})
     assert any("ghost" in p for p in check("E1", root=repo))

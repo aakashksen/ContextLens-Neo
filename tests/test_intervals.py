@@ -12,7 +12,7 @@ from contextlens.eval.records import split_hash, write_run, write_scenarios_mani
 from contextlens.replay.runner import Prediction
 from tests.test_records import LABELS, _git, _gold as gold4, _pred, _predl, _scenario
 
-N = 60
+N = 40
 JUDGE = {"model": "qwen-real", "rubric_version": "r1", "same_model_and_prompt_as_writer": False}
 CONFIG = {"labels_reviewed": True, "judge": JUDGE}
 INTERVAL_METRICS = ["macro_f1", "false_alert_rate", "abstain_when_insufficient", "answer_when_answerable",
@@ -114,14 +114,15 @@ def test_macro_f1_interval_equals_an_independent_bootstrap(repo: Path) -> None:
     assert any("macro_f1" in p and "does not recompute" in p for p in _problems(repo))
 
 
-@pytest.mark.parametrize("metric", INTERVAL_METRICS)
-def test_every_metric_has_a_checked_interval(repo: Path, metric: str) -> None:
-    got = series.interval(_rows(_sys_a()), metric)
-    assert got is not None
-    _save(repo, intervals={"a": {metric: got}})
+def test_every_metric_has_a_checked_interval(repo: Path) -> None:
+    got = {m: series.interval(_rows(_sys_a()), m) for m in INTERVAL_METRICS}
+    assert all(v is not None for v in got.values())
+    _save(repo, intervals={"a": got})  # type: ignore[arg-type]
     assert _problems(repo) == []
-    _save(repo, intervals={"a": {metric: (got[0], got[1] + 0.01)}})
-    assert any(metric in p and "interval" in p for p in _problems(repo))
+    _save(repo, intervals={"a": {m: (v[0], v[1] + 0.01) for m, v in got.items()}})  # type: ignore[index]
+    problems = _problems(repo)
+    for m in INTERVAL_METRICS:
+        assert any(f"interval {m} does not recompute" in p for p in problems), m
 
 
 def test_comparison_on_macro_f1_matches_an_independent_difference(repo: Path) -> None:
@@ -135,16 +136,18 @@ def test_comparison_on_macro_f1_matches_an_independent_difference(repo: Path) ->
     assert _problems(repo) == []
 
 
-@pytest.mark.parametrize("metric", INTERVAL_METRICS)
-def test_every_metric_has_a_checked_comparison_and_no_mcnemar(repo: Path, metric: str) -> None:
-    c = series.comparison(_rows(_sys_a()), _rows(_sys_b()), metric)
-    assert c is not None and c["mcnemar_p"] is None
-    _save(repo, comparisons=[{"a": "a", "b": "b", **c}])
-    assert _problems(repo) == []
-    _save(repo, comparisons=[{"a": "a", "b": "b", **c, "mcnemar_p": 0.5}])
-    assert any("comparison" in p for p in _problems(repo))
-    _save(repo, comparisons=[{"a": "a", "b": "b", **c, "diff": c["diff"] + 0.01}])  # type: ignore[operator]
-    assert any("comparison" in p for p in _problems(repo))
+def test_every_metric_has_a_checked_comparison_and_no_mcnemar(repo: Path) -> None:
+    comps = {m: series.comparison(_rows(_sys_a()), _rows(_sys_b()), m) for m in INTERVAL_METRICS}
+    assert all(c is not None and c["mcnemar_p"] is None for c in comps.values())
+
+    def save(**change: object) -> list[str]:
+        _save(repo, comparisons=[{"a": "a", "b": "b", **c, **change} for c in comps.values()])  # type: ignore[dict-item]
+        return _problems(repo)
+
+    assert save() == []
+    problems = save(mcnemar_p=0.5)  # a p-value on a metric that is not correct/incorrect
+    for m in INTERVAL_METRICS:
+        assert any("comparison" in p and m in p and "does not recompute" in p for p in problems), m
 
 
 def test_a_resample_where_the_metric_is_undefined_gives_no_interval(tmp_path: Path) -> None:

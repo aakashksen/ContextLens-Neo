@@ -1,12 +1,15 @@
-"""Per-unit values behind a metric, so an interval or a paired comparison can be recomputed from
-saved prediction rows. A series is None when a source field is missing on any row, or when no unit
-exists: that value is then not recomputable."""
+"""Metric values recomputed from saved prediction rows, and the intervals and paired comparisons
+built on them. An interval or comparison resamples whole conversations and recomputes the actual
+metric on each resample with the same functions as `base_metrics`; it is None when the metric is
+undefined on the data or on any resample, because dropping those resamples would bias the interval
+toward the defined cases."""
+import random
 import re
-from collections.abc import Sequence
+from collections import defaultdict
+from collections.abc import Iterable, Iterator, Sequence
 
 from contextlens.eval import metrics as M
-from collections.abc import Iterable
-from contextlens.eval.stats import bootstrap_ci, mcnemar_exact, paired_bootstrap_diff, percentile
+from contextlens.eval.stats import mcnemar_exact, percentile
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Card, Scenario
 
@@ -14,11 +17,11 @@ Metrics = dict[str, float | None]
 Rows = Sequence[tuple[Scenario, Prediction]]
 SEED = 13
 RESAMPLES = 10_000
-Unit = tuple[str, str, float]  # scenario id, conversation id, value
+Unit = tuple[str, float]  # scenario id, 1.0 when correct
 
-PER_SCENARIO = ("label_accuracy", "mrr", "recall@", "tokens_per_card", "cost_usd_per_card", "schema_valid_rate")
 BINARY = ("label_accuracy", "schema_valid_rate", "recall@")
 JUDGED = ("grounded_rate", "unsupported_claim_rate")
+GROUP_SUFFIX = re.compile(r"^(.*)\[(category|origin)=(.*)\]$")
 
 
 def label_of(card: Card) -> str:
@@ -60,85 +63,98 @@ def _is(name: str, group: tuple[str, ...]) -> bool:
     return any(name == g or (g.endswith("@") and re.fullmatch(re.escape(g) + r"\d+", name)) for g in group)
 
 
-def is_per_scenario(name: str) -> bool:
-    return _is(name, PER_SCENARIO)
-
-
 def is_binary(name: str) -> bool:
+    """A series of correct/incorrect outcomes, which McNemar's test may be applied to."""
     return _is(name, BINARY)
 
 
 def units(rows: Rows, name: str) -> list[Unit] | None:
-    carded = all(p.card is not None for _, p in rows)
-    out: list[Unit] = []
+    """Correct/incorrect outcome per scenario for a binary metric, or None when not recomputable."""
     if name == "label_accuracy":
-        if not carded:
+        if any(p.card is None for _, p in rows):
             return None
-        out = [(s.id, s.conversation.id, float(label_of(p.card) == s.gold_label))  # type: ignore[arg-type]
+        out = [(s.id, float(label_of(p.card) == s.gold_label))  # type: ignore[arg-type]
                for s, p in rows if s.gold_label]
-    elif name in ("tokens_per_card", "cost_usd_per_card"):
-        if not carded:
-            return None
-        out = [(s.id, s.conversation.id, float(p.card.tokens if name == "tokens_per_card" else p.card.cost_usd))  # type: ignore[union-attr]
-               for s, p in rows]
     elif name == "schema_valid_rate":
         if any(p.raw_output is None for _, p in rows):
             return None
-        out = [(s.id, s.conversation.id, float(schema_valid(p.raw_output or ""))) for s, p in rows]
-    elif name == "mrr" or re.fullmatch(r"recall@\d+", name):
+        out = [(s.id, float(schema_valid(p.raw_output or ""))) for s, p in rows]
+    elif re.fullmatch(r"recall@\d+", name):
         need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
         if any(p.ranked_turn_ids is None for _, p in need):
             return None
-        for s, p in need:
-            ranked = p.ranked_turn_ids or []
-            if name == "mrr":
-                rank = M.first_gold_rank(ranked, s.gold_evidence_turn_ids)
-                v = 1.0 / rank if rank else 0.0
-            else:
-                v = M.recall_at_k(ranked, s.gold_evidence_turn_ids, int(name.split("@")[1])) or 0.0
-            out.append((s.id, s.conversation.id, v))
-    elif name in JUDGED:
-        flags = grounded_per_card(rows)
-        if flags is None:
-            return None
-        for (s, _), fl in zip(rows, flags):
-            if name == "grounded_rate":
-                out += [(s.id, s.conversation.id, float(x)) for x in fl]
-            elif fl:
-                out.append((s.id, s.conversation.id, sum(not x for x in fl) / len(fl)))
-    elif name == "speaker_accuracy":
-        for s, p in rows:
-            speaker_of = {t.id: t.speaker for t in s.conversation.turns}
-            for f in (p.card.findings if p.card else []):
-                out += [(s.id, s.conversation.id, float(ev.speaker == speaker_of[ev.turn_id]))
-                        for ev in f.evidence if ev.turn_id in speaker_of]
+        out = [(s.id, M.recall_at_k(p.ranked_turn_ids or [], s.gold_evidence_turn_ids,
+                                    int(name.split("@")[1])) or 0.0) for s, p in need]
     else:
         return None
     return out or None
 
 
+def metric_value(rows: Rows, name: str) -> float | None:
+    """One metric on these rows, by the same functions `recompute_metrics` uses. `name[category=x]`
+    and `name[origin=y]` restrict to those scenarios first. None when undefined or unknown."""
+    found = GROUP_SUFFIX.match(name)
+    if found:
+        inner, key, value = found.groups()
+        return metric_value([(s, p) for s, p in rows if getattr(s, key) == value], inner)
+    if name == "label_accuracy":
+        u = units(rows, name)
+        return M.mean([v for _, v in u]) if u else None
+    ks = [int(k) for k in re.findall(r"^recall@(\d+)$", name)]
+    return base_metrics(rows, ks, only=name).get(name)
+
+
+def _resamples(rows: Rows, n: int, seed: int) -> Iterator[list[int]]:
+    """Whole-conversation resamples as row positions: draw as many conversations as there are,
+    with replacement."""
+    groups: dict[str, list[int]] = defaultdict(list)
+    for i, (s, _) in enumerate(rows):
+        groups[s.conversation.id].append(i)
+    buckets = list(groups.values())
+    rng = random.Random(seed)
+    for _ in range(n):
+        yield [i for b in [rng.randrange(len(buckets)) for _ in buckets] for i in buckets[b]]
+
+
 def interval(rows: Rows, name: str) -> tuple[float, float] | None:
-    u = units(rows, name)
-    if u is None:
+    """95% bootstrap interval of the metric (seed 13, 10,000 resamples of whole conversations).
+    None when the metric is undefined on the rows or on any resample."""
+    if not rows or metric_value(rows, name) is None:
         return None
-    return bootstrap_ci([v for _, _, v in u], [g for _, g, _ in u], RESAMPLES, SEED)
+    vals = []
+    for pos in _resamples(rows, RESAMPLES, SEED):
+        v = metric_value([rows[i] for i in pos], name)
+        if v is None:
+            return None
+        vals.append(v)
+    return percentile(vals, 2.5), percentile(vals, 97.5)
 
 
 def comparison(a_rows: Rows, b_rows: Rows, name: str) -> dict[str, object] | None:
-    """a minus b on one per-scenario series: mean difference, its 95% interval, and, for a
-    correct/incorrect series, the exact McNemar p-value."""
-    if not is_per_scenario(name):
+    """a minus b on one metric: the difference on all rows, a 95% interval from resampling the same
+    conversations for both systems, and, for a correct/incorrect metric, the exact McNemar p-value.
+    None when the systems cover different cases or the metric is undefined for either, on all rows
+    or on any resample."""
+    if [s.id for s, _ in a_rows] != [s.id for s, _ in b_rows] or not a_rows:
         return None
-    ua, ub = units(a_rows, name), units(b_rows, name)
-    if ua is None or ub is None or [x[0] for x in ua] != [x[0] for x in ub]:
+    va, vb = metric_value(a_rows, name), metric_value(b_rows, name)
+    if va is None or vb is None:
         return None
-    va, vb = [v for _, _, v in ua], [v for _, _, v in ub]
-    diff, lo, hi = paired_bootstrap_diff(va, vb, [g for _, g, _ in ua], RESAMPLES, SEED)
-    p = mcnemar_exact([v == 1.0 for v in va], [v == 1.0 for v in vb]) if is_binary(name) else None
-    return {"metric": name, "diff": diff, "ci": [lo, hi], "mcnemar_p": p}
-
-
-Metrics = dict[str, float | None]
+    diffs = []
+    for pos in _resamples(a_rows, RESAMPLES, SEED):
+        x = metric_value([a_rows[i] for i in pos], name)
+        y = metric_value([b_rows[i] for i in pos], name)
+        if x is None or y is None:
+            return None
+        diffs.append(x - y)
+    p = None
+    if is_binary(name):
+        ua, ub = units(a_rows, name), units(b_rows, name)
+        if ua is None or ub is None or [i for i, _ in ua] != [i for i, _ in ub]:
+            return None
+        p = mcnemar_exact([v == 1.0 for _, v in ua], [v == 1.0 for _, v in ub])
+    return {"metric": name, "diff": va - vb, "ci": [percentile(diffs, 2.5), percentile(diffs, 97.5)],
+            "mcnemar_p": p}
 
 
 def _complete(present: list[bool]) -> bool | None:
@@ -148,46 +164,53 @@ def _complete(present: list[bool]) -> bool | None:
     return None if not any(present) else False
 
 
-def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int]) -> Metrics:
-    """A metric whose source field is on only some rows is left out, so it cannot be saved."""
+def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], only: str | None = None) -> Metrics:
+    """A metric whose source field is on only some rows is left out, so it cannot be saved.
+    With `only`, just the metric of that name is computed."""
+    def want(*names: str) -> bool:
+        return only is None or only in names
+
+    out: Metrics = {}
     carded = [(s, p, p.card) for s, p in rows if p.card is not None]
-    labelled = [(s.gold_label, label_of(c)) for s, _, c in carded if s.gold_label]
-    gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
-    out: Metrics = {
-        "macro_f1": M.macro_f1(gold, pred),
-        "false_alert_rate": M.false_alert_rate(gold, pred),
-        **M.abstention_accuracy(
+    if want("macro_f1", "false_alert_rate"):
+        labelled = [(s.gold_label, label_of(c)) for s, _, c in carded if s.gold_label]
+        gold, pred = [g for g, _ in labelled], [q for _, q in labelled]
+        out["macro_f1"] = M.macro_f1(gold, pred)
+        out["false_alert_rate"] = M.false_alert_rate(gold, pred)
+    if want("abstain_when_insufficient", "answer_when_answerable"):
+        out.update(M.abstention_accuracy(
             [c.status == "abstained" for _, _, c in carded],
             [s.gold_label == "insufficient" for s, _, _ in carded],
-        ),
-        "tokens_per_card": M.mean([float(c.tokens) for _, _, c in carded]),
-        "cost_usd_per_card": M.mean([c.cost_usd for _, _, c in carded]),
-    }
+        ))
+    if want("tokens_per_card"):
+        out["tokens_per_card"] = M.mean([float(c.tokens) for _, _, c in carded])
+    if want("cost_usd_per_card"):
+        out["cost_usd_per_card"] = M.mean([c.cost_usd for _, _, c in carded])
 
-    pred_sp: list[str] = []
-    gold_sp: list[str] = []
-    for s, _, c in carded:
-        speaker_of = {t.id: t.speaker for t in s.conversation.turns}
-        for ev in (e for f in c.findings for e in f.evidence):
-            if ev.turn_id in speaker_of:
-                pred_sp.append(ev.speaker)
-                gold_sp.append(speaker_of[ev.turn_id])
-    out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
+    if want("speaker_accuracy"):
+        pred_sp: list[str] = []
+        gold_sp: list[str] = []
+        for s, _, c in carded:
+            speaker_of = {t.id: t.speaker for t in s.conversation.turns}
+            for ev in (e for f in c.findings for e in f.evidence):
+                if ev.turn_id in speaker_of:
+                    pred_sp.append(ev.speaker)
+                    gold_sp.append(speaker_of[ev.turn_id])
+        out["speaker_accuracy"] = M.speaker_accuracy(pred_sp, gold_sp)
 
     # "supports the claim" is a saved rubric judgement; without one per finding the metric is omitted
-    flags = grounded_per_card(rows)
+    flags = grounded_per_card(rows) if want(*JUDGED) else None
     if flags is not None:
         flat = [x for fl in flags for x in fl]
         out["grounded_rate"] = sum(flat) / len(flat) if flat else None
         out["unsupported_claim_rate"] = M.unsupported_claim_rate(flags)
 
-    raws = _complete([p.raw_output is not None for _, p in rows])
+    raws = _complete([p.raw_output is not None for _, p in rows]) if want("schema_valid_rate") else False
     if raws is not False:
-        out["schema_valid_rate"] = M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output]) \
-            if raws else None
+        out["schema_valid_rate"] = M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output])             if raws else None
 
     need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
-    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need])
+    has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need])         if want("mrr", *(f"recall@{k}" for k in ks)) else False
     if has_ranks is not False:
         ranked = [(s, p.ranked_turn_ids or []) for s, p in need] if has_ranks else []
         out["mrr"] = M.mrr([M.first_gold_rank(r, s.gold_evidence_turn_ids) for s, r in ranked])
@@ -197,9 +220,11 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int]) -> 
 
     stage_names = {name for _, p in rows for name in p.stage_latency_ms}
     for name in sorted(stage_names | {"total"}):
+        suffix = "" if name == "total" else f"[stage={name}]"
+        if not want(f"latency_p50_ms{suffix}", f"latency_p95_ms{suffix}"):
+            continue
         if name in stage_names and not all(name in p.stage_latency_ms for _, p in rows):
             continue
-        suffix = "" if name == "total" else f"[stage={name}]"
         vals = [float(p.stage_latency_ms[name]) for _, p in rows if name in p.stage_latency_ms]
         out[f"latency_p50_ms{suffix}"] = percentile(vals, 50) if vals else None
         out[f"latency_p95_ms{suffix}"] = percentile(vals, 95) if vals else None
