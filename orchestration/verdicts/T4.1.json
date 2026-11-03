@@ -1,0 +1,25 @@
+{
+  "task": "T4.1",
+  "commit": "19b3d62dc6017bc6a109058cf18d26b240fb2b0f",
+  "verdict": "PASS",
+  "checks": [
+    {"item": "HEAD equals commit, tree clean", "result": "pass", "evidence": "git rev-parse HEAD = 19b3d62...; git status --short in worktree empty"},
+    {"item": "Evidence log", "result": "pass", "evidence": "orchestration/evidence/T4.1.log: test_team.py 14 passed at this commit, RESULT PASS; I reran test_team, test_single_agent, test_no_raw_text: 113 passed; ruff clean"},
+    {"item": "Diff vs 61169ef limited to graph.py timing and tests; no weakened test", "result": "pass", "evidence": "git diff --stat: graph.py (+12/-5) and tests/test_team.py only. Removed test lines are the old private-context assertions, replaced by strictly stronger ones (tool-result marker, zebra, ids, quotes, follow-up case). No secrets; legacy untouched"},
+    {"item": "Per-agent timings with follow-up (own stubs, t_time2.py)", "result": "pass", "evidence": "Memory 200ms, consistency 500ms (+500 follow-up), assistance 2x150ms, follow-up to consistency: memory_ms 202, consistency_ms 1003, assistance_ms 302, wall 1318, card.latency_ms 1316. Assistance excludes follow-up, specialist includes it, latency is wall clock. Follow-up with all 100ms stubs: 202/101/203, wall 411"},
+    {"item": "Timing when follow-up hangs / call abandoned", "result": "pass", "evidence": "memory follow-up hangs, deadline 1.0s: partial, missing lists 'memory: deadline reached', 'assistance: deadline reached' and incomplete-tokens note; memory_ms 1301, assistance_ms 101 (follow-up wait not charged to assistance), wall 1509 (deadline+margin). Both-hang case abstained in 0.81s with deadline 0.3"},
+    {"item": "Timing test flakiness", "result": "pass", "evidence": "test_per_agent_time... run 5x idle: 5/5 pass; 5x with 2xCPU-count busy-loop processes: 5/5 pass. Reverting graph.py to 61169ef makes it fail, so it detects the old bug"},
+    {"item": "Isolation mutations", "result": "pass", "evidence": "Assistance prompt gets evidence quote: test fails; gets turn id: fails; a shared module-level message list that leaks memory's tool results to consistency: test_agents_do_not_share_private_context fails. Each restored by git checkout of the path"},
+    {"item": "Follow-up escape, forced labels, follow-up limit", "result": "pass", "evidence": "specialist.py escape(request)->request: 1 failed; forced update={} : fails; only kind forced: fails; only agent forced: fails; decide() limit removed: fails; follow-up request dropped in graph: fails"},
+    {"item": "Injection covers kept finding to Assistance and follow-up path", "result": "pass", "evidence": "Test lines added in test_injection...: kept finding reaches Assistance without the injected text, no follow-up from specialist output; assistance-asked follow-up reply is verified, invented-quote finding dropped, suggestion None. My test_obey_each and forged-finding script: injected text escaped (&lt;/findings&gt;) in the assistance prompt"},
+    {"item": "Parallelism, deadlines, guard, number rule, future-turn/low-confidence, abandoned-call cap", "result": "pass", "evidence": "t_own.py reran: both-hang abstained <1s; assist-hang partial; memory/consistency overlap (wall 0.61 for 0.6 memory); number not in quote dropped; future turn t4 excluded from findings; abandoned-call cap yields 'too many earlier model calls are still running' with abstained, no hang"}
+  ],
+  "own_tests": [
+    {"input": "t_time2.py: follow-up to consistency, follow-up to memory, follow-up hang with 1s deadline", "result": "assistance_ms excludes follow-up; specialist ms includes it; latency_ms = wall; matches expected values within a few ms"},
+    {"input": "t_own.py (rerun): both hang, assistance hang, number rule, forged finding text, injection obey, 6 repeated abandoned runs", "result": "all abstained/partial within deadline plus margin; forged tags escaped; injection text did not change findings; caps hold"},
+    {"input": "Mutations of assistance_agent.py (quote, turn id), specialist.py (escape, labels), shared tool-result list, decide limit, graph follow-up text", "result": "each caused at least one test_team failure; all restored, git status clean"},
+    {"input": "Timing test x5 idle and x5 under CPU burn", "result": "10/10 passed"}
+  ],
+  "failures": [],
+  "notes": "A non-LLMError exception (RuntimeError raised inside a FakeLLM._raw) in the assistance agent propagates out of team.answer rather than giving a card; real clients wrap errors as LLMError, so it is not a stated requirement, but worth hardening. Wall time on a hung call can exceed the deadline by the margin (about 0.5s, 1.5s vs 1.0s deadline); this is by design. After repeated hangs, abandoned threads accumulate until a cap makes later calls fail fast (abstained, not a hang)."
+}

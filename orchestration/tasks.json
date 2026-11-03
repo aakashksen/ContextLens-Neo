@@ -377,7 +377,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_team.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T07:05:56+00:00",
+      "verified": {
+        "commit": "19b3d62dc6017bc6a109058cf18d26b240fb2b0f",
+        "passed": true,
+        "at": "2026-11-03T07:36:42+00:00"
+      },
+      "attempts": 1,
+      "reason": "assistance_ms includes follow-up time already in the specialist's own ms; isolation test passes when Assistance gets raw quotes; follow-up escape and forced agent labels are untested",
+      "done_at": "2026-11-03T07:43:06+00:00"
     },
     {
       "id": "T4.2",
@@ -475,12 +484,12 @@
       "worktree": "<local path>",
       "started_at": "2026-11-03T06:23:49+00:00",
       "verified": {
-        "commit": "314bab5a64f9574b002bb5b0c90031ba30ae7793",
+        "commit": "6968ed45fb6b8b23c83092b5885730532d4ae6c5",
         "passed": true,
-        "at": "2026-11-03T06:41:24+00:00"
+        "at": "2026-11-03T07:31:23+00:00"
       },
-      "attempts": 1,
-      "reason": "44 of 148 abstained examples still show gold turns because MAX_GOLD=4 cuts spans and leftovers stay in the pool; answered examples quote only 4 turns of a span; no test covers it"
+      "attempts": 2,
+      "reason": "_check_train_scenarios compares whole turns exactly, so a dev conversation with one word edited per turn passes into training"
     },
     {
       "id": "T6.2",
