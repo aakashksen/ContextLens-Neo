@@ -51,10 +51,15 @@ class PyannoteBackend:
 
     def __init__(self) -> None:
         import torch
+        from unittest import mock
+
         from pyannote.audio import Pipeline
 
         self._torch = torch
-        self._pipeline = Pipeline.from_pretrained(self.MODEL, token=hf_token())
+        # pyannote 4 always fetches a PLDA from the separate, gated community-1 repo, but 3.1 clusters
+        # agglomeratively and never uses it, so it is not fetched.
+        with mock.patch("pyannote.audio.pipelines.speaker_diarization.get_plda", return_value=None):
+            self._pipeline = Pipeline.from_pretrained(self.MODEL, token=hf_token())
         if self._pipeline is None:
             raise RuntimeError("pyannote could not load its pipeline; check that the model terms were accepted")
 

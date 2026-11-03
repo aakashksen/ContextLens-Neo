@@ -83,6 +83,15 @@ License: The code is MIT (https://github.com/pyannote/pyannote-audio/blob/develo
 Access: Gated. Accept the terms on HF and use a read token, which is the person's step in `docs/HUMAN-GATES.md`.
 Approved: yes, by the person on 2026-11-02, who accepted the model's terms on Hugging Face. Original finding: the access gate requires accepting model terms I could not read, so the license cannot be confirmed from the model card. The person can accept the terms and decide.
 
+### Chosen for the backend (T8.2)
+
+Chosen: pyannote `speaker-diarization-3.1`, in `src/contextlens/speech/diarize.py` (`PyannoteBackend`). Reason: the person accepted its terms and put an `HF_TOKEN` in `.env`, and it ran in memory on the CPU. Checked in the installed pyannote.audio 4.0.7: `Pipeline.__call__` takes `{"waveform": (channel, time) tensor, "sample_rate": int}` (`core/io.py`), and the pipeline code writes no file (the only `tempfile` uses are in training and preview code); a real run with file-write spies saw no writes (`tests/test_diarize_real.py`, real-marked).
+- Not streaming, so it runs in the background over the retained audio (at most the last 2 minutes). A turn is sent as `unknown` (confidence 0.0); when the run finishes the stored turn gets its speaker, so cards show it. The client contract has no message that updates a sent turn, and resending the turn would show it twice in clients that append, so clients that only watch `transcript` messages keep seeing `unknown`. Showing it live needs a contract addition, which this task did not make.
+- pyannote 4.0.7 always loads a PLDA from the separate gated repo `pyannote/speaker-diarization-community-1`, whose terms are not accepted. 3.1 clusters agglomeratively and never uses it, so the load is patched to skip that fetch. Nothing from community-1 is downloaded.
+- CPU speed, one run: loading took 22 s (includes the first download); diarizing 20 s of audio took 5.2 s.
+- Install: `pip install -c constraints pyannote.audio` with `torch==2.11.0+cu128`, `transformers==5.22.1`, `numpy==2.5.4` held, so the venv's torch is not replaced (without the constraint pip would move torch to 2.15). It adds torchaudio 2.11.1, lightning and others; `pip check` is clean. Extra: `pip install -e .[diarize]`.
+- The token is read from `HF_TOKEN` in the environment or `.env`, only when the backend loads. Weights are in the Hugging Face cache, not in git.
+
 ## Diarization alternative: NVIDIA Sortformer (diar_streaming_sortformer_4spk-v2)
 
 URL: https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2 (model card and API https://huggingface.co/api/models/nvidia/diar_streaming_sortformer_4spk-v2); runtime NeMo https://github.com/NVIDIA/NeMo.
