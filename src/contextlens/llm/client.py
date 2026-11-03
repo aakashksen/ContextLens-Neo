@@ -23,7 +23,9 @@ CLAUDE_CALL_CAP = 1000
 
 
 class LLMError(Exception):
-    pass
+    def __init__(self, *args: object, results: list[LLMResult] | None = None) -> None:
+        super().__init__(*args)
+        self.results = results or []  # model replies received before the failure
 
 
 class LLMResult(BaseModel):
@@ -88,11 +90,19 @@ class _Base:
             {"role": "assistant", "content": res.text},
             {"role": "user", "content": note},
         ]
-        res2 = self._raw(retry, schema, max_tokens, temperature, timeout_s)
+        try:
+            res2 = self._raw(retry, schema, max_tokens, temperature, timeout_s)
+        except LLMError as err:
+            err.results = [res]
+            raise
         try:
             res2.parsed = _parse(res2.text, schema)
         except (ValidationError, ValueError) as err:
-            raise LLMError(f"output failed schema validation twice: {err}") from err
+            raise LLMError(f"output failed schema validation twice: {err}", results=[res, res2]) from err
+        res2.prompt_tokens += res.prompt_tokens  # both attempts were paid for
+        res2.completion_tokens += res.completion_tokens
+        res2.cost_usd += res.cost_usd
+        res2.latency_ms += res.latency_ms
         return res2
 
 
