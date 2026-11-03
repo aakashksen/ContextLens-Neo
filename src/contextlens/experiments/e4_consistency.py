@@ -43,6 +43,8 @@ SPLIT = "dev"
 SOURCES = ("scenarios", "decode")
 GRID = tuple((lr, epochs) for lr in (1e-5, 2e-5, 3e-5) for epochs in (2, 3))  # 6 runs, the most the plan allows
 BATCH_SIZE = 8
+MIN_BATCH_SIZE = 2  # out of memory halves the batch size down to this; below it the setting is recorded as failed
+NUM_WORKERS = 2  # tokenising worker processes; the model step is the slow part, so two keep the GPU fed without crowding the CPU
 PATIENCE = 1
 DECODE_TRAIN_N = 8000  # DECODE train pairs used, a fixed sample
 DECODE_DEV_N = 1000  # DECODE dev pairs scored, a fixed sample
@@ -62,6 +64,9 @@ SAMPLE_RULE = ("pairs ordered by sha256 of conversation_id|label|statement, the 
                "DECODE train sample and the DECODE dev sample")
 STYLE_NOTE = ("training used our own writing style (the train-only scenario set was written for this project, like the "
               "dev and test scenarios), so scores on our scenarios could look better than real use")
+BATCH_NOTE = ("on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more "
+              "optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not "
+              "adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like")
 DECODE_NOTE = ("DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are "
                "accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used "
                "for no training; DECODE test is untouched.")
@@ -151,33 +156,77 @@ def _free() -> None:
         pass
 
 
+def _say(text: str) -> None:
+    print(text, flush=True)
+
+
+def is_oom(exc: BaseException) -> bool:
+    return "out of memory" in str(exc).lower() or type(exc).__name__ == "OutOfMemoryError"
+
+
+def _batch_sizes() -> list[int]:
+    sizes, n = [], BATCH_SIZE
+    while n >= MIN_BATCH_SIZE:
+        sizes.append(n)
+        n //= 2
+    return sizes
+
+
 def search(base_model: str, data: TrainingData, dev: list[cm.Example], *, device: str, root: Path, grid=GRID,
-           say=print) -> list[dict[str, Any]]:
-    """Every setting of the grid, in order. A run that errors is listed with its error and the search goes on."""
+           say=_say, num_workers: int = 0) -> list[dict[str, Any]]:
+    """Every setting of the grid, in order. A run that errors is listed with its error and the search goes on. Out of
+    memory is not a failure at first: the setting is retried from the pretrained weights at half the batch size, down to
+    MIN_BATCH_SIZE, and each try is listed in `oom_retries`. `batch_size` is the one the result came from."""
     attempts = []
+    reported = False
     for lr, epochs in grid:
         name = f"lr{lr:g}_ep{epochs}"
         out = root / CHECKPOINTS / name
         row: dict[str, Any] = {"setting": name, "lr": lr, "epochs": epochs, "ok": False, "error": None,
-                               "best_epoch": None, "dev_macro_f1": None, "history": [], "checkpoint": out.as_posix()}
+                               "best_epoch": None, "dev_macro_f1": None, "history": [], "checkpoint": out.as_posix(),
+                               "batch_size": BATCH_SIZE, "lowered_batch_size": False, "oom_retries": [],
+                               "device": device, "seconds_per_epoch": None, "peak_gpu_memory_mb": None,
+                               "peak_gpu_memory_note": None}
         say(f"training {name}")
-        model = tokenizer = None
-        try:
-            model, tokenizer = cm.load_pretrained(base_model)
-            model.to(device)
-            params = {"lr": lr, "epochs": epochs, "batch_size": BATCH_SIZE, "base_model": base_model, **data.counts}
-            with ct.mlflow_run(root / MLRUNS, "E4", {"setting": name, **params}) as log:
-                res = ct.fit(model, tokenizer, data.examples, dev, lr=lr, epochs=epochs, batch_size=BATCH_SIZE,
-                             patience=PATIENCE, out_dir=out, freeze_embeddings=True, log=log, meta=params)
-            row.update(ok=True, best_epoch=res.best_epoch, dev_macro_f1=res.best_macro_f1, history=res.history)
-            say(f"  best epoch {res.best_epoch}, dev macro-F1 {res.best_macro_f1:.4f}")
-        except Exception as exc:  # out of memory included: the setting is recorded as failed and the search goes on
-            row["error"] = f"{type(exc).__name__}: {exc}"
-            say(f"  failed: {row['error']}")
-        finally:
-            del model, tokenizer
-            _free()
+        for bs in _batch_sizes():
+            row["batch_size"] = bs
+            row["lowered_batch_size"] = bs != BATCH_SIZE
+            model = tokenizer = None
+            oom = None
+            try:
+                model, tokenizer = cm.load_pretrained(base_model)
+                model.to(device)
+                params = {"lr": lr, "epochs": epochs, "batch_size": bs, "base_model": base_model, "device": device,
+                          "num_workers": num_workers, **data.counts}
+                with ct.mlflow_run(root / MLRUNS, "E4", {"setting": name, **params}) as log:
+                    res = ct.fit(model, tokenizer, data.examples, dev, lr=lr, epochs=epochs, batch_size=bs,
+                                 patience=PATIENCE, out_dir=out, freeze_embeddings=True, log=log, meta=params,
+                                 num_workers=num_workers)
+                row.update(ok=True, error=None, best_epoch=res.best_epoch, dev_macro_f1=res.best_macro_f1,
+                           history=res.history, seconds_per_epoch=res.seconds_per_epoch,
+                           peak_gpu_memory_mb=res.peak_gpu_memory_mb,
+                           peak_gpu_memory_note=None if res.peak_gpu_memory_mb is not None else "not measured: no GPU")
+                say(f"  best epoch {res.best_epoch}, dev macro-F1 {res.best_macro_f1:.4f}, batch size {bs}")
+            except Exception as exc:  # the setting is recorded as failed and the search goes on
+                row["error"] = f"{type(exc).__name__}: {exc}"
+                if is_oom(exc):
+                    oom = row["error"]
+                    row["oom_retries"].append({"batch_size": bs, "error": oom})
+                say(f"  failed at batch size {bs}: {row['error']}")
+            finally:
+                del model, tokenizer  # after the except block, so the exception no longer holds the model's frames
+                _free()
+            if row["ok"] or oom is None:
+                break
+            if bs // 2 >= MIN_BATCH_SIZE:
+                say(f"  out of memory: retrying at batch size {bs // 2}")
+            else:
+                row["error"] = f"{oom} (batch size {bs} is the floor of {MIN_BATCH_SIZE})"
         attempts.append(row)
+        if row["ok"] and not reported:
+            reported = True
+            peak = row["peak_gpu_memory_note"] or f"peak GPU memory {row['peak_gpu_memory_mb']:.0f} MB"
+            say(f"FIRST SEARCH RUN DONE {name}: {row['seconds_per_epoch']:.1f} s/epoch, {peak}, batch size {row['batch_size']}")
     return attempts
 
 
@@ -302,7 +351,7 @@ def error_analysis(scenarios: dict[str, list[Scenario]], preds: dict[str, list[P
 
 def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cpu",
            grid=GRID, make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker],
-           prompted_model: str = PROMPTED_MODEL, say=print) -> dict[str, Any]:
+           prompted_model: str = PROMPTED_MODEL, say=_say, num_workers: int = 0) -> dict[str, Any]:
     """Search, train the winner, score every system on both sources, and write two records and the error analysis.
     A search run or a baseline that errors is listed in `attempts` and left out. With no finished training run
     nothing is written and the run raises. Any left-out system makes the result incomplete."""
@@ -316,11 +365,14 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
     dev_examples = cm.examples_from_scenarios(scenarios["scenarios"])
     say(f"training data: {train.counts}; dev macro-F1 is scored on {len(dev_examples)} labelled dev scenarios")
 
-    attempts = search(base_model, train, dev_examples, device=device, root=root, grid=grid, say=say)
+    attempts = search(base_model, train, dev_examples, device=device, root=root, grid=grid, say=say, num_workers=num_workers)
     winner = pick_winner(attempts)
     if winner is None:
         raise RuntimeError("no training run finished; nothing is written: " + "; ".join(a["error"] for a in attempts))
     say(f"winner: {winner['setting']}")
+    lowered = [a["setting"] for a in attempts if a["lowered_batch_size"]]
+    if lowered:
+        say(f"WARNING: {lowered} ran at a lower batch size than {BATCH_SIZE}, so the settings are not trained alike")
 
     systems: dict[str, dict[str, list[Prediction]]] = {}
     failed: dict[str, str] = {}
@@ -368,7 +420,9 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             {"setting": n, "kind": "system", "ok": n in systems, "error": failed.get(n)} for n in SYSTEMS if n != "trained"]
         config = {
             "experiment": "E4", "source": src, "winner_rule": WINNER_RULE, "winner": winner["setting"],
-            "grid": [list(g) for g in grid], "batch_size": BATCH_SIZE, "patience": PATIENCE,
+            "grid": [list(g) for g in grid], "batch_size": BATCH_SIZE, "min_batch_size": MIN_BATCH_SIZE,
+            "settings_at_lower_batch_size": lowered, "winner_batch_size": winner["batch_size"],
+            "batch_size_note": BATCH_NOTE, "num_workers": num_workers, "patience": PATIENCE,
             "threshold": cm.THRESHOLD, "freeze_word_embeddings": True, "training": train.counts,
             "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
             "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
@@ -402,7 +456,7 @@ def main() -> int:
     from contextlens.llm.client import OllamaClient
 
     result = run_e4(device="cuda", make_zeroshot=ZeroShotChecker,
-                    make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)))
+                    make_prompted=lambda: PromptedChecker(OllamaClient(PROMPTED_MODEL)), num_workers=NUM_WORKERS)
     print(json.dumps({"winner": result["winner"], "complete": result["complete"], "failed": result["failed"],
                       "records": [p.as_posix() for p in result["records"].values()]}, indent=1))
     return 0 if result["complete"] else 2

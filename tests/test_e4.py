@@ -453,3 +453,91 @@ def test_error_analysis_lists_fifty_by_category_and_never_shows_decode_text() ->
     counts = {c: md.count(f"### {c}-") for c in ("update_case", "trap_case", "decode")}
     assert counts == {"update_case": 16, "trap_case": 17, "decode": 17}  # alphabetical, so decode and trap_case get the extra one
     assert "- decode: 40" in md and "- trap_case: 40" in md
+
+
+# ---- workers, timing and memory, and out-of-memory retries ----
+
+
+def test_fit_gives_the_same_result_with_loader_workers(tmp_path: Path) -> None:
+    def run(workers: int):
+        model, tok = _tiny(tmp_path)
+        return ct.fit(model, tok, EXAMPLES * 2, EXAMPLES, lr=5e-3, epochs=2, batch_size=4, patience=2,
+                      num_workers=workers)
+
+    plain, workers = run(0), run(2)
+    assert [h["train_loss"] for h in plain.history] == [h["train_loss"] for h in workers.history]
+    assert plain.best_macro_f1 == workers.best_macro_f1
+
+
+def test_fit_reports_seconds_per_epoch_and_no_memory_figure_without_a_gpu(tmp_path: Path) -> None:
+    model, tok = _tiny(tmp_path)
+    logged: list[dict] = []
+    res = ct.fit(model, tok, EXAMPLES, EXAMPLES, lr=1e-3, epochs=2, batch_size=4, patience=2,
+                 log=lambda m, step: logged.append(m))
+    assert res.seconds_per_epoch is not None and res.seconds_per_epoch > 0
+    assert res.peak_gpu_memory_mb is None  # not a false 0
+    assert all("epoch_seconds" in m for m in logged) and not any("peak_gpu_memory_mb" in m for m in logged)
+
+
+def test_the_first_finished_search_run_prints_its_speed_and_memory(repo: Repo) -> None:
+    said: list[str] = []
+    repo.run(say=said.append)
+    first = [m for m in said if m.startswith("FIRST SEARCH RUN DONE")]
+    assert len(first) == 1 and "s/epoch" in first[0] and "not measured: no GPU" in first[0] and "lr0.001_ep2" in first[0]
+    assert said.index(first[0]) < said.index("training lr0.003_ep2")
+    attempts = [a for a in _records(repo.root)["scenarios"]["attempts"] if a["kind"] == "training"]
+    assert all(a["seconds_per_epoch"] > 0 and a["peak_gpu_memory_mb"] is None and a["peak_gpu_memory_note"] for a in attempts)
+    assert all(a["batch_size"] == e4.BATCH_SIZE and not a["lowered_batch_size"] for a in attempts)
+
+
+def test_out_of_memory_retries_at_half_the_batch_size_and_flags_it(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = ct.fit
+    sizes: list[int] = []
+
+    def tight(*a, **kw):
+        sizes.append(kw["batch_size"])
+        if kw["lr"] == 1e-3 and kw["batch_size"] > 2:
+            raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ct, "fit", tight)
+    result = repo.run()
+    assert sizes == [8, 4, 2, 8] and result["complete"]
+    for rec in _records(repo.root).values():
+        att = {a["setting"]: a for a in rec["attempts"] if a["kind"] == "training"}
+        low, normal = att["lr0.001_ep2"], att["lr0.003_ep2"]
+        assert low["ok"] and low["error"] is None and low["batch_size"] == 2 and low["lowered_batch_size"]
+        assert [r["batch_size"] for r in low["oom_retries"]] == [8, 4]
+        assert normal["batch_size"] == 8 and not normal["lowered_batch_size"] and normal["oom_retries"] == []
+        assert rec["config"]["settings_at_lower_batch_size"] == ["lr0.001_ep2"] and "batch size" in rec["config"]["batch_size_note"]
+    assert check("E4", root=repo.root, min_n=1, split="dev") == []
+
+
+def test_out_of_memory_below_the_floor_is_a_failed_setting(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = ct.fit
+    sizes: list[int] = []
+
+    def never_fits(*a, **kw):
+        if kw["lr"] == 1e-3:
+            sizes.append(kw["batch_size"])
+            raise RuntimeError("CUDA out of memory")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ct, "fit", never_fits)
+    repo.run()
+    att = {a["setting"]: a for a in _records(repo.root)["scenarios"]["attempts"] if a["kind"] == "training"}
+    assert sizes == [8, 4, 2] and not att["lr0.001_ep2"]["ok"] and "floor" in att["lr0.001_ep2"]["error"]
+    assert att["lr0.001_ep2"]["batch_size"] == 2
+
+
+def test_another_error_is_not_retried(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+
+    def broken(*a, **kw):
+        calls.append(kw["batch_size"])
+        raise ValueError("bad data")
+
+    monkeypatch.setattr(ct, "fit", broken)
+    with pytest.raises(RuntimeError, match="no training run finished"):
+        repo.run()
+    assert calls == [8, 8]

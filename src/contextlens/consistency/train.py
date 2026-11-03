@@ -1,6 +1,7 @@
 """Fine-tuning for the consistency model: class weights, early stopping on dev macro-F1, MLflow logging."""
 import contextlib
 import random
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,6 +60,31 @@ class FitResult:
     best_epoch: int
     best_macro_f1: float
     history: list[dict[str, float]] = field(default_factory=list)
+    seconds_per_epoch: float | None = None  # mean over the epochs run, training plus the dev scoring
+    peak_gpu_memory_mb: float | None = None  # None when the model was not on a GPU: not measured, not zero
+
+
+class Collator:
+    """Tokenises one batch. A module-level class (not a lambda) so a spawned worker on Windows can unpickle it."""
+
+    def __init__(self, tokenizer: Any) -> None:
+        self.tokenizer = tokenizer
+
+    def __call__(self, examples: list[cm.Example]) -> dict[str, Any]:
+        return collate(self.tokenizer, examples)
+
+
+class EpochOrder:
+    """The shuffled sample order for the epoch; replaced each epoch so persistent workers can stay alive."""
+
+    def __init__(self) -> None:
+        self.indices: list[int] = []
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.indices)
+
+    def __len__(self) -> int:
+        return len(self.indices)
 
 
 def dev_macro_f1(model: Any, tokenizer: Any, dev: list[cm.Example], batch_size: int) -> float:
@@ -69,10 +95,14 @@ def dev_macro_f1(model: Any, tokenizer: Any, dev: list[cm.Example], batch_size: 
 
 def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Example], *, lr: float, epochs: int,
         batch_size: int = 16, patience: int = 1, seed: int = 13, out_dir: Path | None = None,
-        freeze_embeddings: bool = False, log: Log | None = None, meta: dict[str, Any] | None = None) -> FitResult:
+        freeze_embeddings: bool = False, log: Log | None = None, meta: dict[str, Any] | None = None,
+        num_workers: int = 0) -> FitResult:
     """Train for up to `epochs`, scoring macro-F1 on `dev` after each. The best epoch is saved to `out_dir`, and
-    training stops after `patience` epochs without a better score. `dev` is used for stopping and nothing else."""
+    training stops after `patience` epochs without a better score. `dev` is used for stopping and nothing else.
+    `num_workers` worker processes tokenise the next batches while the model trains. The shuffle stays in this process
+    and uses the same seeded generator, so the batches, and so the result, are the same for any worker count."""
     import torch
+    from torch.utils.data import DataLoader
     from transformers import get_linear_schedule_with_warmup
 
     rng = random.Random(seed)
@@ -86,14 +116,21 @@ def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Exampl
     steps = epochs * ((len(train) + batch_size - 1) // batch_size)
     scheduler = get_linear_schedule_with_warmup(optimizer, int(0.1 * steps), steps)
     result = FitResult(best_epoch=0, best_macro_f1=-1.0)
+    on_gpu = next(model.parameters()).device.type == "cuda"
+    if on_gpu:
+        torch.cuda.reset_peak_memory_stats()
+    sampler = EpochOrder()
+    loader = DataLoader(train, batch_size=batch_size, sampler=sampler, collate_fn=Collator(tokenizer),  # type: ignore[arg-type]
+                        num_workers=num_workers, persistent_workers=num_workers > 0)
     for epoch in range(1, epochs + 1):
+        started = time.perf_counter()
         model.train()
-        order = list(train)
-        rng.shuffle(order)
-        losses = [train_step(model, collate(tokenizer, order[i : i + batch_size]), optimizer, weights, scheduler)
-                  for i in range(0, len(order), batch_size)]
+        sampler.indices = list(range(len(train)))
+        rng.shuffle(sampler.indices)
+        losses = [train_step(model, batch, optimizer, weights, scheduler) for batch in loader]
         score = dev_macro_f1(model, tokenizer, dev, batch_size)
-        row = {"epoch": epoch, "train_loss": sum(losses) / len(losses), "dev_macro_f1": score}
+        row = {"epoch": epoch, "train_loss": sum(losses) / len(losses), "dev_macro_f1": score,
+               "epoch_seconds": time.perf_counter() - started}
         result.history.append(row)
         if log:
             log({k: v for k, v in row.items() if k != "epoch"}, epoch)
@@ -103,6 +140,11 @@ def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Exampl
                 cm.save_checkpoint(model, tokenizer, out_dir, {**(meta or {}), "epoch": epoch, "dev_macro_f1": score})
         elif epoch - result.best_epoch >= patience:
             break
+    result.seconds_per_epoch = sum(h["epoch_seconds"] for h in result.history) / len(result.history)
+    if on_gpu:
+        result.peak_gpu_memory_mb = torch.cuda.max_memory_allocated() / 2**20
+        if log:
+            log({"peak_gpu_memory_mb": result.peak_gpu_memory_mb}, len(result.history))
     return result
 
 
