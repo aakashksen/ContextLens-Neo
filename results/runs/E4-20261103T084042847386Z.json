@@ -1,0 +1,505 @@
+{
+ "run_id": "E4-20261103T084042847386Z",
+ "experiment": "E4",
+ "git_commit": "0ac406a30aa6d0ef8b9ed8787c21bc263c5e1ce6",
+ "dirty": false,
+ "dataset_hash": "bc875601bad1d7030a637e9e814f9041d4d345e6335c02df84d8080dccaed3c1",
+ "split": "dev",
+ "scenario_source": "scenarios",
+ "config": {
+  "experiment": "E4",
+  "source": "scenarios",
+  "winner_rule": "highest dev macro-F1 over the four labels on our dev scenarios (the best epoch of the run); ties broken by fewer epochs, then by lower learning rate",
+  "winner": "lr1e-05_ep2",
+  "grid": [
+   [
+    1e-05,
+    2
+   ],
+   [
+    1e-05,
+    3
+   ],
+   [
+    2e-05,
+    2
+   ],
+   [
+    2e-05,
+    3
+   ],
+   [
+    3e-05,
+    2
+   ],
+   [
+    3e-05,
+    3
+   ]
+  ],
+  "batch_size": 8,
+  "min_batch_size": 2,
+  "settings_at_lower_batch_size": [],
+  "winner_batch_size": 8,
+  "batch_size_note": "on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like",
+  "num_workers": 2,
+  "patience": 1,
+  "threshold": 0.5,
+  "freeze_word_embeddings": true,
+  "training": {
+   "decode_train_pairs": 8000,
+   "scenarios_train_pairs": 48,
+   "scenario_repeat": 8,
+   "examples": 8384,
+   "label_consistent": 4129,
+   "label_contradiction": 4079,
+   "label_insufficient": 80,
+   "label_update": 96
+  },
+  "sample_rule": "pairs ordered by sha256 of conversation_id|label|statement, the first N taken; the same rule picks the DECODE train sample and the DECODE dev sample",
+  "decode_dev_sample": 1000,
+  "decode_train_sample": 8000,
+  "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
+  "style_note": "training used our own writing style (the train-only scenario set was written for this project, like the dev and test scenarios), so scores on our scenarios could look better than real use",
+  "train_set_review_note": "an independent read of the invented train-only set, before training, caught real near-copies of held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it could not have caught them; those cases were rewritten and read again",
+  "decode_note": "DECODE is binary: a predicted label other than contradiction counts as non-contradiction. Metrics are accuracy and false alert rate; the four-label macro-F1 is not saved for it. DECODE dev was used for no training; DECODE test is untouched.",
+  "checkpoint_sha256": "2ef5bbd22c78a7609e745be4a771fd07de4a862517751ad865d34dafc6b2754c",
+  "scored_cases": 82,
+  "started_at": "2026-11-03T07:58:22.686274+00:00",
+  "labels_reviewed": false,
+  "failed_systems": {}
+ },
+ "models": {
+  "trained": "microsoft/deberta-v3-base fine-tuned",
+  "tfidf": "tfidf-logreg",
+  "zeroshot": "cross-encoder/nli-deberta-v3-xsmall",
+  "prompted": "qwen3.5:4b-q4_K_M"
+ },
+ "prompt_versions": {
+  "consistency": "v1"
+ },
+ "n": 148,
+ "metrics": {
+  "trained": {
+   "macro_f1": 0.14035087719298245,
+   "false_alert_rate": 0.0,
+   "label_accuracy": 0.3902439024390244,
+   "ece": 0.3902439024390244,
+   "abstain_when_insufficient": 0.0,
+   "answer_when_answerable": 1.0,
+   "latency_p50_ms": 22.0,
+   "latency_p95_ms": 37.650000000000006,
+   "label_accuracy[category=contradiction]": 0.0,
+   "label_accuracy[category=hypothetical_or_joking]": 1.0,
+   "label_accuracy[category=insufficient_evidence]": 0.0,
+   "label_accuracy[category=legitimate_update]": 0.0,
+   "label_accuracy[category=prompt_injection]": null,
+   "label_accuracy[category=recall]": null,
+   "label_accuracy[category=respond_with_suggestion]": null,
+   "label_accuracy[category=wrong_speaker_trap]": 1.0
+  },
+  "tfidf": {
+   "macro_f1": 0.1776035886052534,
+   "false_alert_rate": 0.09230769230769231,
+   "label_accuracy": 0.35365853658536583,
+   "ece": 0.3319302275721855,
+   "abstain_when_insufficient": 0.0625,
+   "answer_when_answerable": 1.0,
+   "latency_p50_ms": 0.0,
+   "latency_p95_ms": 1.0,
+   "label_accuracy[category=contradiction]": 0.058823529411764705,
+   "label_accuracy[category=hypothetical_or_joking]": 0.9375,
+   "label_accuracy[category=insufficient_evidence]": 0.0625,
+   "label_accuracy[category=legitimate_update]": 0.0,
+   "label_accuracy[category=prompt_injection]": null,
+   "label_accuracy[category=recall]": null,
+   "label_accuracy[category=respond_with_suggestion]": null,
+   "label_accuracy[category=wrong_speaker_trap]": 0.75
+  },
+  "zeroshot": {
+   "macro_f1": 0.19752798507462688,
+   "false_alert_rate": 0.5230769230769231,
+   "label_accuracy": 0.3170731707317073,
+   "ece": 0.6516237408430287,
+   "abstain_when_insufficient": 0.0,
+   "answer_when_answerable": 1.0,
+   "latency_p50_ms": 21.5,
+   "latency_p95_ms": 43.900000000000034,
+   "label_accuracy[category=contradiction]": 0.9411764705882353,
+   "label_accuracy[category=hypothetical_or_joking]": 0.5625,
+   "label_accuracy[category=insufficient_evidence]": 0.0,
+   "label_accuracy[category=legitimate_update]": 0.0,
+   "label_accuracy[category=prompt_injection]": null,
+   "label_accuracy[category=recall]": null,
+   "label_accuracy[category=respond_with_suggestion]": null,
+   "label_accuracy[category=wrong_speaker_trap]": 0.0625
+  },
+  "prompted": {
+   "macro_f1": 0.5161674620096794,
+   "false_alert_rate": 0.24615384615384617,
+   "label_accuracy": 0.573170731707317,
+   "ece": 0.4158536585365853,
+   "abstain_when_insufficient": 0.0625,
+   "answer_when_answerable": 0.8787878787878788,
+   "latency_p50_ms": 477.0,
+   "latency_p95_ms": 680.1000000000001,
+   "label_accuracy[category=contradiction]": 0.9411764705882353,
+   "label_accuracy[category=hypothetical_or_joking]": 0.8125,
+   "label_accuracy[category=insufficient_evidence]": 0.0625,
+   "label_accuracy[category=legitimate_update]": 0.6470588235294118,
+   "label_accuracy[category=prompt_injection]": null,
+   "label_accuracy[category=recall]": null,
+   "label_accuracy[category=respond_with_suggestion]": null,
+   "label_accuracy[category=wrong_speaker_trap]": 0.375
+  }
+ },
+ "intervals": {
+  "trained": {
+   "macro_f1": [
+    0.11155876951331496,
+    0.16538461538461538
+   ],
+   "label_accuracy": [
+    0.28719604863221887,
+    0.4942528735632184
+   ],
+   "ece": [
+    0.28719604863221887,
+    0.4942528735632184
+   ]
+  },
+  "tfidf": {
+   "macro_f1": [
+    0.11273496346212078,
+    0.2560654085155058
+   ],
+   "label_accuracy": [
+    0.25,
+    0.46069576490924774
+   ],
+   "ece": [
+    0.22741139772560157,
+    0.4341044164217621
+   ]
+  },
+  "zeroshot": {
+   "macro_f1": [
+    0.14031943574023348,
+    0.2521658083296014
+   ],
+   "label_accuracy": [
+    0.21950384229869696,
+    0.4186125078566938
+   ],
+   "ece": [
+    0.5554630186456436,
+    0.7503985046475599
+   ]
+  },
+  "prompted": {
+   "macro_f1": [
+    0.4139326978895498,
+    0.6094767589068049
+   ],
+   "label_accuracy": [
+    0.4642857142857143,
+    0.6781711822660097
+   ],
+   "ece": [
+    0.3102529761904762,
+    0.5256109595635428
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "macro_f1",
+   "diff": -0.03725271141227096,
+   "ci": [
+    -0.11165437270018677,
+    0.021980136174267608
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "tfidf",
+   "metric": "label_accuracy",
+   "diff": 0.03658536585365857,
+   "ci": [
+    -0.02439024390243899,
+    0.10256410256410253
+   ],
+   "mcnemar_p": 0.453125
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "macro_f1",
+   "diff": -0.05717710788164443,
+   "ci": [
+    -0.11949676995734221,
+    0.00801684562797394
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "zeroshot",
+   "metric": "label_accuracy",
+   "diff": 0.07317073170731708,
+   "ci": [
+    -0.0714285714285714,
+    0.21839080459770116
+   ],
+   "mcnemar_p": 0.417692190836533
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "macro_f1",
+   "diff": -0.375816584816697,
+   "ci": [
+    -0.4742355554454684,
+    -0.2668406401021947
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained",
+   "b": "prompted",
+   "metric": "label_accuracy",
+   "diff": -0.18292682926829262,
+   "ci": [
+    -0.3289473684210526,
+    -0.0357142857142857
+   ],
+   "mcnemar_p": 0.027533155829587486
+  }
+ ],
+ "supersedes": [],
+ "attempts": [
+  {
+   "setting": "lr1e-05_ep2",
+   "lr": 1e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 173.03092079999988
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 157.9855929999976
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 165.50825689999874,
+   "peak_gpu_memory_mb": 3312.599609375,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr1e-05_ep3",
+   "lr": 1e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 168.59098340000128
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 127.75889059999827
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 148.17493699999977,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep2",
+   "lr": 2e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 145.37616449999769
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 137.6107278999989
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 141.4934461999983,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr2e-05_ep3",
+   "lr": 2e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 154.48237259999587
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 114.04081530000258
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 134.26159394999922,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep2",
+   "lr": 3e-05,
+   "epochs": 2,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 122.45544340000197
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 115.06269939999765
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 118.75907139999981,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "lr3e-05_ep3",
+   "lr": 3e-05,
+   "epochs": 3,
+   "ok": true,
+   "error": null,
+   "best_epoch": 1,
+   "dev_macro_f1": 0.14035087719298245,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 139.71905369999877
+    },
+    {
+     "epoch": 2,
+     "train_loss": NaN,
+     "dev_macro_f1": 0.14035087719298245,
+     "epoch_seconds": 116.89951739999378
+    }
+   ],
+   "checkpoint": "<local path>",
+   "batch_size": 8,
+   "lowered_batch_size": false,
+   "oom_retries": [],
+   "device": "cuda",
+   "seconds_per_epoch": 128.30928554999628,
+   "peak_gpu_memory_mb": 3310.861328125,
+   "peak_gpu_memory_note": null,
+   "kind": "training"
+  },
+  {
+   "setting": "tfidf",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "zeroshot",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "prompted",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": false,
+ "predictions": {
+  "trained": "results/runs/E4-20261103T084042847386Z.trained.predictions.jsonl",
+  "tfidf": "results/runs/E4-20261103T084042847386Z.tfidf.predictions.jsonl",
+  "zeroshot": "results/runs/E4-20261103T084042847386Z.zeroshot.predictions.jsonl",
+  "prompted": "results/runs/E4-20261103T084042847386Z.prompted.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T07:58:22.686274+00:00",
+ "finished_at": "2026-11-03T08:40:42.847386+00:00"
+}
