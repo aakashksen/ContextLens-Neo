@@ -1,4 +1,5 @@
 from contextlens.llm.client import LLMClient
+from contextlens.llm.untrusted import escape, transcript_block
 from contextlens.schemas import Turn
 
 
@@ -12,7 +13,6 @@ class RollingSummary:
         self.text = ""
 
     def update(self, new_turns: list[Turn]) -> str:
-        block = "\n".join(f"{t.speaker}: {t.text}" for t in new_turns)
         messages = [
             {
                 "role": "system",
@@ -21,7 +21,7 @@ class RollingSummary:
             },
             {
                 "role": "user",
-                "content": f"Summary so far:\n{self.text or '(none)'}\n\n<transcript>\n{block}\n</transcript>",
+                "content": f"Summary so far:\n{escape(self.text) or '(none)'}\n\n{transcript_block(new_turns)}",
             },
         ]
         self.text = self.llm.complete(messages, max_tokens=200).text.strip()

@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from contextlens.llm.client import LLMClient
+from contextlens.llm.untrusted import effective_speaker, escape, transcript_block
 from contextlens.schemas import MemoryItem, Turn
 
 SYSTEM = (
@@ -33,14 +34,12 @@ class MemoryExtractor:
         if not new_turns:
             return []
         by_id = {t.id: t for t in new_turns}
-        known = {m.id for m in existing}
-        block = "\n".join(f"[{t.id}] {t.speaker}: {t.text}" for t in new_turns)
-        have = "\n".join(f"{m.id} | {m.subject} | {m.statement}" for m in existing) or "(none)"
+        have = "\n".join(f"{m.id} | {escape(m.subject)} | {escape(m.statement)}" for m in existing) or "(none)"
         messages = [
             {"role": "system", "content": SYSTEM},
             {
                 "role": "user",
-                "content": f"Existing memory:\n{have}\n\n<transcript>\n{block}\n</transcript>",
+                "content": f"Existing memory:\n{have}\n\n{transcript_block(new_turns, with_ids=True)}",
             },
         ]
         out = self.llm.complete(messages, schema=_Out, max_tokens=800).parsed
@@ -52,10 +51,17 @@ class MemoryExtractor:
             cites = [i for i in raw.source_turn_ids if i in by_id]
             if not cites:
                 continue
-            supersedes = raw.supersedes if raw.supersedes in known else None
+            same_subject = {
+                m.id
+                for m in existing
+                if m.conversation_id == conv and m.subject.lower() == raw.subject.lower()
+            }
+            supersedes = raw.supersedes if raw.supersedes in same_subject else None
             if supersedes is None and raw.kind == "correction":
-                same = [m for m in existing if m.subject.lower() == raw.subject.lower()]
+                same = [m for m in existing if m.id in same_subject]
                 supersedes = same[-1].id if same else None
+            speakers = {effective_speaker(by_id[i]) for i in cites}
+            speaker = speakers.pop() if len(speakers) == 1 else "unknown"
             result.append(
                 MemoryItem(
                     id=f"{conv}-m{len(existing) + len(result)}",
@@ -63,7 +69,7 @@ class MemoryExtractor:
                     kind=raw.kind,
                     subject=raw.subject,
                     statement=raw.statement,
-                    speaker=by_id[cites[0]].speaker,
+                    speaker=speaker,
                     source_turn_ids=cites,
                     supersedes=supersedes,
                     as_of_seq=as_of,
