@@ -12,7 +12,7 @@ from contextlens.cards.dataset import MAX_GOLD, Example, build_examples, load_ex
 from contextlens.cards.train_lora import attach_lora, check_vram, is_architecture_error, run_steps, tokenize_example
 from contextlens.llm.untrusted import unescape
 from contextlens.data.scenarios import load_scenarios
-from contextlens.schemas import ButtonRequest, Card, Conversation, Scenario, Turn
+from contextlens.schemas import ButtonRequest, Card, Conversation, EvidenceRef, Finding, Scenario, Turn
 
 N_TRAIN, N_DEV, N_TEST = 12, 3, 3
 
@@ -311,3 +311,74 @@ def test_scenario_set_refuses_anything_that_could_leak(data, scen, tmp_path, bad
     _write(root, "train", [*load_scenarios("train", root), base])
     with pytest.raises(ValueError):
         build_examples(*data, tmp_path / "cards", train_scenarios=root, held_out_dir=held)
+
+
+def _ex(i: int, source: str, status: str, split: str = "train") -> Example:
+    if status == "abstained":
+        card = Card(mode="recall", status=status, findings=[], missing=["q"])
+    else:
+        ref = EvidenceRef(turn_id="t1", quote="hi", speaker="A", start_ms=0)
+        card = Card(mode="recall", status=status, findings=[Finding(
+            agent="recall", kind="recall", statement="s", evidence=[ref], confidence=1.0)])
+    return Example(id=f"{source}-{status}-{i}", source=source, split=split, conversation_id=f"c{i}",
+                   messages=[{"role": "user", "content": f"text {i}"}], completion=card.model_dump_json())
+
+
+def _mix(n_ans: int, n_abs_q: int, n_abs_s: int, n_ans_s: int = 0) -> list[Example]:
+    return ([_ex(i, "qmsum", "answered") for i in range(n_ans)]
+            + [_ex(i, "scenarios_train", "answered") for i in range(n_ans_s)]
+            + [_ex(i, "qmsum", "abstained") for i in range(n_abs_q)]
+            + [_ex(i, "scenarios_train", "abstained") for i in range(n_abs_s)])
+
+
+def _abstained(exs: list[Example]) -> list[Example]:
+    return [e for e in exs if '"abstained"' in e.completion]
+
+
+def test_cap_limits_abstained_share_and_is_deterministic():
+    from contextlens.cards.dataset import cap_abstained
+    exs = _mix(n_ans=20, n_abs_q=30, n_abs_s=10, n_ans_s=10)
+    a, b = cap_abstained(exs, 0.25, seed=3), cap_abstained(exs, 0.25, seed=3)
+    assert [e.id for e in a] == [e.id for e in b]
+    assert len(_abstained(a)) / len(a) <= 0.25
+    assert len(_abstained(a)) == 10  # 30 answered -> floor(30 / 3)
+    assert len([e for e in a if e not in _abstained(a)]) == 30  # every answered example kept
+    assert [e.id for e in a] != [e.id for e in cap_abstained(exs, 0.25, seed=4)]
+    assert {e.id for e in a} <= {e.id for e in exs}
+    assert all(x in exs for x in a)  # content untouched
+
+
+def test_cap_keeps_every_source_with_abstained_examples():
+    from contextlens.cards.dataset import cap_abstained
+    exs = _mix(n_ans=30, n_abs_q=100, n_abs_s=2)  # cap allows 10
+    out = _abstained(cap_abstained(exs, 0.25, seed=0))
+    assert len(out) == 10
+    assert Counter(e.source for e in out)["scenarios_train"] >= 1
+
+
+def test_cap_drops_nothing_when_under_the_cap_and_handles_empty():
+    from contextlens.cards.dataset import cap_abstained
+    exs = _mix(n_ans=30, n_abs_q=5, n_abs_s=3)
+    assert cap_abstained(exs, 0.25, seed=0) == exs
+    assert cap_abstained([], 0.25, seed=0) == []
+    only_abs = _mix(n_ans=0, n_abs_q=4, n_abs_s=0)
+    assert cap_abstained(only_abs, 0.25, seed=0) == []  # no answered example: none may stay
+
+
+def test_build_cap_applies_to_train_only_and_records_stats(data, tmp_path):
+    raw, splits = data
+    base_stats: Counter = Counter()
+    base = build_examples(raw, splits, tmp_path / "a", stats=base_stats)
+    st: Counter = Counter()
+    out = tmp_path / "b"
+    counts = build_examples(raw, splits, out, stats=st, abstain_cap=0.05, cap_seed=1)
+    assert counts["val"] == base["val"]
+    assert (out / "qmsum-val.jsonl").read_text(encoding="utf-8") == (
+        tmp_path / "a" / "qmsum-val.jsonl").read_text(encoding="utf-8")
+    train = load_examples("train", out)
+    assert len(train) == counts["train"] == st["train_final_size"]
+    n_abs = len(_abstained(train))
+    assert st["train_class_abstained"] == n_abs and st["train_class_answered"] == len(train) - n_abs
+    assert st["train_source_qmsum"] == len(train) and st["train_synthetic_share"] == 0
+    assert n_abs * 3 <= len(train) - n_abs
+    assert st["train_abstained_dropped_by_cap"] == base["train"] - counts["train"] > 0

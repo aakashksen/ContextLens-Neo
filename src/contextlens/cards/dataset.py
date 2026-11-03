@@ -145,6 +145,57 @@ def _example(s: Scenario, split: str, source: str, stats: Counter) -> Example | 
     )
 
 
+def _is_abstained(e: Example) -> bool:
+    return json.loads(e.completion)["status"] == "abstained"
+
+
+def _quotas(have: dict[str, int], k: int) -> dict[str, int]:
+    """Split k slots over sources: one each first (when k allows), the rest in proportion to what is left."""
+    base = 1 if k >= len(have) else 0
+    quota = {s: base for s in have}
+    rest, room = k - base * len(have), sum(n - base for n in have.values())
+    ideal = {s: rest * (n - base) / room if room else 0.0 for s, n in have.items()}
+    for s in have:
+        quota[s] += int(ideal[s])
+    left = k - sum(quota.values())
+    for s in sorted(have, key=lambda s: (-(ideal[s] - int(ideal[s])), s))[:left]:
+        quota[s] += 1
+    return quota
+
+
+def cap_abstained(examples: list[Example], max_share: float, seed: int, stats: Counter | None = None) -> list[Example]:
+    """Keep every answered example and at most `max_share` of the result abstained. Which abstained examples stay:
+    each source that has any keeps at least one (if the cap allows that many), the other slots are shared out in
+    proportion to each source's abstained count, and within a source a seeded random choice is made over examples
+    sorted by id. The kept examples keep their original order and are not changed. If the cap is not reached,
+    nothing is dropped. `stats` gets `train_abstained_dropped_by_cap`."""
+    answered = sum(not _is_abstained(e) for e in examples)
+    k = int(answered * max_share / (1 - max_share))
+    by_source: dict[str, list[Example]] = {}
+    for e in examples:
+        if _is_abstained(e):
+            by_source.setdefault(e.source, []).append(e)
+    if sum(len(v) for v in by_source.values()) <= k:
+        return list(examples)
+    quota = _quotas({s: len(v) for s, v in by_source.items()}, k)
+    rng = random.Random(seed)
+    keep = {e.id for s in sorted(by_source) for e in rng.sample(sorted(by_source[s], key=lambda e: e.id), quota[s])}
+    out = [e for e in examples if not _is_abstained(e) or e.id in keep]
+    if stats is not None:
+        stats["train_abstained_dropped_by_cap"] += len(examples) - len(out)
+    return out
+
+
+def _final_stats(train: list[Example], stats: Counter) -> None:
+    n_abs = sum(_is_abstained(e) for e in train)
+    stats["train_final_size"] = len(train)
+    stats["train_class_abstained"], stats["train_class_answered"] = n_abs, len(train) - n_abs
+    for source, n in Counter(e.source for e in train).items():
+        stats[f"train_source_{source}"] = n
+    synthetic = sum(e.source == "scenarios_train" for e in train)
+    stats["train_synthetic_share"] = synthetic / len(train) if train else 0
+
+
 def _norm(text: str) -> str:
     return " ".join(text.lower().split())
 
@@ -173,13 +224,16 @@ def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> Non
 
 def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Path("datasets/splits"),
                    out_dir: Path | None = None, train_scenarios: Path | None = None,
-                   held_out_dir: Path = SCENARIOS_DIR, stats: Counter | None = None) -> dict[str, int]:
+                   held_out_dir: Path = SCENARIOS_DIR, stats: Counter | None = None,
+                   abstain_cap: float | None = None, cap_seed: int = 0) -> dict[str, int]:
     """Examples from QMSum conversations in the manifest's `train` split, divided by conversation into train and val.
     With `train_scenarios` (a directory holding `train.jsonl`), examples from that invented set are added too, after
     it is checked against the dev and test scenarios in `held_out_dir`. Returns counts per split; writes
     `<out_dir>/qmsum-<split>.jsonl` (and `scenarios-<split>.jsonl`) when out_dir is given. `stats`, if given, receives
     counts per source, mode and status, and how many examples were dropped and why. Without the scenario set it has
-    `scenario_set_absent` = 1."""
+    `scenario_set_absent` = 1. With `abstain_cap` (e.g. 0.25), abstained train examples (all sources together, never val)
+    are thinned by `cap_abstained` with `cap_seed`, and `stats` gets the `train_*` final size, class, source and
+    synthetic-share entries."""
     stats = stats if stats is not None else Counter()
     splits = json.loads((splits_dir / "qmsum.json").read_text(encoding="utf-8"))["splits"]
     allowed = set(splits["train"])
@@ -202,6 +256,13 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
             if ex is not None:
                 by_split[split].append(ex)
         by_file["qmsum" if source == "qmsum" else "scenarios"] = by_split
+    if abstain_cap is not None:
+        # over the combined train examples of every source; val is not touched
+        train = [e for by_split in by_file.values() for e in by_split["train"]]
+        kept = {e.id for e in cap_abstained(train, abstain_cap, cap_seed, stats)}
+        for by_split in by_file.values():
+            by_split["train"] = [e for e in by_split["train"] if e.id in kept]
+        _final_stats([e for by_split in by_file.values() for e in by_split["train"]], stats)
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
         for prefix, by_split in by_file.items():
