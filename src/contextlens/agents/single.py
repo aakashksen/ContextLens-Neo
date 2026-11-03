@@ -273,12 +273,16 @@ def _finish(
             def check() -> Card:
                 guarded = guard_card(card, ctx.store, ctx.as_of_seq, req.conversation_id)
                 kept = [f for f in guarded.findings if _numbers_supported(f)]
+                dropped = len(guarded.findings) - len(kept)
+                note = [f"{dropped} finding(s) dropped: a number in it is not in the cited quotes"] * (dropped > 0)
                 if not kept:
-                    return _abstained("no finding passed the checks")
+                    out = _abstained("no finding passed the checks")
+                    return out.model_copy(update={"missing": [*out.missing, *note]})
                 if len(kept) < len(card.findings):
                     return guarded.model_copy(update={
                         "findings": kept,
                         "status": "partial" if guarded.status == "answered" else guarded.status,
+                        "missing": [*guarded.missing, *note],
                     })  # fmt: skip
                 return guarded
 

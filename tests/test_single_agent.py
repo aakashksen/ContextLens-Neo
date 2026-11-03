@@ -258,6 +258,21 @@ def test_finding_with_a_number_that_is_not_in_its_quote_is_dropped():
     assert agent.answer(req(3), ctx).status == "abstained"
 
 
+def test_a_finding_dropped_by_the_number_rule_leaves_a_note_without_text():
+    ok = finding("t1", "The deadline is Monday", "Ravi")
+    bad = finding("t1", "The deadline is Monday", "Ravi")
+    bad["statement"] = "The deadline is Monday and the fee is 500"
+    agent, ctx, _ = setup(TURNS, FakeLLM([final([ok, bad])]))
+    card = agent.answer(req(3), ctx)
+    assert len(card.findings) == 1 and any("dropped" in m and "number" in m for m in card.missing)
+    assert not any("500" in m or "Monday" in m for m in card.missing)
+    agent, ctx, _ = setup(TURNS, FakeLLM([final([bad])]))
+    card = agent.answer(req(3), ctx)
+    assert card.status == "abstained" and any("dropped" in m and "number" in m for m in card.missing)
+    agent, ctx, _ = setup(TURNS, FakeLLM([final([ok])]))
+    assert not any("dropped" in m for m in agent.answer(req(3), ctx).missing)
+
+
 def test_huge_tool_results_are_capped():
     from contextlens.agents.single import MAX_TOOL_CHARS, tool_result_block
 
