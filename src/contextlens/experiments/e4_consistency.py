@@ -64,6 +64,9 @@ SAMPLE_RULE = ("pairs ordered by sha256 of conversation_id|label|statement, the 
                "DECODE train sample and the DECODE dev sample")
 STYLE_NOTE = ("training used our own writing style (the train-only scenario set was written for this project, like the "
               "dev and test scenarios), so scores on our scenarios could look better than real use")
+TRAIN_SET_REVIEW_NOTE = ("an independent read of the invented train-only set, before training, caught real near-copies of "
+                         "held-out scenarios; the 3-word overlap guard scored them only 0.13 to 0.18, so it could not "
+                         "have caught them; those cases were rewritten and read again")
 BATCH_NOTE = ("on out of memory a setting is retried at half the batch size (floor MIN_BATCH_SIZE). A smaller batch means more "
               "optimizer steps per epoch at the same learning rate, so it can change the dev score; the winner rule does not "
               "adjust for that, and `settings_at_lower_batch_size` lists the settings whose score is not like for like")
@@ -426,7 +429,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "threshold": cm.THRESHOLD, "freeze_word_embeddings": True, "training": train.counts,
             "sample_rule": SAMPLE_RULE, "decode_dev_sample": DECODE_DEV_N, "decode_train_sample": DECODE_TRAIN_N,
             "selection_data": "dev scenarios (early stopping and winner), so dev scores are not held-out",
-            "style_note": STYLE_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
+            "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
             "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started, "labels_reviewed": False,
             "failed_systems": failed,
         }

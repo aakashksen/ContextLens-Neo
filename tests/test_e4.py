@@ -336,7 +336,8 @@ def test_the_run_writes_valid_records_for_both_sources(repo: Repo) -> None:
         assert {a["setting"] for a in r["attempts"] if a["kind"] == "system"} == {"tfidf", "zeroshot", "prompted"}
         assert r["config"]["winner_rule"] == e4.WINNER_RULE and "own writing style" in r["config"]["style_note"]
         assert {c["b"] for c in r["comparisons"]} <= {"tfidf", "zeroshot", "prompted"}
-    sc = recs["scenarios"]
+        assert r["config"]["train_set_review_note"] == e4.TRAIN_SET_REVIEW_NOTE
+    sc =recs["scenarios"]
     assert {"macro_f1", "false_alert_rate", "label_accuracy", "ece"} <= set(sc["metrics"]["trained"])
     assert sc["n"] == len(DEV_CASES) and sc["config"]["scored_cases"] == len(DEV_CASES) - 1
     assert (repo.root / "results/error-analysis-e4.md").is_file()
