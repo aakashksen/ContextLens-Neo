@@ -366,6 +366,22 @@ def cmd_done(args):
     print(f"done {args.id}")
 
 
+def merge_build_branch(task, worktree, branch):
+    """Brings the build branch into the task's worktree and reruns the acceptance commands on the result.
+    Exits, with nothing landed, if the merge conflicts or the merged code no longer passes."""
+    if not git_ok("merge-base", "--is-ancestor", branch, "HEAD", cwd=worktree).returncode:
+        return
+    merged = git_ok("merge", "--no-edit", "-q", branch, cwd=worktree)
+    if merged.returncode:
+        git_ok("merge", "--abort", cwd=worktree)
+        print(f"MERGE CONFLICT: {task['id']} conflicts with {branch}. Nothing landed; send it back to the implementer.\n{merged.stdout[-1500:]}")
+        sys.exit(4)
+    _, passed, log_path = run_acceptance(task, worktree, f"{task['id']}.merged.log")
+    if not passed:
+        print(f"MERGED CODE FAILED: {task['id']} no longer passes after merging {branch}. Nothing landed. See {log_path.relative_to(ROOT)}")
+        sys.exit(5)
+
+
 def cmd_land(args):
     """Merges a verified worktree task into the build branch. The build branch only ever moves forward
     to a commit that passed this task's acceptance commands after merging everything else that landed."""
@@ -387,16 +403,7 @@ def cmd_land(args):
         if dirty():
             sys.exit("refused: the build branch has uncommitted changes")
         branch = git("branch", "--show-current")
-        if git_ok("merge-base", "--is-ancestor", branch, "HEAD", cwd=worktree).returncode:
-            merged = git_ok("merge", "--no-edit", "-q", branch, cwd=worktree)
-            if merged.returncode:
-                git_ok("merge", "--abort", cwd=worktree)
-                print(f"MERGE CONFLICT: {args.id} conflicts with {branch}. Nothing landed; send it back to the implementer.\n{merged.stdout[-1500:]}")
-                sys.exit(4)
-            _, passed, log_path = run_acceptance(task, worktree, f"{args.id}.merged.log")
-            if not passed:
-                print(f"MERGED CODE FAILED: {args.id} no longer passes after merging {branch}. Nothing landed. See {log_path.relative_to(ROOT)}")
-                sys.exit(5)
+        merge_build_branch(task, worktree, branch)
         unlink_shared(Path(worktree))
         try:
             rescued = rescue_ignored(Path(worktree))
