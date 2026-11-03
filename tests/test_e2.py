@@ -495,3 +495,22 @@ def test_earlier_records_are_superseded_by_the_record_of_their_own_kind(repo: Pa
     cl = json.loads(second["records"]["cloud"].read_text(encoding="utf-8"))
     assert [e["run_id"] for e in local["supersedes"]] == [old[0]["run_id"]]
     assert [e["run_id"] for e in cl["supersedes"]] == [old[1]["run_id"]]
+
+
+# ---------------------------------------------------------------- the command line
+
+def test_the_command_refuses_to_start_without_claude_or_with_too_few_calls_left(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.llm import client
+
+    def never(**kw):
+        raise AssertionError("the run must not start")
+
+    monkeypatch.setattr(e2, "run_e2", never)
+    counter = tmp_path / "claude_calls.json"
+    monkeypatch.setattr(client, "CLAUDE_CALLS_PATH", counter)
+    monkeypatch.setattr(e2.shutil, "which", lambda name: None)
+    assert e2.main([]) == 3  # no claude command
+    monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
+    counter.write_text(json.dumps({"count": 250, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+    assert e2.main([]) == 3  # 300 - 250 = 50 calls left, below the 100 cases
