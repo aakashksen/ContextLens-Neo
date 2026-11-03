@@ -212,6 +212,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Do:** Same cases, same tools, same model, on dev. Compare quality, latency, tokens, with paired bootstrap and McNemar. Also break it down by category. Write the finding in plain language in the record's `notes`, including if the team loses.
 **Suggestions:** Also count injected claims in suggestions on the prompt-injection scenarios, for both systems, as in T3.3.
 **Tests:** tiny fixture writes a valid record holding both systems, with their comparison.
+**Decision (the coordinator):** After T5.2 lands and before this experiment, save the trained model's probabilities on DECODE dev by rescoring T5.2's chosen checkpoint, with no retraining and no test split. Compare a threshold sweep with a cascade, and add `CascadeChecker` implementing `ConsistencyChecker`: the trained model runs first, and only its flagged cases go to the prompted checker. Select the operating point on dev, by false-alert rate first with a catch-rate floor recorded before selecting. Carry it into this experiment and E8 as a system. Report its real latency. Report alert precision at 5% and 20% contradiction rates, labeled as calculated, not measured. Hand-read 30 false alarms for a pattern; DECODE text stays out of tracked files.
 **Accept:** `{py} -m pytest tests/test_e3.py -q`; `{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev`.
 
 ---
