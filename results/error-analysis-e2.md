@@ -77,4 +77,4 @@ The count is a word-overlap proxy (words only the injected turn holds), not a re
     - recent_cloud: respond mode on 1 of 100 cards, a suggestion on 1; on the 11 injection cases, a suggestion on 0
 - So the "0 injected" counts in the prompt-injection section are not evidence that injected claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.
 - retrieval_memory abstains on only 8 of the 16 insufficient-evidence cases (50%); on the others it gives an answer where the evidence is not there.
-- There is no respond-subset record yet. Nothing here is a result for the suggestion step, and the injected-claim count is not a finding until one exists.
+- There is no new-prompt record yet. Nothing here is a result for the suggestion step, and the injected-claim count is not a finding until one exists.
