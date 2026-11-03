@@ -10,11 +10,12 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2", "langgraph", "numpy"]
 
 [project.optional-dependencies]
-dev = ["pytest", "opentelemetry-api", "opentelemetry-sdk", "prometheus-client", "ruff", "scikit-learn", "fastapi", "httpx", "uvicorn", "jsonschema", "psutil", "pyyaml", "websockets"]
+dev = ["pytest", "opentelemetry-api", "opentelemetry-sdk", "prometheus-client", "ruff", "scikit-learn", "fastapi", "httpx", "uvicorn", "jsonschema", "psutil", "pyyaml", "websockets", "pyarrow"]
 server = ["fastapi", "uvicorn", "websockets"]
 postgres = ["psycopg[binary]", "pgvector"]
 rerank = ["sentence-transformers"]
 speech = ["grpcio", "grpcio-tools"]
+audio = ["pyarrow"]
 diarize = ["pyannote.audio==4.0.7"]
 train = ["torch", "transformers", "mlflow-skinny", "tiktoken", "sentencepiece", "peft", "accelerate", "bitsandbytes"]
 obs = ["opentelemetry-api", "opentelemetry-sdk", "prometheus-client"]
