@@ -19,6 +19,8 @@
 ## Provisional results
 Dev experiments may run before the person reviews the labels (H2), with `labels_reviewed: false` in the record. They guide choices but aren't claims. The final test run (E8) needs H1 and H2. If H2 finds wrong labels, fix them and rerun what they affect.
 
+Whose labels are reviewed depends on the record's source (`label_source`, decided from `scenario_source`): our `scenarios` once H2 is done; AMI questions (`ami_rule`) only with their own signed line, separate from H2; publisher-provided labels (DECODE, QMSum) count as reviewed by the person's decision of 2026-11-03. A claim from a publisher-labelled record must say "on published labels" in its `text`, and `claims check` rejects it otherwise. `claims check` decides from the record's `scenario_source`, so records written before this rule (flag false, no `label_source`) are judged the same way; a record whose source cannot be determined is not reviewed. DECODE and QMSum text may go to Claude through `claude -p` for grading and comparison; it is still never committed, published or redistributed.
+
 ## No peeking
 Replay feeds turns in order and freezes `as_of_seq` at the button press. Every retrieval and tool call filters on it, and a test confirms that a
 later turn can't appear in evidence.

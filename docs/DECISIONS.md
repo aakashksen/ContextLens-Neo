@@ -209,3 +209,11 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Who:** The person.
 - **Chosen:** Commit messages carry no tool or assistant names, no co-author lines and no session lines. Old verdict hashes were stale after the rewrite, finished tasks stayed finished, and the T1.3 to T1.5 gates were rerun.
 - **Reason:** The person's rule. Further reason not recorded.
+
+## 26. DECODE and QMSum may go to Claude; their labels count as reviewed, said as "on published labels"
+- **Date / task:** 2026-11-03, cleanup (`labels_reviewed` and claims), passed on by the coordinator.
+- **Who:** The person, in the coordinator's session: "QMSum and DECODE may go to Claude through claude -p for grading and comparison. Publisher-provided labels (DECODE, QMSum) count as reviewed for claims, and the wording says 'on published labels'."
+- **Before:** Both datasets were approved on 2026-11-02 for local, non-commercial evaluation only (QMSum also for training the T6.2 adapter locally), and their text could not leave this machine. Their labels were not counted as reviewed.
+- **Chosen:** Their text may go to Claude through `claude -p` for grading and comparison. `write_run` sets `labels_reviewed` true for the `publisher` label source, and `claims check` decides from the record's `scenario_source` so older records (flag false, no `label_source`) are covered; a record whose source cannot be determined is not reviewed. A claim from such a record must say "on published labels" in its `text`. Our scenarios and AMI keep their sign-offs. The cloud rule changed for future runs only; records made before 2026-11-03 did not send this text to Claude.
+- **Still in force:** Raw text is never committed, published or redistributed. "Never publish" for the QMSum adapter and for examples derived from QMSum is unchanged, because the person has not changed it.
+- **Evidence:** `docs/datasets.md`, `docs/TESTING.md`, `tests/test_claims_publisher.py`.
