@@ -67,3 +67,58 @@ def test_ece_has_an_interval_from_resampled_conversations() -> None:
     finally:
         series.RESAMPLES = 10_000
     assert 0 <= lo <= hi <= 1
+
+
+# ---- the train-only scenario set ----
+
+from pathlib import Path  # noqa: E402
+
+from contextlens.data import train_scenarios as ts  # noqa: E402
+from contextlens.data.scenarios import load_scenarios  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_training_set_covers_every_label_and_card_mode_and_is_synthetic() -> None:
+    scs = ts.load_train_scenarios(ROOT / "datasets/scenarios_train")
+    c = ts.counts(scs)
+    assert set(c["by_label"]) >= {"consistent", "update", "contradiction", "insufficient"}
+    assert set(c["by_mode"]) == {"recall", "clarify", "respond"}
+    assert c["abstention_cases"]["insufficient"] >= 5 and c["injected_turn_cases"]["with_injection"] >= 5
+    assert all(s.origin == "synthetic" and s.conversation.split == "train" for s in scs)
+    assert c["cases"]["total"] == c["cases"]["conversations"] == len({s.id for s in scs})
+    assert scs == ts.build_train_scenarios()  # the committed file is what the code builds
+
+
+def test_training_set_shares_nothing_with_dev_or_test_scenarios() -> None:
+    train = ts.load_train_scenarios(ROOT / "datasets/scenarios_train")
+    held = [s for sp in ("dev", "test") for s in load_scenarios(sp, ROOT / "datasets/scenarios")]
+    assert ts.overlap_problems(train, held) == []
+    assert not {s.conversation.id for s in train} & {s.conversation.id for s in held}
+
+
+def test_overlap_check_catches_an_id_a_turn_and_an_eight_word_run() -> None:
+    train = ts.build_train_scenarios()
+    held = [train[0].model_copy(update={"id": "x"})]
+    problems = ts.overlap_problems(train[:1], held)
+    assert any("repeats a held-out turn" in p for p in problems) and any("8-word runs" in p for p in problems)
+    other = train[1]
+    reworded = other.model_copy(update={"id": "y", "conversation": other.conversation.model_copy(update={"id": "y"})})
+    assert any("also in" in p for p in ts.overlap_problems([other], [other])) and ts.overlap_problems([other], [reworded])
+
+
+def test_training_cases_are_not_near_duplicates_of_each_other() -> None:
+    scs = ts.build_train_scenarios()
+    seen: dict[str, str] = {}
+    for s in scs:
+        for run in ts.word_runs([t.text for t in s.conversation.turns], 6):
+            assert seen.setdefault(run, s.id) == s.id, f"{run!r} appears in {seen[run]} and {s.id}"
+
+
+def test_deadline_update_pair_is_in_eval_set() -> None:
+    from contextlens.consistency.data import build_pairs
+
+    pairs = build_pairs("dev", ROOT / "tests/fixtures/data", ROOT / "datasets/scenarios")
+    hit = [p for p in pairs if p.source == "scenarios" and p.label == "update"
+           and p.statement == "We moved the deadline to Wednesday"]
+    assert len(hit) == 1 and hit[0].earlier == ["The deadline is Monday"]
