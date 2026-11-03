@@ -75,6 +75,7 @@ def write_run(
     *,
     comparisons: list[dict[str, Any]] | None = None,
     supersedes: list[dict[str, str]] | None = None,
+    subset: str | None = None,
     root: Path = ROOT,
     allow_dirty: bool = False,
 ) -> Path:
@@ -108,6 +109,7 @@ def write_run(
         "intervals": {sys: {k: list(v) for k, v in d.items()} for sys, d in intervals.items()},
         "comparisons": comparisons or [],
         "supersedes": supersedes or [],
+        **({"subset": subset} if subset is not None else {}),
         "attempts": attempts,
         "claude_calls": config.get("claude_calls", 0),
         "labels_reviewed": config.get("labels_reviewed", False),

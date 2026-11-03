@@ -21,6 +21,9 @@ TOLERANCE = 1e-9
 K_DEFAULT = (1, 3, 5, 10)
 FAKE = re.compile(r"fake|stub", re.I)
 TIMESTAMP = re.compile(r"\d{8}T\d{12}Z")
+SUBSET_NAME = re.compile(r"[A-Za-z0-9_-]+")
+CRLF, LF = chr(13) + chr(10), chr(10)
+SUBSETS_REL = Path("datasets/splits/subsets")
 
 
 def recompute_metrics(
@@ -142,6 +145,40 @@ def _row_problems(scenarios: list[Scenario], preds: list[Prediction]) -> list[st
     return out
 
 
+def subset_problems(rec: dict[str, Any], root: Path, split_ids: list[str]) -> tuple[set[str] | None, list[str]]:
+    """The ids of the record's named subset, or None with the problems when the subset can't be trusted.
+    The manifest must be the same at the record's git_commit as on disk, so it was fixed before the run."""
+    name = rec["subset"]
+    if not (isinstance(name, str) and SUBSET_NAME.fullmatch(name)):
+        return None, [f"subset {name!r} is not a valid subset name"]
+    rel = (SUBSETS_REL / f"{name}.json").as_posix()
+    path = root / rel
+    if not path.is_file():
+        return None, [f"subset {name} has no manifest at {rel}"]
+    text = path.read_text(encoding="utf-8")
+    shown = git(root, "show", f"{rec['git_commit']}:{rel}")
+    if shown.returncode != 0 or shown.stdout.replace(CRLF, LF) != text.replace(CRLF, LF):
+        return None, [f"subset {name} manifest was not committed before the run (absent or different at git_commit)"]
+    try:
+        manifest = json.loads(text)
+        ids, split = manifest["ids"], manifest["split"]
+        ok = isinstance(ids, list) and all(isinstance(i, str) for i in ids)
+    except (ValueError, KeyError, TypeError):
+        ok = False
+    if not ok:
+        return None, [f"subset {name} manifest needs split and a list of ids"]
+    if split != rec["split"]:
+        return None, [f"subset {name} belongs to split {split}, not {rec['split']}"]
+    if not ids:
+        return None, [f"subset {name} has no ids"]
+    if len(set(ids)) != len(ids):
+        return None, [f"subset {name} repeats ids"]
+    stray = sorted(set(ids) - set(split_ids))
+    if stray:
+        return None, [f"subset {name} has ids not in the split: {stray[:3]}"]
+    return set(ids), []
+
+
 def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     problems = [f"missing field {k}" for k in REQUIRED if k not in rec]
     if problems:
@@ -174,8 +211,17 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
             problems.append("scenario file no longer matches the split manifest")
         else:
             scenarios = load_scenarios(split, root / "datasets/scenarios")
-        if rec["n"] != entry["n"]:
-            problems.append(f"n={rec['n']} differs from the split's {entry['n']} cases")
+        expected_n, what = entry["n"], "split"
+        if "subset" in rec:
+            ids, bad = subset_problems(rec, root, [s.id for s in scenarios])
+            problems += bad
+            if ids is None:
+                scenarios = []
+            else:
+                scenarios = [s for s in scenarios if s.id in ids]
+                expected_n, what = len(ids), "subset"
+        if rec["n"] != expected_n:
+            problems.append(f"n={rec['n']} differs from the {what}'s {expected_n} cases")
 
     paths, metrics, intervals = rec["predictions"], rec["metrics"], rec["intervals"]
     if not isinstance(paths, dict) or not paths:
