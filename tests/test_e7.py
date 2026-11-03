@@ -279,8 +279,8 @@ def run(repo: Path, speedup: float = 1000.0, realtime_meeting: str | None = "m1"
         root=repo, speech=ScriptedSpeech(scripts), backend=TruthBackend(),
         embedder=NoEmbed(), make_assistant=make_assistant, extractor=FirstTurnExtractor(),
         models={"llm": "qwen3.5:4b-q4_K_M", "speech": "whisper.cpp ggml-tiny.en", "diarizer": "pyannote"},
-        prompt_versions={"team": "v1"}, say=lambda m: None, speedup=speedup, realtime_meeting=realtime_meeting,
-        step_ms=10_000, **({"ran_alone": True, "device_probe": ALL_CUDA} | kw))
+        prompt_versions={"team": "v1"}, speedup=speedup, realtime_meeting=realtime_meeting,
+        step_ms=10_000, **({"ran_alone": True, "device_probe": ALL_CUDA, "say": lambda m: None} | kw))
 
 
 def test_tiny_fixture_writes_a_valid_record(repo: Path) -> None:

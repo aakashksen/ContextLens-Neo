@@ -597,7 +597,8 @@ def run_e7(
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="e7_realtime")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("build-scenarios")
+    b = sub.add_parser("build-scenarios")
+    b.add_argument("--raw", type=Path, help="folder holding ami/ (default datasets/raw)")
     r = sub.add_parser("run")
     r.add_argument("--only-meeting", help="a short check on one meeting; writes no run record")
     alone = r.add_mutually_exclusive_group(required=True)
@@ -609,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--realtime-meeting", help="required with a speedup other than 1.0: replayed again at 1.0")
     args = ap.parse_args(argv)
     if args.cmd == "build-scenarios":
-        print(build_ami_dev())
+        print(build_ami_dev(raw_root=args.raw))
         return 0
     return _run_real(args)
 
