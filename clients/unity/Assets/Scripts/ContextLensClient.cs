@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR;
 
 namespace ContextLens
 {
@@ -15,11 +14,15 @@ namespace ContextLens
 
         ContextLensSocket socket;
         readonly List<Turn> turns = new List<Turn>();
-        string serverState = "not connected"; // only ever what the server last said
+        // What the indicator may claim. Same rules as clients/web/src/session.ts: the user's own Pause,
+        // Resume and Delete presses take effect here at once, and a "recording" status the user did
+        // not ask for (after Pause, Delete or a closed socket) is stale and ignored.
+        string connection = "connecting"; // connecting | recording | paused | deleting | deleted | closed
+        bool resumePending; // from the user's Resume press until the server answers recording
+        string connectionDetail = "";
         WebCamTexture webcam;
         Text cardText, stateText, webcamText, transcriptText;
         RawImage webcamPreview;
-        bool wasPrimaryDown;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
@@ -38,7 +41,8 @@ namespace ContextLens
             }
             catch (Exception e)
             {
-                serverState = "not connected (" + e.Message + ")";
+                connection = "closed";
+                connectionDetail = e.Message;
             }
             RefreshState();
         }
@@ -49,23 +53,14 @@ namespace ContextLens
             while (socket.TryReceive(out var frame)) Handle(frame);
             while (socket.TryEvent(out var ev))
             {
-                if (ev == "closed") { if (serverState != "deleted") serverState = "not connected"; }
-                else serverState = ev;
+                if (ev == "closed")
+                {
+                    resumePending = false;
+                    if (connection != "deleted") connection = "closed";
+                }
+                else connectionDetail = ev;
                 RefreshState();
             }
-            PollController();
-        }
-
-        // Primary button (A/X) on any controller; the XR Device Simulator drives the same input.
-        void PollController()
-        {
-            bool down = false;
-            var devices = new List<InputDevice>();
-            InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.Controller, devices);
-            foreach (var d in devices)
-                if (d.TryGetFeatureValue(CommonUsages.primaryButton, out bool v) && v) down = true;
-            if (down && !wasPrimaryDown) Press();
-            wasPrimaryDown = down;
         }
 
         void Handle(string frame)
@@ -88,15 +83,17 @@ namespace ContextLens
                         {
                             cardText.text = "Server error: " + s.detail;
                         }
+                        else if (s.state == "deleted")
+                        {
+                            resumePending = false;
+                            connection = "deleted";
+                            turns.Clear();
+                            cardText.text = "Transcript deleted.";
+                            RefreshTranscript();
+                        }
                         else
                         {
-                            serverState = s.state;
-                            if (s.state == "deleted")
-                            {
-                                turns.Clear();
-                                cardText.text = "Transcript deleted.";
-                                RefreshTranscript();
-                            }
+                            ReceiveStatus(s.state);
                         }
                         RefreshState();
                         break;
@@ -111,6 +108,23 @@ namespace ContextLens
             }
         }
 
+        // Capture may start only from the first connect or a Resume the user pressed.
+        void ReceiveStatus(string state)
+        {
+            if (connection == "deleting" || connection == "deleted" || connection == "closed") return;
+            if (state == "recording")
+            {
+                if (connection == "paused" && !resumePending) return;
+                resumePending = false;
+                connection = "recording";
+            }
+            else if (state == "paused")
+            {
+                connection = "paused";
+            }
+        }
+
+        // Called by a button, and by ContextLensXRInput when the controller or simulator primary button goes down.
         public void Press()
         {
             if (turns.Count == 0)
@@ -131,11 +145,38 @@ namespace ContextLens
         }
 
         // A chunk of silence: this client does not capture the microphone.
-        public void SendTestAudio() =>
+        // Sent only while this client itself believes it is recording.
+        public void SendTestAudio()
+        {
+            if (connection != "recording") return;
             socket.Send(new AudioMessage { data = Convert.ToBase64String(new byte[3200]) });
-        public void Pause() => socket.Send(new PauseMessage());
-        public void Resume() => socket.Send(new ResumeMessage());
-        public void DeleteTranscript() => socket.Send(new DeleteMessage());
+        }
+
+        public void Pause()
+        {
+            if (connection != "recording") return;
+            resumePending = false;
+            connection = "paused"; // shown at once, whatever the server later says
+            RefreshState();
+            socket.Send(new PauseMessage());
+        }
+
+        public void Resume()
+        {
+            if (connection != "paused" || resumePending) return;
+            resumePending = true;
+            socket.Send(new ResumeMessage());
+            RefreshState();
+        }
+
+        public void DeleteTranscript()
+        {
+            if (connection == "deleting" || connection == "deleted" || connection == "closed") return;
+            resumePending = false;
+            connection = "deleting";
+            RefreshState();
+            socket.Send(new DeleteMessage());
+        }
 
         public void ToggleWebcam()
         {
@@ -183,8 +224,11 @@ namespace ContextLens
 
         void RefreshState()
         {
-            bool rec = serverState == "recording";
-            stateText.text = rec ? "REC: server says recording" : "Not recording (" + serverState + ")";
+            // "REC" appears only when the server has confirmed recording and the user has not pressed
+            // Pause or Delete since. Resume stays "paused" until the server answers.
+            bool rec = connection == "recording";
+            string label = connection == "closed" ? "not connected" + (connectionDetail != "" ? " (" + connectionDetail + ")" : "") : connection;
+            stateText.text = rec ? "REC: server says recording" : "Not recording (" + label + ")";
             stateText.color = rec ? Color.red : Color.gray;
         }
 
