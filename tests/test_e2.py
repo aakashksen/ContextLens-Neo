@@ -183,38 +183,11 @@ def _unloaded(wire: Wire) -> set[str]:
 
 # ---------------------------------------------------------------- what may go to the cloud
 
-def test_the_cloud_never_gets_qmsum_decode_or_an_unlisted_source() -> None:
-    ok = _scn("a", "recall", ["x"])
-    e2.assert_cloud_safe([ok, _scn("m", "recall", ["x"], source="longmemeval")], "scenarios")
-    for bad in (_scn("q", "recall", ["x"], source="qmsum"), _scn("d", "recall", ["x"], source="decode"),
-                _scn("e", "recall", ["x"], source="ami"), _scn("qmsum-test-0-q1", "recall", ["x"])):
-        with pytest.raises(e2.RunBroken):
-            e2.assert_cloud_safe([ok, bad], "scenarios")
-    for source in ("qmsum", "decode"):
-        with pytest.raises(e2.RunBroken):
-            e2.assert_cloud_safe([ok], source)
-
-
-def test_the_committed_subset_is_what_the_rule_gives_and_is_cloud_safe() -> None:
-    dev = load_scenarios("dev", REAL_ROOT / "datasets/scenarios")
-    manifest = json.loads((REAL_ROOT / e2.SUBSETS_REL / f"{e2.SUBSET}.json").read_text(encoding="utf-8"))
-    by_id = {s.id: s for s in dev}
-    assert manifest["split"] == "dev" and manifest["ids"] == e2.choose_subset(dev)
-    assert len(manifest["ids"]) == len(set(manifest["ids"])) == e2.SUBSET_N
-    e2.assert_cloud_safe([by_id[i] for i in manifest["ids"]], "scenarios")
-    assert {by_id[i].conversation.source for i in manifest["ids"]} <= e2.CLOUD_SOURCES
-    cats = {by_id[i].category for i in manifest["ids"]}
-    assert {"prompt_injection", "respond_with_suggestion", "insufficient_evidence"} <= cats
-
-
-def test_the_subset_rule_is_proportional_and_does_not_depend_on_order() -> None:
-    cases = _cases() + [_scn("q1", "recall", ["x"], source="qmsum")]
-    ids = e2.choose_subset(cases, n=6)
-    assert len(ids) == 6 and "q1" not in ids
-    assert {i[0] for i in ids} >= {"r", "n", "i", "s"}
-    assert e2.choose_subset(list(reversed(cases)), n=6) == [i for i in [s.id for s in reversed(cases)] if i in ids]
-    with pytest.raises(ValueError):
-        e2.choose_subset(_cases(), n=50)
+def test_the_cloud_set_takes_cases_of_every_source_and_has_no_refusal_check() -> None:
+    cases = [_scn("a", "recall", ["x"]), _scn("q", "recall", ["x"], source="qmsum"), _scn("d", "recall", ["x"], source="decode"),
+             _scn("qmsum-test-0-q1", "recall", ["x"])]
+    assert e2.all_case_ids(cases) == ["a", "q", "d", "qmsum-test-0-q1"]
+    assert not hasattr(e2, "assert_cloud_safe") and not hasattr(e2, "LOCAL_ONLY_SOURCES")
 
 
 # ---------------------------------------------------------------- rules and analysis
@@ -397,7 +370,7 @@ def test_a_missing_model_or_a_dirty_tree_stops_before_any_call(repo: Path) -> No
 
 # ---------------------------------------------------------------- the cloud comparison
 
-def test_the_cloud_is_never_called_for_a_subset_with_a_restricted_source(repo: Path) -> None:
+def test_a_subset_with_a_qmsum_case_is_accepted_by_the_cloud_stage(repo: Path) -> None:
     bad = _scn("q0", "recall", ["the venue is porto", "noted"], source="qmsum")
     path = repo / "datasets/scenarios/dev.jsonl"
     path.write_text(path.read_text(encoding="utf-8") + bad.model_dump_json() + "\n", encoding="utf-8")
@@ -407,9 +380,8 @@ def test_the_cloud_is_never_called_for_a_subset_with_a_restricted_source(repo: P
     _git(repo, "commit", "-q", "-m", "bad subset")
     writer = Scripted()
     llm, cloud = _cloud()
-    with pytest.raises(e2.RunBroken, match="may not go to a cloud model"):
-        _go(repo, writer=writer, cloud=cloud, subset="e2-bad")
-    assert llm.raw_calls == 0 and writer.raw_calls == 0 and _nothing_written(repo)
+    result, _ = _go(repo, writer=writer, cloud=cloud, subset="e2-bad")
+    assert llm.raw_calls > 0 and "cloud" in result["records"]
 
 
 def test_a_subset_that_was_not_committed_before_the_run_stops_it(repo: Path) -> None:
@@ -513,8 +485,8 @@ def test_the_command_refuses_to_start_without_claude_or_with_too_few_calls_left(
     monkeypatch.setattr(e2.shutil, "which", lambda name: None)
     assert e2.main([]) == 3  # no claude command
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    counter.write_text(json.dumps({"count": 950, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
-    assert e2.main([]) == 3  # 1000 - 950 = 50 calls left, below the 100 cases
+    counter.write_text(json.dumps({"count": 1000, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+    assert e2.main([]) == 3  # the cap leaves no call
 
 
 def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -533,7 +505,7 @@ def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path,
     for count in (0, 700, 900):
         counter.write_text(json.dumps({"count": count, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
         assert e2.main([]) == 0
-    assert seen == [(250, 250), (250, 950), (100, 1000)]
+    assert seen == [(1000, 1000), (300, 1000), (100, 1000)]
     assert not hasattr(e2, "CLOUD_CALL_CAP")
 
 
