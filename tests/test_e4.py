@@ -236,7 +236,7 @@ def test_mlflow_logging_goes_to_a_local_store(tmp_path: Path) -> None:
 
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
-from types import SimpleNamespace  # noqa: E402
+from contextlens.llm.client import LLMResult  # noqa: E402
 
 from contextlens.agents.consistency_check import PromptedChecker  # noqa: E402
 from contextlens.consistency.baselines import ZeroShotChecker  # noqa: E402
@@ -267,7 +267,7 @@ def _stub_llm(label: str = "consistent"):
         model = "stub-llm-for-tests"
 
         def complete(self, messages, *, schema=None, max_tokens=512, temperature=0.0, timeout_s=10.0):
-            return SimpleNamespace(parsed=schema(label=label, confidence=0.7))
+            return LLMResult(text="", parsed=schema(label=label, confidence=0.7), prompt_tokens=10, completion_tokens=5)
 
     return Llm()
 
