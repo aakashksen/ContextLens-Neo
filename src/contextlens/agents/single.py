@@ -252,6 +252,25 @@ def _suggest(
     return (parsed.suggestion or "").strip() or None, None
 
 
+def verify_card(card: Card, ctx: Context, conv_id: str) -> Card:
+    """The checks every system's findings pass: each quote is a real turn at or before the cut-off, and every
+    number in a statement is in its quotes. Raises on a store error."""
+    guarded = guard_card(card, ctx.store, ctx.as_of_seq, conv_id)
+    kept = [f for f in guarded.findings if _numbers_supported(f)]
+    dropped = len(guarded.findings) - len(kept)
+    note = [f"{dropped} finding(s) dropped: a number in it is not in the cited quotes"] * (dropped > 0)
+    if not kept:
+        out = _abstained("no finding passed the checks")
+        return out.model_copy(update={"missing": [*out.missing, *note]})
+    if len(kept) < len(card.findings):
+        return guarded.model_copy(update={
+            "findings": kept,
+            "status": "partial" if guarded.status == "answered" else guarded.status,
+            "missing": [*guarded.missing, *note],
+        })  # fmt: skip
+    return guarded
+
+
 def _finish(
     card: Card, ctx: Context, req: ButtonRequest, start: float, run: "_Run", llm: LLMClient, end: float,
     guard_timeout: float | None = None,
@@ -269,23 +288,7 @@ def _finish(
     card = card.model_copy(update={"suggestion": None})
     if card.findings:
         try:
-
-            def check() -> Card:
-                guarded = guard_card(card, ctx.store, ctx.as_of_seq, req.conversation_id)
-                kept = [f for f in guarded.findings if _numbers_supported(f)]
-                dropped = len(guarded.findings) - len(kept)
-                note = [f"{dropped} finding(s) dropped: a number in it is not in the cited quotes"] * (dropped > 0)
-                if not kept:
-                    out = _abstained("no finding passed the checks")
-                    return out.model_copy(update={"missing": [*out.missing, *note]})
-                if len(kept) < len(card.findings):
-                    return guarded.model_copy(update={
-                        "findings": kept,
-                        "status": "partial" if guarded.status == "answered" else guarded.status,
-                        "missing": [*guarded.missing, *note],
-                    })  # fmt: skip
-                return guarded
-
+            check = functools.partial(verify_card, card, ctx, req.conversation_id)
             card = _bounded(check, guard_timeout)
         except _Abandoned:
             card = _abstained("the check did not finish in time")
