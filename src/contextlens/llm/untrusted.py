@@ -14,13 +14,13 @@ def escape(text: str) -> str:
     return flat.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+_ENTITY = re.compile("&(amp|lt|gt);")
+_CHARS = {"amp": "&", "lt": "<", "gt": ">"}
+
+
 def unescape(text: str) -> str:
-    """Undo `escape` for model output that echoed escaped prompt text, even if echoed repeatedly."""
-    while True:
-        plain = text.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-        if plain == text:
-            return text
-        text = plain
+    """Exactly reverse `escape` in one pass: `unescape(escape(x)) == x` (apart from line breaks)."""
+    return _ENTITY.sub(lambda m: _CHARS[m.group(1)], text)
 
 
 def effective_speaker(turn: Turn) -> str:

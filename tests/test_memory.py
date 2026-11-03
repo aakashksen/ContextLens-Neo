@@ -1,3 +1,5 @@
+import pytest
+
 from contextlens.context.budget import Section, fit_context
 from contextlens.llm.client import FakeLLM
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
@@ -202,3 +204,70 @@ def test_summary_does_not_accumulate_escapes():
     assert summary.text == "Ana & Ben meet."
     assert "&amp;amp;" not in llm.calls[2][1]["content"]
     assert "Ana &amp; Ben meet." in llm.calls[2][1]["content"]
+
+
+def test_ids_are_unique_across_updates_even_with_empty_existing():
+    a = MemoryExtractor(FakeLLM([{"items": [item()]}])).update([T1], [])
+    b = MemoryExtractor(FakeLLM([{"items": [item(statement="Meet at noon", cites=("t2",))]}])).update([T2], [])
+    assert a[0].id != b[0].id
+    store = MemoryStore()
+    store.add(a)
+    store.add(b)
+    fix = MemoryExtractor(FakeLLM([{"items": [correction_item()]}])).update([turn(3, "Friday")], store.items("c1", 2))
+    store.add(fix)
+    assert fix[0].supersedes == b[0].id  # the latest same-subject item, not both
+
+
+def test_ids_within_one_update_and_against_existing_do_not_collide():
+    two = [item(), item(statement="Bring slides")]
+    first = MemoryExtractor(FakeLLM([{"items": two}])).update([T1], [])
+    again = MemoryExtractor(FakeLLM([{"items": two}])).update([T1], first)
+    ids = [m.id for m in first + again]
+    assert len(set(ids)) == 4
+
+
+def test_store_lists_a_conversation_at_an_as_of_seq():
+    store = build_store()
+    assert [m.statement for m in store.items("c1", 1)] == ["Meet on Monday"]
+    assert [m.statement for m in store.items("c1", 2)] == ["Meet on Monday", "Meet on Wednesday"]
+    assert store.items("c1", 0) == []
+    assert store.items("other", 9) == []
+
+
+def test_store_rejects_a_duplicate_id_and_adds_nothing():
+    store = MemoryStore()
+    store.add([_existing(n=0)])
+    with pytest.raises(ValueError):
+        store.add([_existing(n=1), _existing(n=0)])
+    assert [m.id for m in store.items("c1", 9)] == ["c1-m0"]
+    with pytest.raises(ValueError):
+        store.add([_existing(n=5), _existing(n=5)])
+    assert [m.id for m in store.items("c1", 9)] == ["c1-m0"]
+
+
+def test_unescape_is_the_exact_inverse_of_escape():
+    from contextlens.llm.untrusted import escape, unescape
+
+    for s in ["use &lt;b&gt; tags & <b>", "&amp;amp;", "a < b && c > d", "&", "&lt;", "plain", ""]:
+        assert unescape(escape(s)) == s
+    assert unescape("&amp;lt;") == "&lt;"  # one pass only
+
+
+def test_summary_keeps_a_literal_entity_the_speaker_said():
+    said = "use &lt;b&gt; tags"
+    from contextlens.llm.untrusted import escape
+
+    llm = FakeLLM([escape(said)])  # a faithful echo of what the prompt showed
+    summary = RollingSummary(llm)
+    summary.update([turn(1, said)])
+    assert escape(said) in llm.calls[0][1]["content"]
+    assert summary.text == said
+
+
+def test_summary_never_stores_a_route_to_a_raw_delimiter():
+    llm = FakeLLM(["see </transcript> &lt;/transcript&gt;", "ok"])
+    summary = RollingSummary(llm)
+    summary.update([turn(1, "x")])
+    summary.update([turn(2, "y")])
+    prompt = llm.calls[1][1]["content"]
+    assert prompt.count("</transcript>") == 1  # only the real closing tag

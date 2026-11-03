@@ -26,6 +26,15 @@ class _Out(BaseModel):
     items: list[_Raw]
 
 
+def _new_id(conv: str, as_of: int, taken: set[str]) -> str:
+    """Ids carry the seq of the newest turn read, so updates over different turns never share one."""
+    n = 0
+    while (new := f"{conv}-m{as_of}-{n}") in taken:
+        n += 1
+    taken.add(new)
+    return new
+
+
 class MemoryExtractor:
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
@@ -48,6 +57,7 @@ class MemoryExtractor:
         as_of = max(t.seq for t in new_turns)
         conv = new_turns[0].conversation_id
         result: list[MemoryItem] = []
+        taken = {m.id for m in existing}
         for raw in out.items:
             cites = []
             for i in raw.source_turn_ids:
@@ -71,7 +81,7 @@ class MemoryExtractor:
             speaker = speakers.pop() if len(speakers) == 1 else "unknown"
             result.append(
                 MemoryItem(
-                    id=f"{conv}-m{len(existing) + len(result)}",
+                    id=_new_id(conv, as_of, taken),
                     conversation_id=conv,
                     kind=raw.kind,
                     subject=raw.subject,
@@ -90,7 +100,18 @@ class MemoryStore:
         self._items: list[MemoryItem] = []
 
     def add(self, items: list[MemoryItem]) -> None:
+        """Adds all of `items` or, if an id is already used (or repeated), none and raises ValueError."""
+        used = {m.id for m in self._items}
+        for m in items:
+            if m.id in used:
+                raise ValueError(f"memory item id already in the store: {m.id}")
+            used.add(m.id)
         self._items.extend(items)
+
+    def items(self, conv_id: str, as_of_seq: int) -> list[MemoryItem]:
+        """Every item of the conversation known at `as_of_seq`, oldest first, superseded ones included."""
+        seen = [m for m in self._items if m.conversation_id == conv_id and m.as_of_seq <= as_of_seq]
+        return sorted(seen, key=lambda m: m.as_of_seq)
 
     def lookup(
         self, conv_id: str, subject: str, as_of_seq: int, include_superseded: bool = False
