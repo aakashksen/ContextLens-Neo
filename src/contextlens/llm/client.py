@@ -22,6 +22,16 @@ CLAUDE_CALLS_PATH = REPO_ROOT / "results" / "claude_calls.json"
 CLAUDE_CALL_CAP = 1000
 
 
+_caller = threading.local()
+
+
+def stop_retries_when(stopped: threading.Event) -> None:
+    """On this thread, once `stopped` is set, `complete` makes no further attempt.
+
+    A caller that gave up waiting sets it, so an abandoned call does not start a paid retry."""
+    _caller.stopped = stopped
+
+
 class LLMError(Exception):
     def __init__(self, *args: object, results: list[LLMResult] | None = None) -> None:
         super().__init__(*args)
@@ -85,6 +95,9 @@ class _Base:
                 f"That was not valid for the required JSON schema: {err}\n"
                 "Reply again with only valid JSON."
             )
+        stopped = getattr(_caller, "stopped", None)
+        if stopped is not None and stopped.is_set():
+            raise LLMError("no retry: the caller stopped waiting", results=[res])
         retry = [
             *messages,
             {"role": "assistant", "content": res.text},

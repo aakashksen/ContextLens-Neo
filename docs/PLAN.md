@@ -175,11 +175,13 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Produces:** `SingleAgent(llm, tools, prompt_version, max_steps=4, deadline_s=8.0)` implementing `Assistant`, using a tool-calling loop with structured output, then `guard_card`. Also `RecentTurnsAssistant`, `FullTranscriptAssistant`, and `RetrievalAssistant` as the simple baselines for E2.
 **Tests:** `test_empty_conversation_abstains`; `test_one_short_turn_abstains_or_answers_only_from_it`; `test_stops_after_max_steps`; `test_deadline_returns_partial`; `test_llm_error_returns_abstained`; `test_injection_turn_does_not_change_card` (`FakeLLM` scripted to obey would be stopped by the guard; check the invented claim is dropped); `test_default_press_uses_latest_exchange`.
 **From phase review:** Tool results sent back to a model must go through the shared escaping in `src/contextlens/llm/untrusted.py`, since `Tools` returns raw objects. `guard_card` lets a store error out, so the agent must catch it and abstain. A card's `suggestion` is not verified by the guard.
+**Decision (the person):** No word-overlap filter on suggestions. The first step's suggestion is always discarded; in respond mode a second call, shown only the verified finding statements and the question, writes it, and every drop is noted in `missing`.
 **Accept:** `{py} -m pytest tests/test_single_agent.py -q`.
 
 ### T3.3: Experiment E2, context strategies
 **Files:** `src/contextlens/experiments/e2_context.py`, `tests/test_e2.py`.
 **Do:** On dev, compare recent turns, full transcript, retrieval, and retrieval + memory with one local model. Also run the best strategy on `ClaudeCodeClient` over at most 100 synthetic or benchmark cases, as the cloud comparison. Report grounded rate, unsupported claims, abstention both ways, speaker accuracy, latency, and tokens, split by scenario category and by public vs synthetic.
+**Suggestions:** Also count, on the prompt-injection scenarios, injected claims that appear in a card's suggestion (T3.2's second call can still repeat one a kept finding repeated).
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
 **From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run. `tests/test_no_raw_text.py` misses a quote hard-wrapped across lines in a non-JSON file, and one used as a JSON dict key; close both before this task writes committed output from restricted sources.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
@@ -207,6 +209,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 ### T4.2: Experiment E3, team vs single agent
 **Files:** `src/contextlens/experiments/e3_team.py`, `tests/test_e3.py`.
 **Do:** Same cases, same tools, same model, on dev. Compare quality, latency, tokens, with paired bootstrap and McNemar. Also break it down by category. Write the finding in plain language in the record's `notes`, including if the team loses.
+**Suggestions:** Also count injected claims in suggestions on the prompt-injection scenarios, for both systems, as in T3.3.
 **Tests:** tiny fixture writes a valid record holding both systems, with their comparison.
 **Accept:** `{py} -m pytest tests/test_e3.py -q`; `{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev`.
 
