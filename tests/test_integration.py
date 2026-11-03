@@ -610,3 +610,12 @@ def test_press_end_to_end_returns_a_cited_card(monkeypatch):
         print("\nEND-TO-END REPORT (no transcript text beyond the fixture's):\n" + json.dumps(report, indent=2), flush=True)
         raise
     print("\nEND-TO-END TIMINGS:", json.dumps({"warmup": report["warmup"], "stage_ms": stages}), flush=True)
+
+
+def test_compose_publishes_ports_on_the_loopback_only():
+    import yaml
+
+    services = yaml.safe_load((ROOT / "docker-compose.yml").read_text("utf-8"))["services"]
+    published = [(name, p) for name, s in services.items() for p in s.get("ports", [])]
+    assert {n for n, _ in published} >= {"db", "speech", "speech-gpu", "prometheus", "grafana"}
+    assert all(str(p).startswith("127.0.0.1:") for _, p in published), published
