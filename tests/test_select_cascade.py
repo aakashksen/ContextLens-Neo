@@ -63,8 +63,9 @@ def test_selection_is_lowest_false_alert_rate_among_points_meeting_the_floor_on_
     pts = sc.sweep(cases(SPEC), thresholds=(0.0, 0.25, 0.5, 0.75, 0.95))
     best = sc.select(pts, floor=0.5)
     assert best is not None and (best.system, best.threshold) == ("cascade", 0.5)  # catch 3/4, no false alert
-    # a floor of 1.0 is met only by points flagging everything the models can see: prompted-alone misses a 0.3 case
-    assert sc.select(pts, floor=1.0) is None
+    # a floor of 1.0 needs the 0.3 case caught; only the trained model alone, at 0.25 or lower, flags it and passes the prompted checker
+    strict = sc.select(pts, floor=1.0)
+    assert strict is not None and (strict.system, strict.threshold) == ("trained", 0.25)
 
 
 def test_a_point_that_misses_the_floor_on_one_source_is_not_eligible() -> None:
