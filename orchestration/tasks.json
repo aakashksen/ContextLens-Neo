@@ -87,9 +87,9 @@
       "status": "done",
       "started_at": "2026-11-02T22:15:25+00:00",
       "verified": {
-        "commit": "0bf5e94f11919c6079292b873598b86b04112794",
-        "passed": false,
-        "at": "2026-11-03T04:56:04+00:00"
+        "commit": "f152104ed0ce231ed6f4107e728cc1c6a75a3a64",
+        "passed": true,
+        "at": "2026-11-03T05:17:28+00:00"
       },
       "done_at": "2026-11-02T22:22:02+00:00"
     },
@@ -474,7 +474,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T05:05:32+00:00"
+      "started_at": "2026-11-03T05:05:32+00:00",
+      "verified": {
+        "commit": "0c7e17ea60a2e5cc349cacb1b49d7ffb818cd285",
+        "passed": true,
+        "at": "2026-11-03T05:12:28+00:00"
+      },
+      "attempts": 1,
+      "reason": "fake_server.py ignores as_of_seq: press with as_of_seq=0 gets an answered card citing turn c1-t2 the client never received; as_of_seq=99 and -5 accepted"
     },
     {
       "id": "T8.1",
