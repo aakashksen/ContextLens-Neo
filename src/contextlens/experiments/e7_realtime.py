@@ -64,6 +64,7 @@ AUDIO_REL = Path("datasets/raw/ami-audio")  # <meeting>.wav, git-ignored
 STEP_MS = 60_000  # a tick; the speaker model sees two minutes, so each run overlaps the one before
 TAIL_MS = 3_000  # silence after the last cut, so the speech service closes its last utterance
 CHUNK_MS = 100
+GPU_SPEECH_ADDRESS = "127.0.0.1:50052"  # docker compose --profile gpu up -d speech-gpu; the CPU service is on 50051
 SYSTEMS = ("clean", "asr_oracle_speakers", "asr_pipeline")
 ASR_SYSTEMS = SYSTEMS[1:]
 KS = (1, 3, 5)
@@ -445,7 +446,7 @@ def run_e7(
     prompt_versions: dict[str, str], telemetry: Telemetry | None = None, audio_dir: Path | None = None,
     rerun_of: str | None = None, changes: list[str] | None = None, speedup: float = 1.0, settle_s: float = 10.0,
     realtime_meeting: str | None = None, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
-    ran_alone: bool, device_probe: Callable[[], dict[str, str | None]], only_meeting: str | None = None,
+    ran_alone: bool, speech_address: str, device_probe: Callable[[], dict[str, str | None]], only_meeting: str | None = None,
 ) -> Path:
     """Replay every dev scenario three ways and write one E7 record. A first run is the baseline and names
     its two slowest press stages; a rerun (`rerun_of` a baseline's run id, with the `changes` made) must be on the
@@ -455,6 +456,7 @@ def run_e7(
     real-time figures. Such a run records its speedup and `latency_basis`, leaves its own speech timings out, and must
     name `realtime_meeting`: that meeting is replayed again at 1.0 and `realtime_segment` holds the real-time latencies.
 
+    `speech_address` is where the speech service listens; it is recorded, and the device record says what ran there.
     `ran_alone` is the person's statement that nothing else used the machine. `device_probe` is called once the run
     has finished, while the models are still loaded, and returns the device each of pyannote, embeddings and llm
     actually ran on; whisper's comes from the speech service itself.
@@ -556,7 +558,7 @@ def run_e7(
         "latency_basis": ("real_time" if speedup == 1.0 else
                           "sped_up: speech and speaker timings here are not real-time; see realtime_segment"),
         "realtime_segment": segment,
-        "audio_source": audio_source(audio),
+        "audio_source": audio_source(audio), "speech_address": speech_address,
         "devices": devices, "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"],
         "ran_alone": ran_alone,
         "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
@@ -600,6 +602,8 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("build-scenarios")
     b.add_argument("--raw", type=Path, help="folder holding ami/ (default datasets/raw)")
     r = sub.add_parser("run")
+    r.add_argument("--speech-address", default=GPU_SPEECH_ADDRESS,
+                   help="speech service (default: the GPU one); the record says which device it reported")
     r.add_argument("--only-meeting", help="a short check on one meeting; writes no run record")
     alone = r.add_mutually_exclusive_group(required=True)
     alone.add_argument("--alone", action="store_true", help="nothing else is using the machine")
@@ -635,13 +639,13 @@ def _run_real(args: argparse.Namespace) -> int:
 
     try:
         path = run_e7(
-            speech=GrpcSpeech(), backend=backend, embedder=embedder, make_assistant=make,
+            speech=GrpcSpeech(args.speech_address), backend=backend, embedder=embedder, make_assistant=make,
             extractor=production.MemoryExtractor(llms["memory"]), telemetry=telemetry,
             models={"llm": production.MODEL, "embedder": "nomic-embed-text",
                     "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
             prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
             speedup=args.speedup, realtime_meeting=args.realtime_meeting, ran_alone=args.alone,
-            only_meeting=args.only_meeting,
+            only_meeting=args.only_meeting, speech_address=args.speech_address,
             device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
                                   "llm": ollama_device(production.MODEL, _get_json)})
     finally:

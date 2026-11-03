@@ -280,7 +280,7 @@ def run(repo: Path, speedup: float = 1000.0, realtime_meeting: str | None = "m1"
         embedder=NoEmbed(), make_assistant=make_assistant, extractor=FirstTurnExtractor(),
         models={"llm": "qwen3.5:4b-q4_K_M", "speech": "whisper.cpp ggml-tiny.en", "diarizer": "pyannote"},
         prompt_versions={"team": "v1"}, speedup=speedup, realtime_meeting=realtime_meeting,
-        step_ms=10_000, **({"ran_alone": True, "device_probe": ALL_CUDA, "say": lambda m: None} | kw))
+        step_ms=10_000, **({"ran_alone": True, "speech_address": "127.0.0.1:50052", "device_probe": ALL_CUDA, "say": lambda m: None} | kw))
 
 
 def test_tiny_fixture_writes_a_valid_record(repo: Path) -> None:
@@ -420,7 +420,7 @@ def test_a_real_time_run_needs_no_segment_and_a_sped_up_run_cannot_skip_it(repo:
     with pytest.raises(ValueError, match="real time throughout"):
         e7.run_e7(root=repo, speech=ScriptedSpeech([]), backend=TruthBackend(), embedder=NoEmbed(),
                   make_assistant=make_assistant, extractor=None, models={}, prompt_versions={}, speedup=1.0,
-                  realtime_meeting="m1", ran_alone=True, device_probe=ALL_CUDA)
+                  realtime_meeting="m1", ran_alone=True, speech_address=e7.GPU_SPEECH_ADDRESS, device_probe=ALL_CUDA)
 
 
 # -- where the audio came from, and where each stage ran --------------------------------------------------------------
@@ -487,7 +487,7 @@ def test_a_one_meeting_check_writes_no_run_record(repo: Path) -> None:
     out = e7.run_e7(
         root=repo, speech=ScriptedSpeech(scripts), backend=TruthBackend(), embedder=NoEmbed(),
         make_assistant=make_assistant, extractor=None, models={}, prompt_versions={}, say=lambda m: None,
-        step_ms=10_000, ran_alone=True, device_probe=ALL_CUDA, only_meeting="m1")
+        step_ms=10_000, ran_alone=True, speech_address=e7.GPU_SPEECH_ADDRESS, device_probe=ALL_CUDA, only_meeting="m1")
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert doc["not_a_record"] is True and doc["n"] == 2 and "wer" in doc["metrics"]["asr_pipeline"]
     assert doc["config"]["audio_source"]["method"] == e7.AUDIO_METHOD and out.parent == repo / "results/local"
@@ -495,3 +495,21 @@ def test_a_one_meeting_check_writes_no_run_record(repo: Path) -> None:
     for bad in ({"only_meeting": "nope"}, {"only_meeting": "m1", "speedup": 5.0}, {"only_meeting": "m1", "rerun_of": "x"}):
         with pytest.raises(ValueError):
             run(repo, **bad)
+
+
+def test_the_speech_address_defaults_to_the_gpu_service_and_is_recorded(repo: Path, monkeypatch) -> None:
+    assert e7.GPU_SPEECH_ADDRESS == "127.0.0.1:50052"
+    cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert cfg["speech_address"] == "127.0.0.1:50052"
+    assert json.loads(run(repo, speech_address="127.0.0.1:50051").read_text(encoding="utf-8"))["config"][
+        "speech_address"] == "127.0.0.1:50051"
+    # the CLI: the default is the GPU service, an explicit address wins, and what the service reports is what is recorded
+    seen: list[str] = []
+    monkeypatch.setattr(e7, "_run_real", lambda args: seen.append(args.speech_address) or 0)
+    e7.main(["run", "--alone"])
+    e7.main(["run", "--alone", "--speech-address", "127.0.0.1:50051"])
+    assert seen == ["127.0.0.1:50052", "127.0.0.1:50051"]
+    monkeypatch.setattr(ScriptedStream, "BACKEND", "cpu")  # a CPU service answering on the GPU address is still recorded as cpu
+    with pytest.warns(RuntimeWarning, match="whisper ran on cpu"):
+        cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
+    assert cfg["speech_address"] == "127.0.0.1:50052" and cfg["devices"]["whisper"]["actual"] == "cpu"
