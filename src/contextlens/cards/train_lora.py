@@ -1,4 +1,5 @@
 """QLoRA training for the card model. Nothing here runs at import; the real path loads a model only in `train`."""
+import errno
 import json
 from pathlib import Path
 from typing import Any
@@ -40,9 +41,28 @@ def attach_lora(model: Any, r: int = 16, alpha: int = 32, dropout: float = 0.05)
                                             task_type="CAUSAL_LM"))
 
 
+def check_vram(limit_gb: float = VRAM_LIMIT_GB) -> float:
+    """Peak GPU memory so far in GB; raises when over the limit. 0.0 without CUDA."""
+    if not torch.cuda.is_available():
+        return 0.0
+    peak_gb = torch.cuda.max_memory_allocated() / 1024**3
+    if peak_gb > limit_gb:
+        raise RuntimeError(f"blocked: peak {peak_gb:.2f} GB is over the {limit_gb} GB limit")
+    return peak_gb
+
+
+def is_architecture_error(e: BaseException) -> bool:
+    """True for failures a model class PEFT or the loader cannot handle. Out-of-memory, a missing package, a network
+    or permission problem, or a full disk are not architecture problems, so they are never answered by switching model."""
+    if isinstance(e, OSError):
+        return not isinstance(e, (ConnectionError, TimeoutError, PermissionError)) and e.errno != errno.ENOSPC
+    return isinstance(e, (ValueError, KeyError, TypeError, AttributeError))
+
+
 def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps: int, batch_size: int = 2,
-              lr: float = 2e-4) -> list[float]:
-    """Plain loop: AdamW over the LoRA parameters only. Returns the loss at each step."""
+              lr: float = 2e-4, vram_limit_gb: float | None = None) -> list[float]:
+    """Plain loop: AdamW over the LoRA parameters only. Returns the loss at each step. With `vram_limit_gb`, the
+    peak memory is checked after every step, so a run over the limit stops at the first step."""
     rows = [r for e in examples if (r := tokenize_example(tok, e, max_len)) is not None]
     if not rows:
         raise ValueError("no example fits in max_len")
@@ -58,6 +78,8 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
         opt.step()
         opt.zero_grad()
         losses.append(loss.item())
+        if vram_limit_gb is not None:
+            check_vram(vram_limit_gb)
     return losses
 
 
@@ -72,22 +94,24 @@ def _load_4bit(model_id: str) -> Any:
 
 
 def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARDS_DIR) -> dict[str, Any]:
-    """Needs a GPU turn. Tries PRIMARY; if PEFT cannot wrap it, uses FALLBACK and records why in train_meta.json.
-    Exceeding the VRAM limit raises: the model class is not changed silently."""
+    """Needs a GPU turn. Tries PRIMARY; if loading or PEFT fails with an architecture error (see
+    is_architecture_error), uses FALLBACK and records the exact error in train_meta.json; any other failure is
+    raised. Exceeding the VRAM limit raises at the first step over it: the model class is not changed silently."""
     from transformers import AutoTokenizer
 
     base, reason = PRIMARY, None
     try:
         model = attach_lora(_load_4bit(base))
-    except (ValueError, KeyError, TypeError, AttributeError) as e:
+    except Exception as e:
+        if not is_architecture_error(e):
+            raise
         base, reason = FALLBACK, f"{type(e).__name__}: {e}"
         torch.cuda.empty_cache()
         model = attach_lora(_load_4bit(base))
     tok = AutoTokenizer.from_pretrained(base)
-    losses = run_steps(model, tok, load_examples("train", cards_dir), max_len, steps)
-    peak_gb = torch.cuda.max_memory_allocated() / 1024**3
-    if peak_gb > VRAM_LIMIT_GB:
-        raise RuntimeError(f"blocked: peak {peak_gb:.2f} GB is over the {VRAM_LIMIT_GB} GB limit")
+    losses = run_steps(model, tok, load_examples("train", cards_dir), max_len, steps,
+                       vram_limit_gb=VRAM_LIMIT_GB)
+    peak_gb = check_vram()
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir)
     meta = {"base_model": base, "fallback_used": base == FALLBACK, "fallback_reason": reason,
