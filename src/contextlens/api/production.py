@@ -17,7 +17,7 @@ from contextlens.llm.warm import Warmup
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
 from contextlens.memory.store import TranscriptStore
 from contextlens.memory.summary import RollingSummary
-from contextlens.obs.tracing import Telemetry, TracedAssistant
+from contextlens.obs.tracing import Telemetry, TracedAssistant, serve_metrics
 from contextlens.replay.runner import Assistant, Context
 from contextlens.retrieval.hybrid import Retriever
 from contextlens.schemas import Card, ButtonRequest
@@ -51,6 +51,13 @@ def local_warmup(llm: OllamaClient, embedder: Embedder, telemetry: Telemetry | N
         {"chat": llm.load, "embed": lambda: embedder.embed(["warm up"])},
         on_loaded=telemetry.record_warmup if telemetry else None,
     )
+
+
+def serve_metrics_if_asked(telemetry: Telemetry) -> None:
+    """Off unless CONTEXTLENS_METRICS_PORT is set. The host stays on this machine unless the person names one."""
+    port = os.environ.get("CONTEXTLENS_METRICS_PORT")
+    if port:
+        serve_metrics(telemetry, int(port), os.environ.get("CONTEXTLENS_METRICS_HOST", "127.0.0.1"))
 
 
 @dataclass
@@ -106,6 +113,7 @@ def create_production_app() -> FastAPI:
     embedder = local_embedder()
     llms = local_llms()
     telemetry = Telemetry()
+    serve_metrics_if_asked(telemetry)
     prod = build_services(
         store=PostgresTranscriptStore(database_url(), embedder), embedder=embedder, llms=llms,
         telemetry=telemetry, warmup=local_warmup(llms["memory"], embedder, telemetry),
