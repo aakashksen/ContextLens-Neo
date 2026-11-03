@@ -354,6 +354,37 @@ class Tracks(Sandbox):
         self.assertEqual({self.state(t["id"])["status"] for t in tasks}, {"in_progress"})
 
 
+class AddDep(Sandbox):
+    def setUp(self):
+        super().setUp()
+        self.write([task("T1"), task("T2"), task("T3", deps=["T1"])])
+
+    def refused(self, *args):
+        before = (self.root / "orchestration" / "tasks.json").read_text()
+        out = self.ctl("add-dep", *args)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        self.assertEqual((self.root / "orchestration" / "tasks.json").read_text(), before)
+        return out.stderr
+
+    def test_adds_an_earlier_task_as_a_dependency(self):
+        out = self.ctl("add-dep", "T3", "T2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.state("T3")["deps"], ["T1", "T2"])
+
+    def test_refuses_an_unknown_task_or_dependency(self):
+        self.assertIn("no such task", self.refused("T9", "T1"))
+        self.assertIn("no such task", self.refused("T3", "T9"))
+
+    def test_refuses_a_dependency_later_in_the_list_or_itself(self):
+        self.assertIn("later", self.refused("T1", "T3"))
+        self.assertIn("later", self.refused("T2", "T2"))
+
+    def test_refuses_a_task_already_started_or_done(self):
+        for status in ("in_progress", "done", "blocked"):
+            self.write([task("T1"), {**task("T2"), "status": status}])
+            self.assertIn(status, self.refused("T2", "T1"))
+
+
 class PlanMatchesState(unittest.TestCase):
     """tasks.json drives the loop and PLAN.md explains it, so they must not drift apart."""
 
