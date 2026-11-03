@@ -8,7 +8,8 @@ from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import series
-from contextlens.eval.records import IDS_ONLY_SOURCES, ROOT, RUNS_REL, SCENARIO_SOURCES, git, split_hash
+from contextlens.eval.check_cache import PassCache, code_hash, record_key
+from contextlens.eval.records import IDS_ONLY_SOURCES, ROOT, RUNS_REL, SCENARIO_SOURCES, SUBSETS_REL, git, split_hash
 from contextlens.eval.series import JUDGED, base_metrics, base_name
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
@@ -24,7 +25,6 @@ FAKE = re.compile(r"fake|stub", re.I)
 TIMESTAMP = re.compile(r"\d{8}T\d{12}Z")
 SUBSET_NAME = re.compile(r"[A-Za-z0-9_-]+")
 CRLF, LF = chr(13) + chr(10), chr(10)
-SUBSETS_REL = Path("datasets/splits/subsets")
 
 
 def recompute_metrics(
@@ -198,6 +198,11 @@ def training_loss_problems(rec: dict[str, Any]) -> list[str]:
             for e in non_finite_epochs(a.get("history") or [])]
 
 
+def _ancestor_problems(rec: dict[str, Any], root: Path) -> list[str]:
+    ok = git(root, "merge-base", "--is-ancestor", rec["git_commit"], "HEAD").returncode == 0
+    return [] if ok else ["git_commit is not an ancestor of HEAD"]
+
+
 def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     problems = [f"missing field {k}" for k in REQUIRED if k not in rec]
     if problems:
@@ -209,8 +214,7 @@ def check_record(rec: dict[str, Any], root: Path, min_n: int = 0) -> list[str]:
     if not rec["attempts"]:
         problems.append("attempts is empty")
     problems += training_loss_problems(rec)
-    if git(root, "merge-base", "--is-ancestor", rec["git_commit"], "HEAD").returncode != 0:
-        problems.append("git_commit is not an ancestor of HEAD")
+    problems += _ancestor_problems(rec, root)
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
 
@@ -385,7 +389,11 @@ def _supersede_problems(recs: list[tuple[Path, dict[str, Any]]], effective: dict
     return out
 
 
-def check(experiment: str, *, root: Path = ROOT, min_n: int = 0, split: str | None = None) -> list[str]:
+def check(
+    experiment: str, *, root: Path = ROOT, min_n: int = 0, split: str | None = None, cache: PassCache | None = None
+) -> list[str]:
+    """Problems with the experiment's records. With a `cache`, a record whose key is stored as passed is not
+    rechecked, except that its git_commit must still be an ancestor of HEAD; a record that passes is added."""
     recs = _load_records(experiment, root)
     if split:
         recs = [(p, r) for p, r in recs if r.get("split") == split]
@@ -394,8 +402,16 @@ def check(experiment: str, *, root: Path = ROOT, min_n: int = 0, split: str | No
     gone = superseded_by(experiment, root)
     problems = _supersede_problems(recs, gone)
     for path, rec in recs:
-        if rec.get("run_id") not in gone:
-            problems += [f"{path.name}: {m}" for m in check_record(rec, root, min_n)]
+        if rec.get("run_id") in gone:
+            continue
+        key = record_key(path, rec, root, min_n, split, cache.code) if cache and "git_commit" in rec else None
+        if key and cache and cache.hit(key):
+            found = _ancestor_problems(rec, root)
+        else:
+            found = check_record(rec, root, min_n)
+            if key and cache and not found:
+                cache.add(key, path.name)
+        problems += [f"{path.name}: {m}" for m in found]
     if any(r.get("split") == "test" for _, r in recs):
         problems += _test_once_problems(root)
     return problems
@@ -419,8 +435,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("experiment")
     ap.add_argument("--min-n", type=int, default=0)
     ap.add_argument("--split")
+    ap.add_argument("--all", action="store_true", help="recheck every record, ignoring remembered passes")
     a = ap.parse_args(argv)
-    problems = check(a.experiment, min_n=a.min_n, split=a.split)
+    cache = PassCache(ROOT, code_hash(), read=not a.all)
+    problems = check(a.experiment, min_n=a.min_n, split=a.split, cache=cache)
+    cache.save()
     for old, (new, reason) in superseded_by(a.experiment).items():
         print(f"note: {old} is superseded by {new}: {reason}")
     for p in problems:

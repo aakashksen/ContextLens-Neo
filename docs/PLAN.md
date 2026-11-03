@@ -362,7 +362,8 @@ See `docs/HUMAN-GATES.md`.
 **Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split, in one run record that holds every system: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
 **From phase review:** E8 reports each public benchmark separately, so it uses the local scenario manifests from T2.5 for sources whose text can't be committed. All of them go in the one test record.
-**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test`.
+**Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
+**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test --all`.
 
 ### T9.2: User study kit
 **Files:** `docs/study/` (consent form, tasks, script, anonymous results template), `src/contextlens/experiments/e9_study.py`, `tests/test_e9.py`.
@@ -377,6 +378,7 @@ See `docs/HUMAN-GATES.md`.
 **Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
+**Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off

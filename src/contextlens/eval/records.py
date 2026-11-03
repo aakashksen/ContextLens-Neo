@@ -12,6 +12,7 @@ from contextlens.schemas import Scenario
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNS_REL = Path("results/runs")
+SUBSETS_REL = Path("datasets/splits/subsets")
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
