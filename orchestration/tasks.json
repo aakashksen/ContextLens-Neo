@@ -140,9 +140,9 @@
       "status": "done",
       "started_at": "2026-11-02T22:33:32+00:00",
       "verified": {
-        "commit": "21fc934ad4eb13ed1017dd567aba1bae2c78bb0b",
+        "commit": "fe5d5e48a7cb60189d2d7e8a40e070a72198edb2",
         "passed": true,
-        "at": "2026-11-02T23:39:08+00:00"
+        "at": "2026-11-03T00:40:03+00:00"
       },
       "done_at": "2026-11-02T22:35:25+00:00"
     },
@@ -160,9 +160,9 @@
       "status": "done",
       "started_at": "2026-11-02T22:35:27+00:00",
       "verified": {
-        "commit": "21fc934ad4eb13ed1017dd567aba1bae2c78bb0b",
+        "commit": "fe5d5e48a7cb60189d2d7e8a40e070a72198edb2",
         "passed": true,
-        "at": "2026-11-02T23:39:10+00:00"
+        "at": "2026-11-03T00:40:05+00:00"
       },
       "attempts": 2,
       "reason": "c93b84f changed macro_f1 to average over labels present; docs/TESTING.md:31 defines it over the 4 fixed labels. Orchestrator's retry instruction caused this. Compare with sklearn using labels=LABELS instead",
@@ -184,9 +184,9 @@
       "status": "done",
       "started_at": "2026-11-02T22:44:04+00:00",
       "verified": {
-        "commit": "21fc934ad4eb13ed1017dd567aba1bae2c78bb0b",
+        "commit": "fe5d5e48a7cb60189d2d7e8a40e070a72198edb2",
         "passed": true,
-        "at": "2026-11-02T23:39:19+00:00"
+        "at": "2026-11-03T00:40:13+00:00"
       },
       "attempts": 1,
       "reason": "check_run: dataset_hash never reads datasets/splits manifests; predictions need not cover split scenarios (cherry-picking passes); empty metrics passes; no record-split vs predictions check; claims check passes on a wrong key; dirty check ignores all of results/runs",
