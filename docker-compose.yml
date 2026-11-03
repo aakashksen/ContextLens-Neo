@@ -10,5 +10,30 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  speech:
+    build: ./speech
+    ports:
+      - "50051:50051"
+
+  # Opt-in GPU build and run: `docker compose --profile gpu up -d speech-gpu`. Plain `up` never
+  # starts it, so the default stack stays on CPU and takes no GPU memory.
+  speech-gpu:
+    profiles: ["gpu"]
+    build:
+      context: ./speech
+      args:
+        BUILD_BASE: nvidia/cuda:12.6.2-devel-ubuntu24.04
+        RUNTIME_BASE: nvidia/cuda:12.6.2-runtime-ubuntu24.04
+        GGML_CUDA: "ON"
+    ports:
+      - "50052:50051"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   pgdata:

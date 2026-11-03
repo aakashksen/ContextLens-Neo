@@ -316,16 +316,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_guard.py tests/test_tools.py -q"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:18:02+00:00",
       "verified": {
-        "commit": "ec813c3fce87f02699568b5e6d06579f6da6cfe4",
+        "commit": "92ff6ae345708f8d581bb1a0497836035a28c8be",
         "passed": true,
-        "at": "2026-11-03T05:30:53+00:00"
+        "at": "2026-11-03T05:40:16+00:00"
       },
       "attempts": 1,
-      "reason": "Tools and guard_card take conv_id, unrecorded in docs/PLAN.md; later tasks written from the plan would raise TypeError"
+      "reason": "Tools and guard_card take conv_id, unrecorded in docs/PLAN.md; later tasks written from the plan would raise TypeError",
+      "done_at": "2026-11-03T05:41:54+00:00"
     },
     {
       "id": "T3.2",
@@ -339,7 +339,9 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:41:55+00:00"
     },
     {
       "id": "T3.3",
@@ -505,16 +507,16 @@
         "docker compose up -d speech",
         "{py} -m pytest tests/test_speech_contract.py -q -m real"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:05:32+00:00",
       "verified": {
-        "commit": "a6fc2cc846bb4a675e1ae84c341c0f2c8ae10c8b",
+        "commit": "c8cb551e93dd5a33362f7c467f16ee18581da6ba",
         "passed": true,
-        "at": "2026-11-03T05:18:46+00:00"
+        "at": "2026-11-03T05:42:59+00:00"
       },
       "attempts": 1,
-      "reason": "GPU path not met: compose has no GPU option, default build CPU-only, Dockerfile GPU recipe mixes a 22.04 CUDA base with 24.04 packages, backend report lists registered devices not the one used"
+      "reason": "GPU path not met: compose has no GPU option, default build CPU-only, Dockerfile GPU recipe mixes a 22.04 CUDA base with 24.04 packages, backend report lists registered devices not the one used",
+      "done_at": "2026-11-03T05:45:21+00:00"
     },
     {
       "id": "T8.2",
@@ -543,7 +545,14 @@
         "npm --prefix clients/web test -- --run",
         "npm --prefix clients/web run build"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T05:35:25+00:00",
+      "verified": {
+        "commit": "254be7e1647281a7b29c3c5f3137e67e73fd1d3e",
+        "passed": true,
+        "at": "2026-11-03T05:44:56+00:00"
+      }
     },
     {
       "id": "T8.4",
