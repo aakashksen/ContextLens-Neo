@@ -99,7 +99,13 @@ def create_app() -> FastAPI:
         await send(StatusMessage(state="recording"))
         try:
             while True:
-                raw = await websocket.receive_text()
+                frame = await websocket.receive()
+                if frame["type"] == "websocket.disconnect":
+                    return
+                raw = frame.get("text")
+                if raw is None:
+                    await send(StatusMessage(state="error", detail="messages must be text frames"))
+                    continue
                 try:
                     msg = client_adapter.validate_json(raw)
                 except ValidationError as e:

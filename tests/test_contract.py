@@ -122,3 +122,67 @@ def test_fake_server_can_send_answered_partial_and_abstained():
         _hear(ws, 4)
         statuses = [_press(ws).card.status for _ in range(3)]
     assert statuses == ["answered", "partial", "abstained"]
+
+
+def test_binary_frame_gets_error_status_and_connection_stays_open():
+    with TestClient(create_app()).websocket_connect("/ws/c1") as ws:
+        ws.receive_text()
+        ws.send_bytes(b"\x00\x01")
+        msg = server_msg.validate_json(ws.receive_text())
+        assert _is_error(msg)
+        _hear(ws, 1)  # still usable
+
+
+def test_client_disconnect_ends_cleanly_and_turns_survive_reconnect():
+    client = TestClient(create_app())
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_text()
+        _hear(ws, 2)
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_text()
+        assert isinstance(_press_as(ws, 1), CardMessage)
+        # the press cycle restarts on each connection
+        assert _press_as(ws, 1).card.status == "partial"
+    with client.websocket_connect("/ws/c1") as ws:
+        ws.receive_text()
+        assert _press_as(ws, 1).card.status == "answered"
+
+
+def test_every_message_the_fake_sends_validates_against_schema_file():
+    import json
+
+    import jsonschema
+
+    schema = json.loads((ROOT / "docs" / "client-contract.schema.json").read_text("utf-8"))
+    server_schema = {**schema["server_to_client"]}
+    client_schema = {**schema["client_to_server"]}
+    seen = set()
+    with TestClient(create_app()).websocket_connect("/ws/c1") as ws:
+
+        def check_server(raw):
+            data = json.loads(raw)
+            jsonschema.validate(data, server_schema)
+            seen.add(data["type"])
+            return data
+
+        def send(payload):
+            jsonschema.validate(payload, client_schema)
+            ws.send_json(payload)
+
+        check_server(ws.receive_text())
+        for _ in range(4):
+            send({"type": "audio", "data": "AAAA"})
+            check_server(ws.receive_text())
+        for _ in range(3):
+            send(PRESS)
+            check_server(ws.receive_text())
+        send({"type": "pause"})
+        check_server(ws.receive_text())
+        send({"type": "resume"})
+        check_server(ws.receive_text())
+        ws.send_text("not json")
+        data = check_server(ws.receive_text())
+        assert data["state"] == "error"
+        send({"type": "delete"})
+        check_server(ws.receive_text())
+    assert seen == {"transcript", "card", "status"}
