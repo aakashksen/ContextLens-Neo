@@ -1,7 +1,10 @@
 """QMSum and DECODE may be used locally but never committed: no tracked or committable file may hold their text."""
+import hashlib
 import json
+import os
 import re
 import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -10,7 +13,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIRS = [ROOT / "datasets/raw/qmsum", ROOT / "datasets/raw/decode"]
 WINDOW = 8  # a run of this many words in a row counts as copied text
-SAMPLE = 4  # keep one window in SAMPLE, chosen by content, so a copied passage of 30 words is still found
 
 
 def _strings(x: object) -> Iterator[str]:
@@ -43,9 +45,7 @@ def _texts(path: Path) -> Iterator[str]:
 def _windows(text: str) -> Iterator[int]:
     words = re.findall(r"\w+", text.lower())
     for i in range(len(words) - WINDOW + 1):
-        h = hash(" ".join(words[i : i + WINDOW]))
-        if h % SAMPLE == 0:
-            yield h
+        yield int.from_bytes(hashlib.blake2b(" ".join(words[i : i + WINDOW]).encode(), digest_size=8).digest(), "big")
 
 
 def leaked_files(raw_dirs: list[Path], files: list[Path]) -> list[str]:
@@ -80,3 +80,25 @@ def test_no_tracked_file_holds_qmsum_or_decode_text() -> None:
     if not present:
         pytest.skip("datasets/raw/qmsum and datasets/raw/decode are not on this machine, so there is nothing to compare")
     assert leaked_files(present, _committable_files()) == []
+
+
+@pytest.mark.parametrize("seed", ["0", "1", "2", "3", "5", "8", "13", "21"])
+def test_detection_does_not_depend_on_the_hash_seed(tmp_path: Path, seed: str) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    words = [f"zq{i}x" for i in range(60)]
+    (raw / "a.txt").write_text(" ".join(words), encoding="utf-8")
+    exact8 = tmp_path / "exact8.md"
+    exact8.write_text("pre " + " ".join(words[20:28]) + " post", encoding="utf-8")
+    seven = tmp_path / "seven.md"
+    seven.write_text(" ".join(words[20:27]) + " other words here " + " ".join(words[40:47]), encoding="utf-8")
+    script = (
+        "import importlib.util, sys, pathlib\n"
+        f"spec = importlib.util.spec_from_file_location('m', {str(Path(__file__))!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        f"raw = pathlib.Path({str(raw)!r})\n"
+        f"print(m.leaked_files([raw], [pathlib.Path({str(exact8)!r}), pathlib.Path({str(seven)!r})]))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True,
+                         env={**os.environ, "PYTHONHASHSEED": seed})
+    assert out.stdout.strip() == str([exact8.as_posix()])
