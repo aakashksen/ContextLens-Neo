@@ -115,19 +115,35 @@ def write_scenarios_manifest(root: Path = ROOT) -> Path:
 
 
 TASKS_REL = Path("orchestration/tasks.json")
+AMI_SIGNED_REL = Path("orchestration/evidence/signed-ami-labels.txt")  # git-ignored; written by a person or reader
+# Whose labels a scenario source carries. The record keeps this beside labels_reviewed, so a later decision about
+# which of them count as reviewed needs no rerun.
+LABEL_SOURCE = {"scenarios": "scenarios", "ami": "ami_rule", "qmsum": "publisher", "decode": "publisher"}
+
+
+def label_source(scenario_source: str) -> str:
+    return LABEL_SOURCE[scenario_source]
 
 
 def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
-    """True only when the person has signed H2 (status done in tasks.json) and the record's labels are the
-    scenario labels H2 reviewed. Labels from another source (QMSum, DECODE, ...) were not in H2's sample, so
-    they stay unreviewed here. This is the only place the flag is set; a runner's config cannot override it."""
-    if scenario_source != "scenarios":
-        return False
+    """Whether a person has signed off the labels of this record's source. Only the main folder holds live state,
+    so a linked worktree reads the main folder's, never its own possibly stale copy. `scenarios` needs H2 done in
+    tasks.json; `ami_rule` needs the signed line in AMI_SIGNED_REL, separate from H2; `publisher` labels are not
+    reviewed here. Missing or unreadable state means false. This is the only place the flag is set; a runner's
+    config cannot override it."""
+    from contextlens.llm.client import shared_root
+
+    kind = LABEL_SOURCE.get(scenario_source)
+    main = shared_root(root)
     try:
-        tasks = json.loads((root / TASKS_REL).read_text(encoding="utf-8"))["tasks"]
+        if kind == "scenarios":
+            tasks = json.loads((main / TASKS_REL).read_text(encoding="utf-8"))["tasks"]
+            return any(isinstance(t, dict) and t.get("id") == "H2" and t.get("status") == "done" for t in tasks)
+        if kind == "ami_rule":
+            return bool((main / AMI_SIGNED_REL).read_text(encoding="utf-8").strip())
     except (OSError, ValueError, KeyError, TypeError):
         return False
-    return any(isinstance(t, dict) and t.get("id") == "H2" and t.get("status") == "done" for t in tasks)
+    return False
 
 
 SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -191,6 +207,7 @@ def write_run(
         "attempts": attempts,
         "claude_calls": config.get("claude_calls", 0),
         "labels_reviewed": labels_reviewed(root, scenario_source),
+        "label_source": label_source(scenario_source),
         "predictions": pred_paths,
         "started_at": config.get("started_at", now.isoformat()),
         "finished_at": now.isoformat(),

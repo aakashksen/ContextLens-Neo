@@ -9,7 +9,7 @@ from typing import Any
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import series
 from contextlens.eval.check_cache import PassCache, code_hash, record_key
-from contextlens.eval.records import IDS_ONLY_SOURCES, ROOT, RUNS_REL, SCENARIO_SOURCES, SUBSETS_REL, git, split_hash
+from contextlens.eval.records import IDS_ONLY_SOURCES, LABEL_SOURCE, ROOT, RUNS_REL, SCENARIO_SOURCES, SUBSETS_REL, git, split_hash
 from contextlens.eval.series import JUDGED, base_metrics, base_name
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
@@ -212,6 +212,8 @@ def _header_problems(rec: dict[str, Any], root: Path, min_n: int) -> list[str]:
     if not rec["attempts"]:
         problems.append("attempts is empty")
     problems += training_loss_problems(rec)
+    if "label_source" in rec and rec["label_source"] != LABEL_SOURCE.get(rec["scenario_source"]):  # older records have none
+        problems.append(f"label_source {rec['label_source']!r} is not the one for scenario source {rec['scenario_source']!r}")
     problems += _ancestor_problems(rec, root)
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
