@@ -1,8 +1,12 @@
 // Microphone capture: 16 kHz mono 16-bit PCM chunks, base64-encoded.
 export type StopMic = () => void;
 
-export async function startMic(onChunk: (base64: string, sampleRate: number) => void): Promise<StopMic> {
+export async function startMic(
+  onChunk: (base64: string, sampleRate: number) => void,
+  onEnded: () => void,
+): Promise<StopMic> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  stream.getTracks().forEach((t) => t.addEventListener('ended', onEnded));
   const ctx = new AudioContext({ sampleRate: 16000 });
   const source = ctx.createMediaStreamSource(stream);
   const node = ctx.createScriptProcessor(4096, 1, 1);

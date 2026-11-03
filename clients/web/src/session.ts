@@ -1,7 +1,7 @@
 import type { Card, ClientMessage, Detail, Turn } from './protocol';
 import { parseServerMessage } from './protocol';
 
-export type Connection = 'connecting' | 'recording' | 'paused' | 'deleted' | 'closed';
+export type Connection = 'connecting' | 'recording' | 'paused' | 'deleting' | 'deleted' | 'closed';
 
 export interface SessionState {
   connection: Connection;
@@ -56,6 +56,8 @@ export class Session {
       this.set({ error: msg.detail ?? 'The server reported an error.', waiting: false });
     } else if (msg.state === 'deleted') {
       this.set({ connection: 'deleted', turns: [], card: null, waiting: false, error: null });
+    } else if (this.state.connection === 'deleting' || this.state.connection === 'closed') {
+      // A late status must not restart capture after delete or disconnect.
     } else {
       this.set({ connection: msg.state, error: null });
     }
@@ -65,7 +67,9 @@ export class Session {
     if (this.ws.readyState === 1) this.ws.send(JSON.stringify(msg));
   }
 
+  // Audio leaves only while the client itself believes it is recording.
   sendAudio(data: string, sampleRate = 16000) {
+    if (this.state.connection !== 'recording') return;
     this.send({ type: 'audio', data, sample_rate: sampleRate });
   }
 
@@ -80,6 +84,8 @@ export class Session {
   }
 
   pause() {
+    if (this.state.connection !== 'recording') return;
+    this.set({ connection: 'paused' });
     this.send({ type: 'pause' });
   }
 
@@ -88,6 +94,7 @@ export class Session {
   }
 
   delete() {
+    this.set({ connection: 'deleting' });
     this.send({ type: 'delete' });
   }
 

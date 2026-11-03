@@ -1,18 +1,30 @@
 import type { Connection } from '../session';
 
-const TEXT: Record<Connection, string> = {
+export type IndicatorState =
+  | Connection
+  | 'starting'
+  | 'blocked'
+  | 'mic-stopped'
+  | 'error';
+
+const TEXT: Record<IndicatorState, string> = {
   connecting: 'Connecting',
+  starting: 'Starting microphone',
   recording: 'Recording',
+  blocked: 'Microphone blocked',
+  'mic-stopped': 'Microphone stopped',
+  error: 'Error',
   paused: 'Paused',
+  deleting: 'Deleting',
   deleted: 'Deleted',
   closed: 'Disconnected',
 };
 
-export default function RecordingIndicator({ connection }: { connection: Connection }) {
+export default function RecordingIndicator({ state }: { state: IndicatorState }) {
   return (
-    <div role="status" aria-label="Recording indicator" className={`indicator indicator-${connection}`}>
+    <div role="status" aria-label="Recording indicator" className={`indicator indicator-${state}`}>
       <span className="dot" aria-hidden="true" />
-      {TEXT[connection]}
+      {TEXT[state]}
     </div>
   );
 }

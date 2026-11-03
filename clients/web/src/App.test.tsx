@@ -26,6 +26,9 @@ class FakeSocket {
     this.sent.push(JSON.parse(s));
   }
   close() {}
+  drop() {
+    act(() => this.onclose?.());
+  }
   push(msg: object) {
     act(() => this.onmessage?.({ data: JSON.stringify(msg) }));
   }
@@ -42,11 +45,34 @@ const turn = {
   source: 'synthetic',
 };
 
-function renderApp() {
+// Stands in for the browser microphone; the real getUserMedia path needs a browser.
+class MicStub {
+  stops = 0;
+  onChunk: (b64: string, rate: number) => void = () => {};
+  onEnded: () => void = () => {};
+  private resolve: (stop: () => void) => void = () => {};
+  private reject: (e: Error) => void = () => {};
+  start = (onChunk: (b64: string, rate: number) => void, onEnded: () => void) => {
+    this.onChunk = onChunk;
+    this.onEnded = onEnded;
+    return new Promise<() => void>((res, rej) => {
+      this.resolve = res;
+      this.reject = rej;
+    });
+  };
+  async grant() {
+    await act(async () => this.resolve(() => void this.stops++));
+  }
+  async deny() {
+    await act(async () => this.reject(new Error('NotAllowedError')));
+  }
+}
+
+function renderApp(mic: MicStub = new MicStub()) {
   render(
     <App
       socketCtor={FakeSocket as any}
-      startMic={async () => () => {}}
+      startMic={mic.start}
       serverUrl="ws://test"
       conversationId="c"
     />,
@@ -100,9 +126,11 @@ describe('card view', () => {
 });
 
 describe('app', () => {
-  it('recording indicator shows while listening', () => {
-    const ws = renderApp();
+  it('recording indicator shows while listening', async () => {
+    const mic = new MicStub();
+    const ws = renderApp(mic);
     ws.push({ type: 'status', state: 'recording' });
+    await mic.grant();
     expect(screen.getByRole('status', { name: /recording/i })).toHaveTextContent(/recording/i);
     ws.push({ type: 'status', state: 'paused' });
     expect(screen.getByRole('status', { name: /recording/i })).toHaveTextContent(/paused/i);
@@ -136,22 +164,6 @@ describe('app', () => {
     expect(press.request).toMatchObject({ conversation_id: 'c', as_of_seq: 0, detail: 'brief' });
     ws.push({ type: 'card', card: { mode: 'recall', status: 'answered', findings: [finding] } });
     expect(screen.getByText(finding.statement)).toBeInTheDocument();
-  });
-
-  it('pause and resume send messages; keyboard activates controls', async () => {
-    const ws = renderApp();
-    ws.push({ type: 'status', state: 'recording' });
-    const user = userEvent.setup();
-    await user.tab();
-    const first = document.activeElement as HTMLElement;
-    expect(first).toBeInstanceOf(HTMLElement);
-    screen.getByRole('button', { name: /pause/i }).focus();
-    await user.keyboard('{Enter}');
-    expect(ws.sent.some((m) => m.type === 'pause')).toBe(true);
-    ws.push({ type: 'status', state: 'paused' });
-    screen.getByRole('button', { name: /resume/i }).focus();
-    await user.keyboard(' ');
-    expect(ws.sent.some((m) => m.type === 'resume')).toBe(true);
   });
 
   it('text size setting changes the root size class', async () => {

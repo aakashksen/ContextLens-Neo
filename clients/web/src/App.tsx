@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { startMic as realStartMic } from './audio';
 import type { StopMic } from './audio';
 import CardView from './components/CardView';
 import DeleteConfirm from './components/DeleteConfirm';
 import RecordingIndicator from './components/RecordingIndicator';
+import type { IndicatorState } from './components/RecordingIndicator';
 import Settings from './components/Settings';
 import type { SettingsValue } from './components/Settings';
 import { Session } from './session';
@@ -11,7 +12,7 @@ import type { SocketCtor } from './session';
 
 interface Props {
   socketCtor?: SocketCtor;
-  startMic?: (onChunk: (b64: string, rate: number) => void) => Promise<StopMic>;
+  startMic?: (onChunk: (b64: string, rate: number) => void, onEnded: () => void) => Promise<StopMic>;
   serverUrl?: string;
   conversationId?: string;
 }
@@ -42,31 +43,60 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot);
   const [settings, setSettings] = useState<SettingsValue>({ detail: 'standard', plain: false, size: 'medium' });
   const [confirming, setConfirming] = useState(false);
-  const [micError, setMicError] = useState<string | null>(null);
+  const [capture, setCapture] = useState<'off' | 'starting' | 'on' | 'blocked' | 'stopped'>('off');
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLElement>(null);
 
   const recording = state.connection === 'recording';
   useEffect(() => {
     if (!recording) return;
     let stop: StopMic | null = null;
     let cancelled = false;
-    startMic((b64, rate) => session.sendAudio(b64, rate)).then(
-      (s) => (cancelled ? s() : (stop = s)),
-      () => setMicError('The microphone is not available.'),
+    setCapture('starting');
+    startMic(
+      (b64, rate) => !cancelled && session.sendAudio(b64, rate),
+      () => !cancelled && setCapture('stopped'),
+    ).then(
+      (s) => {
+        if (cancelled) return s();
+        stop = s;
+        setCapture('on');
+      },
+      () => !cancelled && setCapture('blocked'),
     );
     return () => {
       cancelled = true;
       stop?.();
+      setCapture('off');
     };
   }, [recording, session, startMic]);
 
+  // After the delete dialog closes, put focus back on its opener, or on the settings if that is disabled now.
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    if (wasConfirming.current && !confirming) {
+      const opener = deleteButton.current;
+      (opener && !opener.disabled ? opener : root.current?.querySelector<HTMLElement>('.settings select'))?.focus();
+    }
+    wasConfirming.current = confirming;
+  }, [confirming]);
+
   const live = state.connection === 'recording' || state.connection === 'paused';
-  const error = state.error ?? micError;
+  const error = state.error ?? (capture === 'blocked' ? 'The microphone is not available.' : null);
+  let indicator: IndicatorState = state.connection;
+  if (state.connection === 'recording') {
+    if (state.error) indicator = 'error';
+    else if (capture === 'on') indicator = 'recording';
+    else if (capture === 'blocked') indicator = 'blocked';
+    else if (capture === 'stopped') indicator = 'mic-stopped';
+    else indicator = 'starting';
+  } else if (state.connection === 'connecting' && state.error) indicator = 'error';
 
   return (
-    <main className={`app size-${settings.size}`}>
+    <main ref={root} className={`app size-${settings.size}`}>
       <header>
         <h1>ContextLens</h1>
-        <RecordingIndicator connection={state.connection} />
+        <RecordingIndicator state={indicator} />
       </header>
 
       <div className="controls">
@@ -87,7 +117,7 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
             Pause
           </button>
         )}
-        <button type="button" disabled={!live} onClick={() => setConfirming(true)}>
+        <button type="button" ref={deleteButton} disabled={!live} onClick={() => setConfirming(true)}>
           Delete conversation
         </button>
       </div>
