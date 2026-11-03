@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from contextlens.data.loaders import load_dataset
+from contextlens.data.loaders import decode_split_hashes, load_dataset
 from contextlens.eval.records import SCENARIO_SOURCES
 from contextlens.data.splits import RAW_DIR, SPLITS_DIR, dataset_hash, make_splits
 
@@ -58,7 +58,8 @@ def check(splits_dir: Path = SPLITS_DIR, raw_dir: Path = RAW_DIR) -> list[str]:
         convs = load_dataset(m["dataset"], raw_dir)
         if dataset_hash(convs) != m["hash"]:
             problems.append(f"{path.name}: dataset hash differs from the manifest")
-        if make_splits(convs, seed=m["seed"]) != s:
+        fresh = decode_split_hashes(raw_dir) if m.get("split_rule") == "official" else make_splits(convs, seed=m["seed"])
+        if fresh != s:
             problems.append(f"{path.name}: splits differ from a fresh split")
     return problems
 

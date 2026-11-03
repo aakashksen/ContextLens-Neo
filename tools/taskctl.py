@@ -379,6 +379,21 @@ def cmd_reopen(args):
     print(f"reopened {args.id}")
 
 
+def cmd_add_dep(args):
+    """Adds a dependency to a task that hasn't started, so state is never edited by hand."""
+    with editing() as plan:
+        task = find(plan, args.id)
+        find(plan, args.dep)
+        order = [t["id"] for t in plan["tasks"]]
+        if order.index(args.dep) >= order.index(args.id):
+            sys.exit(f"refused: {args.dep} is not earlier in the plan than {args.id}, so it appears later or is the task itself")
+        if task["status"] != "pending":
+            sys.exit(f"refused: {args.id} is already {task['status']}")
+        if args.dep not in task["deps"]:
+            task["deps"].append(args.dep)
+    print(f"{args.id} now depends on {args.dep}")
+
+
 def gpu_problem(task_id):
     """Why this task's GPU job must not start, or None. Fails closed if the GPU can't be read."""
     need = gpu_need(task_id)
@@ -483,6 +498,10 @@ def main():
         item = sub.add_parser(name)
         item.add_argument("id")
         item.set_defaults(run=run)
+    add_dep = sub.add_parser("add-dep")
+    add_dep.add_argument("id")
+    add_dep.add_argument("dep")
+    add_dep.set_defaults(run=cmd_add_dep)
     release = sub.add_parser("gpu-release")
     release.add_argument("id")
     release.add_argument("--force", action="store_true")

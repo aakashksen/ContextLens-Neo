@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from contextlens.data.loaders import load_dataset, load_gold, load_pairs
+from contextlens.data.loaders import decode_split_hashes, decode_splits, load_dataset, load_gold, load_pairs
 from contextlens.data.splits import dataset_hash, make_splits
 from contextlens.schemas import Conversation, Turn
 
@@ -85,12 +85,20 @@ def test_qmsum_loader():
 
 def test_decode_loader():
     pairs = load_pairs(FIX)
-    assert [p.label for p in pairs] == ["contradiction", "non_contradiction"]
+    assert [p.label for p in pairs].count("contradiction") == 5 and len(pairs) == 9
     p = pairs[0]
     assert p.statement == "I have never had a pet."
     assert p.earlier == ["I have a dog.", "What breed?"]
-    assert p.conversation_id == "d1" and p.source == "decode"
-    assert len(load_dataset("decode", FIX)) == 2
+    assert p.conversation_id == "c1" and p.source == "decode" and p.split == "train"
+    # c5 is in both dev and test in the real files; it goes wholly to test. The rct file is not read.
+    assert {(p.conversation_id, p.split) for p in pairs if p.conversation_id == "c5"} == {("c5", "test")}
+    convs = load_dataset("decode", FIX)
+    assert len(convs) == 9 and {c.id for c in convs} == {f"r{i}" for i in range(1, 10)}
+    assert convs[0].turns[0].speaker == "speaker0" and convs[0].turns[1].speaker == "speaker1"
+    assert decode_splits(FIX) == {"train": ["c1", "c2", "c3"], "dev": ["c4"], "test": ["c5", "c6", "c7"]}
+    hashed = decode_split_hashes(FIX)
+    assert {k: len(v) for k, v in hashed.items()} == {"train": 3, "dev": 1, "test": 3}
+    assert not {"c1", "c4", "c5"} & {h for v in hashed.values() for h in v}
 
 
 def test_unknown_dataset_rejected():

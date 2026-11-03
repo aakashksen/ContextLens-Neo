@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -17,8 +18,9 @@ class Pair(BaseModel):
     conversation_id: str
     statement: str
     earlier: list[str]
-    label: Literal["contradiction", "non_contradiction"]
+    label: Literal["contradiction", "non_contradiction", "consistent", "update", "insufficient"]
     source: str
+    split: Literal["train", "dev", "test"] | None = None
 
 
 def _turn(cid: str, seq: int, speaker: str, text: str, start_ms: int | None = None, end_ms: int | None = None) -> Turn:
@@ -136,20 +138,50 @@ def _gold_qmsum(root: Path) -> list[Scenario]:
     return out
 
 
-def _decode_records(root: Path) -> list[tuple[str | None, dict]]:
-    out = []
-    for path in sorted((root / "decode").glob("*.jsonl")):
-        for line in path.read_text(encoding="utf-8").splitlines():
+_DECODE_FILES = ("train", "dev", "test")  # human-bot, a2t and rct are auxiliary sets built from other data and are not read
+_DECODE_PRIORITY = {"test": 0, "dev": 1, "train": 2}
+
+
+def _decode_records(root: Path) -> list[tuple[str, dict]]:
+    """Records of DECODE v0.1 (`decode/decode_v0.1/{train,dev,test}.jsonl`) with the split each belongs to.
+
+    The official files are used as given, except that a conversation_id found in more than one file
+    (22 are in both dev and test) goes wholly to the held-out side, so no conversation spans two splits.
+    """
+    base = root / "decode" / "decode_v0.1"
+    rows = []
+    for name in _DECODE_FILES:
+        for line in (base / f"{name}.jsonl").read_text(encoding="utf-8").splitlines():
             if line.strip():
-                out.append((_SPLIT_FROM_FILE.get(path.stem), json.loads(line)))
-    return out
+                rows.append((name, json.loads(line)))
+    home: dict[str, str] = {}
+    for name, rec in rows:
+        cid = rec["conversation_id"]
+        if cid not in home or _DECODE_PRIORITY[name] < _DECODE_PRIORITY[home[cid]]:
+            home[cid] = name
+    return [(home[rec["conversation_id"]], rec) for _, rec in rows]
+
+
+def decode_splits(root: Path) -> dict[str, list[str]]:
+    """conversation_ids per split."""
+    out: dict[str, set[str]] = {"train": set(), "dev": set(), "test": set()}
+    for split, rec in _decode_records(root):
+        out[split].add(rec["conversation_id"])
+    return {k: sorted(v) for k, v in out.items()}
+
+
+def decode_split_hashes(root: Path) -> dict[str, list[str]]:
+    """decode_splits with each conversation_id replaced by a short sha256, so a tracked manifest holds no DECODE text."""
+    return {
+        k: sorted(hashlib.sha256(c.encode()).hexdigest()[:16] for c in v) for k, v in decode_splits(root).items()
+    }
 
 
 def _load_decode(root: Path) -> list[Conversation]:
     return [
         Conversation(
-            id=rec["id"], source="decode", split=split,
-            turns=[_turn(rec["id"], i, t["speaker"], t["text"]) for i, t in enumerate(rec["dialogue"])],
+            id=rec["record_id"], source="decode", split=split,  # type: ignore[arg-type]
+            turns=[_turn(rec["record_id"], t["turn_id"], f"speaker{t['agent_id']}", t["text"]) for t in rec["turns"]],
         )
         for split, rec in _decode_records(root)
     ]
@@ -157,11 +189,11 @@ def _load_decode(root: Path) -> list[Conversation]:
 
 def load_pairs(root: Path) -> list[Pair]:
     pairs = []
-    for _, rec in _decode_records(root):
-        texts = [t["text"] for t in rec["dialogue"]]
+    for split, rec in _decode_records(root):
+        texts = [t["text"] for t in rec["turns"]]
         pairs.append(Pair(
-            conversation_id=rec["id"], statement=texts[-1], earlier=texts[:-1], source="decode",
-            label="contradiction" if rec["is_contradiction"] else "non_contradiction",
+            conversation_id=rec["conversation_id"], statement=texts[-1], earlier=texts[:-1], source="decode",
+            label="contradiction" if rec["is_contradiction"] else "non_contradiction", split=split,  # type: ignore[arg-type]
         ))
     return pairs
 

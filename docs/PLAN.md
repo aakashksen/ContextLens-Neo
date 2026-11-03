@@ -226,6 +226,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **From phase review:** this task adds calibration (expected calibration error) to `metrics.py`, `check_run.py` and `series.py`, with a row field for the model probability on `Prediction`, so a saved `ece` recomputes from the predictions and `check_run` does not reject it.
 **Do:** Fine-tune the base model chosen in `docs/datasets.md` with PyTorch and Transformers, using class weights, early stopping on dev macro-F1, a small hyperparameter search (learning rate and epochs, 6 runs at most, all recorded), and MLflow logging. Compare to TF-IDF, zero-shot, and prompted on dev. Save an error analysis of 50 mistakes to `results/error-analysis-e4.md`, by category. Add `TrainedChecker` implementing `ConsistencyChecker`.
 **Tests:** `test_train_one_step_on_tiny_model_reduces_loss`; `test_checkpoint_saves_label_map`; `test_trained_checker_abstains_below_threshold`; `test_deadline_update_pair_is_in_eval_set`.
+**Decision (the person):** Training combines DECODE with a new, small, invented train-only scenario set at `datasets/scenarios_train/`, covering all four consistency labels, marked `origin="synthetic"`, reusing no dev or test text. The person can review a sample. Alongside the four-label results on our scenarios, report contradiction vs non-contradiction separately on DECODE's dev conversations, which training doesn't use; DECODE's test split stays for T9.1. State in the record and report that training used our own writing style, so scores on our scenarios could look better than real use. **Decision (the coordinator):** the set also covers all three card modes (recall, clarify, respond), abstention, and injected turns, because T6.1 trains on it too.
 **Accept:** `{py} -m pytest tests/test_e4.py -q`; `{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev`.
 
 ---
@@ -237,12 +238,14 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Do:** Build instruction examples: recent exchange + retrieved evidence → valid `Card` JSON, from QMSum and reviewed scenarios, split by conversation. Pipeline: 4-bit QLoRA with PEFT on Qwen3.5-4B, the same model the agents run (`docs/model-choice.md`), falling back to Qwen3-4B if its image-capable architecture blocks PEFT, and recording that. It must fit under 7 GB; if it can't, block the task and don't change the model class silently.
 **Tests:** `test_every_example_parses_as_card`; `test_every_citation_exists_in_its_input`; `test_no_conversation_in_two_splits`; `test_tokenized_labels_mask_the_prompt`; `test_dry_run_one_step_on_tiny_model`.
 **From phase review:** Training examples built from QMSum go only under a git-ignored path, and the tracked-text test from T2.5 must still pass.
+**Decision (the coordinator):** Training examples come from QMSum train plus the invented train-only set from T5.2, marked synthetic, with all three card modes and abstention represented. Never train on dev or test scenarios. T6.1 finishes on QMSum with a tested loader option for the set, so it doesn't wait for T5.2.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
 ### T6.2: Experiment E5, fine-tuned vs prompted
 **Files:** `src/contextlens/llm/hf.py`, `src/contextlens/experiments/e5_cards.py`, `tests/test_e5.py`.
 Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_path, adapter_path=None)` implementing `LLMClient`, since Ollama can't load a PEFT adapter. Train. On dev, using `HFClient` for both sides so the runtime is the same, compare the base model with the best prompt from E6 against the adapter: grounded rate, unsupported claims, schema-valid rate, abstention, latency. Save the adapter under `models/`, with its hash in the record. If it doesn't beat the prompted version, record that, and keep the prompted version in the product.
 **Tests:** tiny fixture writes a valid record; `test_adapter_hash_recorded`.
+**Decision (the coordinator):** Requires the invented train-only set from T5.2 to exist. The record reports results per source and per mode, and states that the training mix includes synthetic data. **Approval (the person):** QMSum may train this adapter locally; never publish the adapter, QMSum text, or examples derived from it.
 **Accept:** `{py} -m pytest tests/test_e5.py -q`; `{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev`.
 
 ---
@@ -315,6 +318,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Files:** `tests/test_integration.py`, `docs/run-everything.md`, changes wherever integration needs them.
 **Do:** Run the real backend with the real agent team, the speech service, and the web client together, and connect Unity's message types to the real server. The earlier client tasks used the fake server, so this is where any mismatch has to surface and get fixed. Document starting everything with one command.
 **Tests:** `test_real_backend_matches_contract` (fakes for models); real-marked `test_press_end_to_end_returns_a_cited_card`, covering audio → transcript → press → card; `test_fake_server_and_real_backend_send_same_shapes`.
+**From T8.3's verifier:** In the web client, a server `error` status while recording leaves the microphone live and sending while the indicator reads "Error", so stop capture on it; and `Session` still accepts transcript and card messages after `deleted`, so reject them, and check the real backend can't send a late transcript. Run the real browser microphone, `AudioContext`, and WebSocket path here, since nothing has yet.
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client

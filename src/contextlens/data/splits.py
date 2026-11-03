@@ -3,7 +3,7 @@ import json
 import random
 from pathlib import Path
 
-from contextlens.data.loaders import load_dataset
+from contextlens.data.loaders import decode_split_hashes, load_dataset
 from contextlens.schemas import Conversation
 
 SPLITS_DIR = Path("datasets/splits")
@@ -33,7 +33,12 @@ def dataset_hash(convs: list[Conversation]) -> str:
 
 def write_manifest(name: str, root: Path = RAW_DIR, out_dir: Path = SPLITS_DIR) -> Path:
     convs = load_dataset(name, root)
-    manifest = {"dataset": name, "seed": 13, "hash": dataset_hash(convs), "splits": make_splits(convs)}
+    if name == "decode":
+        # DECODE keeps its official files; the manifest lists hashed conversation_ids (a conversation has up to two records).
+        manifest = {"dataset": name, "split_rule": "official", "seed": None, "hash": dataset_hash(convs),
+                    "splits": decode_split_hashes(root)}
+    else:
+        manifest = {"dataset": name, "seed": 13, "hash": dataset_hash(convs), "splits": make_splits(convs)}
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.json"
     path.write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
@@ -41,5 +46,5 @@ def write_manifest(name: str, root: Path = RAW_DIR, out_dir: Path = SPLITS_DIR) 
 
 
 if __name__ == "__main__":
-    for ds in ("longmemeval", "ami", "qmsum"):
+    for ds in ("longmemeval", "ami", "qmsum", "decode"):
         print(write_manifest(ds))

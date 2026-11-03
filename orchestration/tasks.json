@@ -339,9 +339,12 @@
       "acceptance": [
         "{py} -m pytest tests/test_single_agent.py -q"
       ],
-      "status": "in_progress",
+      "status": "pending",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T05:41:55+00:00"
+      "started_at": "2026-11-03T05:41:55+00:00",
+      "attempts": 0,
+      "reason": "number rule keeps wrong numbers against spelled-out compounds: '5 dollars' vs 'five hundred dollars', '20 dollars' vs 'twenty-five dollars'; number words in statements unchecked",
+      "note": "one more attempt, decided by the coordinator: simple token-run number rule"
     },
     {
       "id": "T3.3",
@@ -398,7 +401,14 @@
       "acceptance": [
         "{py} -m pytest tests/test_consistency_baselines.py -q"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-03T05:45:45+00:00",
+      "verified": {
+        "commit": "fdf0ccb42baf370fd14d0f8fbb748ad69b1d2d9e",
+        "passed": true,
+        "at": "2026-11-03T06:10:23+00:00"
+      },
+      "done_at": "2026-11-03T06:23:15+00:00"
     },
     {
       "id": "T5.2",
@@ -413,7 +423,9 @@
         "{py} -m pytest tests/test_e4.py -q",
         "{py} -m contextlens.eval.check_run E4 --min-n 100 --split dev"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:47:48+00:00"
     },
     {
       "id": "T7.1",
@@ -454,7 +466,16 @@
       "acceptance": [
         "{py} -m pytest tests/test_cards_data.py -q"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:23:49+00:00",
+      "verified": {
+        "commit": "314bab5a64f9574b002bb5b0c90031ba30ae7793",
+        "passed": true,
+        "at": "2026-11-03T06:41:24+00:00"
+      },
+      "attempts": 1,
+      "reason": "44 of 148 abstained examples still show gold turns because MAX_GOLD=4 cuts spans and leftovers stay in the pool; answered examples quote only 4 turns of a span; no test covers it"
     },
     {
       "id": "T6.2",
@@ -464,7 +485,8 @@
       "deps": [
         "T6.1",
         "T3.3",
-        "T7.1"
+        "T7.1",
+        "T5.2"
       ],
       "acceptance": [
         "{py} -m pytest tests/test_e5.py -q",
@@ -545,14 +567,16 @@
         "npm --prefix clients/web test -- --run",
         "npm --prefix clients/web run build"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T05:35:25+00:00",
       "verified": {
-        "commit": "254be7e1647281a7b29c3c5f3137e67e73fd1d3e",
+        "commit": "8d8ea7ce4b8b3ed6b772f518d4238cedad474e48",
         "passed": true,
-        "at": "2026-11-03T05:44:56+00:00"
-      }
+        "at": "2026-11-03T05:59:28+00:00"
+      },
+      "attempts": 2,
+      "reason": "session.ts: late recording status restarts the mic and says Recording after deleted, and overwrites a local pause with no Resume pressed",
+      "done_at": "2026-11-03T06:05:16+00:00"
     },
     {
       "id": "T8.4",
@@ -580,7 +604,16 @@
       "acceptance": [
         "{py} tools/check_unity_schema.py"
       ],
-      "status": "pending"
+      "status": "in_progress",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T06:00:09+00:00",
+      "verified": {
+        "commit": "f4b243aed5dff77942db5aaf21ca3250a1739cf7",
+        "passed": true,
+        "at": "2026-11-03T06:40:55+00:00"
+      },
+      "attempts": 1,
+      "reason": "check_unity_schema misses extra fields with trailing comments and [SerializeField], ignores optional vs required and defaults; XR simulator press unsubstantiated; setup doc and contract disagree about pause reply"
     },
     {
       "id": "T8.7",
