@@ -14,7 +14,7 @@
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM, one GPU job at a time. Product calls to Claude capped at 1,000 Claude Code calls, on Haiku, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -119,9 +119,9 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 
 ### T2.1: Model clients
 **Files:** `src/contextlens/llm/client.py`, `tests/test_llm.py`.
-**Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model)` for vLLM; `ClaudeCodeClient(model="haiku")`; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
-**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 1,000 Claude Code calls.
-**Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_call_cap_refuses_and_makes_no_call`; `test_claude_client_builds_expected_command_with_no_tools` (stubbed process); `test_usage_limit_raises_llm_error`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama, and one to Claude on Haiku.
+**Produces:** `class LLMClient(Protocol): def complete(self, messages: list[dict], *, schema: type[BaseModel] | None = None, max_tokens: int = 512, temperature: float = 0.0, timeout_s: float = 10.0) -> LLMResult`; `LLMResult: text, parsed, model, prompt_tokens, completion_tokens, latency_ms, cost_usd`; `FakeLLM(responses)`; `OllamaClient`; `OpenAICompatClient(base_url, model)` for vLLM; `ClaudeCodeClient(model="sonnet")`; `Embedder.embed(texts) -> list[list[float]]` using `nomic-embed-text`; `class LLMError(Exception)`.
+**Do:** Validate against `schema`, retry once with the validation error, then raise `LLMError`. `ClaudeCodeClient` runs `claude -p` through `shutil.which`, sends the prompt on stdin, and uses `--output-format json --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands --no-session-persistence --max-turns 1`, from a temp folder, so it can't load this project's agents or tools. It reads tokens and cost from the JSON, treats a usage-limit or nonzero exit as `LLMError`, adds to `results/claude_calls.json`, and refuses past 5,000 Claude Code calls.
+**Tests:** `test_invalid_json_retries_once_then_raises`; `test_timeout_raises_llm_error`; `test_connection_refused_raises_llm_error`; `test_call_cap_refuses_and_makes_no_call`; `test_claude_client_builds_expected_command_with_no_tools` (stubbed process); `test_usage_limit_raises_llm_error`; `test_usage_is_recorded`. Real, marked: a round trip to Ollama, and one to Claude on Sonnet.
 **Accept:** `{py} -m pytest tests/test_llm.py -q`.
 
 ### T2.2: Transcript store and hybrid retrieval
@@ -324,7 +324,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **From phase review:** `check_run` rejects rows citing turn ids that aren't in the scenario, ASR transcripts segment differently from clean ones, and `datasets/scenarios/dev.jsonl` has no AMI scenarios. Settle how E7's rows and scenarios pass `check_run --min-n 30 --split dev` without weakening its rules or changing the committed dev file's hash; if that can't be done, block the task and say why.
 **Decision (the coordinator):** E7's error analysis covers memory items extracted from a turn while it was `unknown`, which keep that label after the turn is assigned.
 **Decision (the coordinator):** E7 waits for T8.7's real diarization run, since diarization error can't be reported from honest `unknown` turns.
-**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 15 GB, or if free disk falls under 40 GB.
+**Decision (the coordinator):** Download only the AMI meetings E7 needs, and check the size first. Stop and tell the coordinator before any single download over 40 GB, or if free disk falls under 40 GB.
 **Decision (the coordinator):** E7 runs with the `obs` profile on, so its metrics reach Prometheus.
 **From T8.7's verifier:** The backend sends `keep_alive` 30m and never unloads on shutdown: unload at shutdown, or whoever holds the GPU turn must unload before releasing. Measure press-to-card time, since the team's margin against the 8 s deadline looks thin and would be worse if Ollama serves the specialists one at a time. Real pyannote on the live path and the production backend started by `run_everything.py` with Ollama haven't run yet: run both here.
 **Decision (the coordinator):** E7's questions are derived from AMI's annotations and clean transcripts by a written rule, never from speech output, with `labels_reviewed: false`, and the file is committed before the run. An independent reader checks a sample before E7 runs, and a sample goes to H2. `--speedup` is used only if the record states it, and real-time latency is reported from a real-time segment.
@@ -362,7 +362,9 @@ See `docs/HUMAN-GATES.md`.
 **Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split, in one run record that holds every system: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
 **From phase review:** E8 reports each public benchmark separately, so it uses the local scenario manifests from T2.5 for sources whose text can't be committed. All of them go in the one test record.
-**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test`.
+**Decision (the person), judge check before this task:** Sonnet, through the existing `claude -p` client, grades a random sample of at least 200 answers the local `gemma4` judge already graded, across experiments on dev only, never test. Sources are synthetic and LongMemEval only: QMSum and DECODE text never leaves this machine. Report agreement, Cohen's kappa, which way disagreements lean, and whether the local judge flatters results. Save rows as they arrive, inside the call cap, with a run record and a `docs/DECISIONS.md` entry. If agreement is poor, say so and propose Sonnet as the judge for final numbers. This adds to the person-reviewed sample in `docs/TESTING.md`, and doesn't replace it.
+**Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
+**Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test --all`.
 
 ### T9.2: User study kit
 **Files:** `docs/study/` (consent form, tasks, script, anonymous results template), `src/contextlens/experiments/e9_study.py`, `tests/test_e9.py`.
@@ -377,6 +379,7 @@ See `docs/HUMAN-GATES.md`.
 **Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
+**Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off

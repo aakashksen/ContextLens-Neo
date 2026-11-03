@@ -66,7 +66,7 @@ def rescore(scenarios: list[Scenario], proba: Callable[[list[cm.Example]], list[
     for s in scenarios:
         statement, earlier = _judged(s)
         examples.append(cm.example_from_turns(statement, earlier))
-    return [{"id": s.id, "probs": dict(zip(labels, p))} for s, p in zip(scenarios, proba(examples))]
+    return [{"id": s.id, "probs": dict(zip(labels, p, strict=True))} for s, p in zip(scenarios, proba(examples), strict=True)]
 
 
 def write_rows(path: Path, rows: list[dict]) -> None:
@@ -86,7 +86,7 @@ def agreement(rows: list[dict], saved: list[Prediction], *, binary: bool, thresh
     if [r["id"] for r in rows] != [p.scenario_id for p in saved]:
         raise ValueError("the rescored ids and the saved prediction ids differ")
     agree = 0
-    for r, p in zip(rows, saved):
+    for r, p in zip(rows, saved, strict=True):
         best = max(r["probs"], key=r["probs"].__getitem__)
         label = best if r["probs"][best] >= threshold else "insufficient"
         got = predicted_label(p)

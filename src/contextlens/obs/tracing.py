@@ -34,6 +34,26 @@ def _agent(name: str) -> str:
     return name if name in AGENTS else "other"
 
 
+def _by_agent(stages: dict[str, int]) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    """A press's stage_ms as (milliseconds per agent, tokens per agent, the single agent's stages)."""
+    tokens: dict[str, int] = {}
+    ms: dict[str, int] = {}
+    single: dict[str, int] = {}
+    for key, value in stages.items():
+        if not isinstance(value, int | float):
+            continue
+        if key in SINGLE_STAGES:
+            single[key] = int(value)
+            ms["single"] = ms.get("single", 0) + int(value)
+        elif key.endswith("_ms"):
+            a = _agent(key[:-3])
+            ms[a] = ms.get(a, 0) + int(value)
+        elif key.endswith("_tokens"):
+            a = _agent(key[:-7])
+            tokens[a] = tokens.get(a, 0) + int(value)
+    return ms, tokens, single
+
+
 class Telemetry:
     """Spans and metrics. Pass a registry/provider to keep them apart (tests); the defaults are private."""
 
@@ -78,21 +98,7 @@ class Telemetry:
             root.set_status(trace.StatusCode.ERROR)  # no description: a message could hold transcript text
             self._errors.labels(kind).inc()
         ctx = trace.set_span_in_context(root)
-        tokens: dict[str, int] = {}
-        ms: dict[str, int] = {}
-        single: dict[str, int] = {}
-        for key, value in stages.items():
-            if not isinstance(value, int | float):
-                continue
-            if key in SINGLE_STAGES:
-                single[key] = int(value)
-                ms["single"] = ms.get("single", 0) + int(value)
-            elif key.endswith("_ms"):
-                a = _agent(key[:-3])
-                ms[a] = ms.get(a, 0) + int(value)
-            elif key.endswith("_tokens"):
-                a = _agent(key[:-7])
-                tokens[a] = tokens.get(a, 0) + int(value)
+        ms, tokens, single = _by_agent(stages)
         if card is not None and card.tokens > sum(tokens.values()):
             # an assistant that reports no per-agent tokens (SingleAgent): the rest of the card's total
             rest = "single" if single else "other"

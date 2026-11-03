@@ -23,7 +23,7 @@ def class_weights(labels: list[str], order: tuple[str, ...] = cm.LABELS) -> list
 def collate(tokenizer: Any, examples: list[cm.Example], order: tuple[str, ...] = cm.LABELS) -> dict[str, Any]:
     import torch
 
-    first, second = zip(*(cm.render(e) for e in examples))
+    first, second = zip(*(cm.render(e) for e in examples), strict=True)
     enc = tokenizer(list(first), list(second), truncation=True, max_length=cm.MAX_LENGTH, padding=True,
                     return_tensors="pt")
     enc["labels"] = torch.tensor([order.index(e.label) for e in examples])  # type: ignore[arg-type]
@@ -95,6 +95,26 @@ def dev_macro_f1(model: Any, tokenizer: Any, dev: list[cm.Example], batch_size: 
     return macro_f1([e.label for e in dev], pred) or 0.0  # type: ignore[misc]
 
 
+def _run_epoch(model: Any, tokenizer: Any, loader: Any, sampler: EpochOrder, rng: random.Random, n_train: int,
+               step_state: tuple[Any, Any, Any], dev: list[cm.Example], batch_size: int) -> dict[str, float]:
+    """One shuffled pass of training, then the dev score; the row `fit` records for the epoch (without its number)."""
+    optimizer, weights, scheduler = step_state
+    started = time.perf_counter()
+    model.train()
+    sampler.indices = list(range(n_train))
+    rng.shuffle(sampler.indices)
+    losses = [train_step(model, batch, optimizer, weights, scheduler) for batch in loader]
+    score = dev_macro_f1(model, tokenizer, dev, batch_size)
+    return {"train_loss": sum(losses) / len(losses), "dev_macro_f1": score,
+            "epoch_seconds": time.perf_counter() - started}
+
+
+def _freeze_embeddings(model: Any) -> None:
+    """The embedding matrix is a large share of the weights; frozen, it needs no gradient or optimizer state."""
+    for p in model.get_input_embeddings().parameters():
+        p.requires_grad = False
+
+
 def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Example], *, lr: float, epochs: int,
         batch_size: int = 16, patience: int = 1, seed: int = 13, out_dir: Path | None = None,
         freeze_embeddings: bool = False, log: Log | None = None, meta: dict[str, Any] | None = None,
@@ -109,9 +129,8 @@ def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Exampl
 
     rng = random.Random(seed)
     torch.manual_seed(seed)
-    if freeze_embeddings:  # the embedding matrix is a large share of the weights; frozen, it needs no gradient or optimizer state
-        for p in model.get_input_embeddings().parameters():
-            p.requires_grad = False
+    if freeze_embeddings:
+        _freeze_embeddings(model)
     weights = torch.tensor(class_weights([e.label for e in train]))  # type: ignore[misc]
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=0.01)
@@ -125,14 +144,10 @@ def fit(model: Any, tokenizer: Any, train: list[cm.Example], dev: list[cm.Exampl
     loader = DataLoader(train, batch_size=batch_size, sampler=sampler, collate_fn=Collator(tokenizer),  # type: ignore[arg-type]
                         num_workers=num_workers, persistent_workers=num_workers > 0)
     for epoch in range(1, epochs + 1):
-        started = time.perf_counter()
-        model.train()
-        sampler.indices = list(range(len(train)))
-        rng.shuffle(sampler.indices)
-        losses = [train_step(model, batch, optimizer, weights, scheduler) for batch in loader]
-        score = dev_macro_f1(model, tokenizer, dev, batch_size)
-        row = {"epoch": epoch, "train_loss": sum(losses) / len(losses), "dev_macro_f1": score,
-               "epoch_seconds": time.perf_counter() - started}
+        row = _run_epoch(model, tokenizer, loader, sampler, rng, len(train), (optimizer, weights, scheduler), dev,
+                         batch_size)
+        row = {"epoch": epoch, **row}
+        score = row["dev_macro_f1"]
         result.history.append(row)
         if log:
             log({k: v for k, v in row.items() if k != "epoch"}, epoch)

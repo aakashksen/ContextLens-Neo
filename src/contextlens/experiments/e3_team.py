@@ -43,7 +43,7 @@ from contextlens.consistency import model as cm
 from contextlens.consistency import rescore, select_cascade
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, RUNS_REL, SCENARIO_SOURCES, is_dirty, split_hash, write_run
+from contextlens.eval.records import ROOT, RUNS_REL, SCENARIO_SOURCES, is_dirty, load_verified, split_hash, write_run
 from contextlens.eval.row_report import before_after, row_report
 from contextlens.eval.series import base_name
 from contextlens.experiments import e2_context as e2
@@ -468,7 +468,7 @@ def _cards(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, c
         "notes": [plain_finding(metrics, comparisons), conditions_note(run_conditions), deadline_sentence(report),
                   "grounded_rate and unsupported_claim_rate come from one local judge; no person has reviewed a sample.",
                   "Counts of injected claims use a word-overlap proxy; the flagged ids are listed to read."],
-        "claude_calls": 0, "labels_reviewed": False, "started_at": started,
+        "claude_calls": 0, "started_at": started,
     }
     if supersedes:
         config["superseded"] = supersede_report(root, supersedes, rows, config, models, {"recall": PROMPT_VERSION}, digest)
@@ -755,7 +755,7 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
         raise RunBroken("run_conditions is required: say what else was running while latency was measured")
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the records cannot be written")
-    data = {src: e4._load(src, root) for src in CONSISTENCY_SOURCES}
+    data = {src: load_verified(src, SPLIT, root) for src in CONSISTENCY_SOURCES}
     cases = {src: [judged_case(s) for s in scs] for src, (scs, _) in data.items()}
     labelled = {src: [c for c in cs if c[0].gold_label is not None] for src, cs in cases.items()}
     evals = {mode: Evaluator(proba, labels, prompted, threshold) for mode in SPEAKER_MODES}
@@ -803,7 +803,7 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
         "provenance": provenance, "hand_read_file": hand_read.as_posix() if hand_read else None,
         "inference_input": "low-confidence speakers pass as unknown and every string is escaped before the trained model sees it",
         "selection_data": "dev (selection data, not held out); dev labels are unreviewed (provisional)",
-        "claude_calls": 0, "labels_reviewed": False, "started_at": started,
+        "claude_calls": 0, "started_at": started,
     }
     paths = {}
     for src in CONSISTENCY_SOURCES:

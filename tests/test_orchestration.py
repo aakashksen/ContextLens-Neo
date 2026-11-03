@@ -28,7 +28,9 @@ class Sandbox(unittest.TestCase):
         self.git("config", "user.email", "test@example.com")
         self.git("config", "user.name", "test")
         (self.root / "a.txt").write_text("a")
-        self.git("add", "a.txt")
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "DECISIONS.md").write_text("".join(f"T{n}: no new decisions\n" for n in (1, 2, 3)))
+        self.git("add", "a.txt", "docs/DECISIONS.md")
         self.git("commit", "-qm", "init")
         self.write([task("T1"), task("T2", deps=["T1"]), task("H1", owner="human")])
 
@@ -218,7 +220,9 @@ class GpuGuard(Sandbox):
         self.assertEqual(self.run_ctl("unused", "start", "T2").returncode, 0)
 
 
-class Tracks(Sandbox):
+class TrackSandbox(Sandbox):
+    """Tracks' fixtures. Decisions shares them without inheriting (and rerunning) Tracks' tests."""
+
     def setUp(self):
         super().setUp()
         self.wt_root = Path(self.tmp.name + "-wt")
@@ -249,6 +253,8 @@ class Tracks(Sandbox):
         self.assertEqual(self.ctl("verify", task_id).returncode, 0)
         self.verdict(task_id, commit=commit)
 
+
+class Tracks(TrackSandbox):
     def test_next_offers_every_independent_task(self):
         state = json.loads(self.ctl("next").stdout)
         self.assertEqual([t["id"] for t in state["ready"]], ["T1", "T2"])
@@ -420,6 +426,100 @@ class Tracks(Sandbox):
         running = [subprocess.Popen([sys.executable, str(CTL), "start", t["id"]], env=env, stdout=subprocess.DEVNULL) for t in tasks]
         self.assertEqual([p.wait() for p in running], [0] * 12)
         self.assertEqual({self.state(t["id"])["status"] for t in tasks}, {"in_progress"})
+
+
+class Decisions(TrackSandbox):
+    """Closing a task needs docs/DECISIONS.md to mention its id, in the copy that is being closed."""
+
+    def decisions(self, text, base=None):
+        base = Path(base or self.root)
+        (base / "docs" / "DECISIONS.md").write_text(text)
+        subprocess.run(["git", "add", "docs/DECISIONS.md"], cwd=base, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "decisions"], cwd=base, check=True, capture_output=True)
+
+    def ready_to_close(self, task_id):
+        self.ctl("start", task_id)
+        self.assertEqual(self.ctl("verify", task_id).returncode, 0)
+        self.verdict(task_id)
+
+    def test_done_is_refused_without_an_entry_and_changes_nothing(self):
+        self.write([task("T1"), task("T1.1"), task("T1.10")])
+        self.decisions("Nothing about the task here.\n")
+        self.ready_to_close("T1")
+        before = (self.root / "orchestration" / "tasks.json").read_text()
+        out = self.ctl("done", "T1")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("DECISIONS.md", out.stderr)
+        self.assertIn("T1: no new decisions", out.stderr)
+        self.assertEqual((self.root / "orchestration" / "tasks.json").read_text(), before)
+
+    def test_an_entry_or_a_no_new_decisions_line_lets_done_through(self):
+        for text in ("## Choice for T1\nWhy.\n", "T1: no new decisions\n", "(T1.) ends a sentence"):
+            self.write([task("T1")])
+            self.decisions(text)
+            self.ready_to_close("T1")
+            out = self.ctl("done", "T1")
+            self.assertEqual(out.returncode, 0, text + out.stderr)
+
+    def test_an_id_that_is_a_prefix_of_another_is_not_a_match(self):
+        self.write([task("T1.1"), task("T1.10")])
+        self.decisions("T1.10: no new decisions\nSee T1.1.5 and XT1.1 and T1.1x.\n")
+        self.ready_to_close("T1.1")
+        self.assertIn("does not mention T1.1", self.ctl("done", "T1.1").stderr)
+        self.decisions("T1.10: no new decisions\nT1.1: no new decisions\n")
+        self.ready_to_close("T1.1")
+        self.assertEqual(self.ctl("done", "T1.1").returncode, 0)
+        self.ready_to_close("T1.10")
+        self.assertEqual(self.ctl("done", "T1.10").returncode, 0)
+
+    def test_the_other_way_round_the_longer_id_needs_its_own_mention(self):
+        self.write([task("T1.1"), task("T1.10")])
+        self.decisions("T1.1: no new decisions\n")
+        self.ready_to_close("T1.10")
+        self.assertIn("does not mention T1.10", self.ctl("done", "T1.10").stderr)
+
+    def test_a_mention_in_an_unrelated_entry_counts(self):
+        self.write([task("T1")])
+        self.decisions("## A choice made in T2\nIt replaced what T1 had done.\n")
+        self.ready_to_close("T1")
+        self.assertEqual(self.ctl("done", "T1").returncode, 0)
+
+    def test_human_tasks_and_finished_tasks_are_not_checked(self):
+        self.write([task("H1", owner="human"), task("T1")])
+        self.decisions("T1: no new decisions\n")
+        self.assertEqual(self.ctl("human-done", "H1", "--note", "ok").returncode, 0)
+        self.ready_to_close("T1")
+        self.assertEqual(self.ctl("done", "T1").returncode, 0)
+        self.decisions("Emptied.\n")
+        out = self.ctl("done", "T1")
+        self.assertNotIn("DECISIONS", out.stderr)
+        self.assertEqual(self.state("T1")["status"], "done")
+
+    def test_land_reads_the_task_branch_so_its_own_entry_counts(self):
+        self.write([task("T1")])
+        self.decisions("Nothing here.\n")
+        self.ctl("start", "T1", "--worktree")
+        worktree = self.state("T1")["worktree"]
+        self.decisions("T1: no new decisions\n", base=worktree)
+        self.pass_gates("T1", subprocess.run(["git", "rev-parse", "HEAD"], cwd=worktree, capture_output=True, text=True).stdout.strip())
+        self.assertNotIn("T1", (self.root / "docs" / "DECISIONS.md").read_text())
+        out = self.ctl("land", "T1")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(self.state("T1")["status"], "done")
+
+    def test_land_is_refused_without_an_entry_and_changes_nothing(self):
+        self.write([task("T1")])
+        self.decisions("Nothing here.\n")
+        self.ctl("start", "T1", "--worktree")
+        commit = self.build("T1", "one.txt", "1")
+        self.pass_gates("T1", commit)
+        before = (self.root / "orchestration" / "tasks.json").read_text()
+        out = self.ctl("land", "T1")
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("does not mention T1", out.stderr)
+        self.assertEqual((self.root / "orchestration" / "tasks.json").read_text(), before)
+        self.assertTrue(Path(self.state("T1")["worktree"]).exists())
+        self.assertFalse((self.root / "one.txt").exists())
 
 
 class AddDep(Sandbox):

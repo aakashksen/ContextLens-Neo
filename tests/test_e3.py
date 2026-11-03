@@ -739,3 +739,15 @@ def test_the_committed_cloud_set_is_every_cloud_safe_dev_case_and_the_old_manife
     assert manifest["sources"] == {"longmemeval": 10, "synthetic": 138}
     assert (REAL_DEV.parents[1] / e2.SUBSETS_REL / f"{e2.OLD_SUBSET}.json").is_file()
     assert not hasattr(e2, "CLOUD_CALL_BUDGET") and not hasattr(e2, "SUBSET_N")
+
+
+def test_a_decode_row_holding_dropped_finding_text_fails_the_record_check(crepo):
+    paths = go(crepo)
+    assert check("E3", root=crepo, split="dev") == []
+    rec = json.loads(paths["decode"].read_text(encoding="utf-8"))
+    rows = crepo / rec["predictions"]["trained"]
+    first, *rest = rows.read_text(encoding="utf-8").splitlines()
+    row_ = json.loads(first)
+    row_["drops"] = [{"reason": "number", "statement": "raw dataset words", "turn_ids": ["x"]}]
+    rows.write_text("\n".join([json.dumps(row_), *rest]) + "\n", encoding="utf-8")
+    assert any("dropped-finding text" in p or "ids and metrics only" in p for p in check("E3", root=crepo, split="dev"))
