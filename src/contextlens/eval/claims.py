@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.eval.check_run import _test_once_problems, check_record, review_problems, superseded_by
-from contextlens.eval.records import ROOT, RUNS_REL
+from contextlens.eval.records import ROOT, RUNS_REL, record_label_source
 from contextlens.eval.series import JUDGED, base_name
 
 CLAIMS_REL = Path("results/claims.json")
 COMPARISON_FIELDS = ("diff", "ci", "mcnemar_p")
+PUBLISHED_WORDS = "on published labels"
 
 
 def _system(c: dict[str, Any], rec: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -59,14 +60,27 @@ def _value_problem(c: dict[str, Any], rec: dict[str, Any]) -> tuple[str | None, 
     return None, metric
 
 
+def _label_problems(cid: str, c: dict[str, Any], rec: dict[str, Any]) -> list[str]:
+    """Publisher labels count as reviewed (the person's rule), but the claim must say they are published labels.
+    Our scenarios and AMI keep their sign-off, as recorded in the run. An unknown source is not reviewed."""
+    kind = record_label_source(rec)
+    if kind is None:
+        return [f"claim {cid}: the run's label source cannot be determined, so its labels are not reviewed"]
+    if kind == "publisher":
+        text = c.get("text")
+        if isinstance(text, str) and PUBLISHED_WORDS in text.lower():
+            return []
+        return [f"claim {cid}: the run's labels come from the publisher, so the claim's text must say '{PUBLISHED_WORDS}'"]
+    return [] if rec.get("labels_reviewed") else [f"claim {cid}: run has labels_reviewed false"]
+
+
 def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated: list[str]) -> list[str]:
     cid = c.get("id", "?")
     problem, metric = _value_problem(c, rec)
     problems = [f"claim {cid}: {problem}"] if problem else []
     if metric and base_name(metric) in JUDGED:
         problems += [f"claim {cid}: {m}" for m in review_problems(rec.get("config"))]
-    if not rec.get("labels_reviewed"):
-        problems.append(f"claim {cid}: run has labels_reviewed false")
+    problems += _label_problems(cid, c, rec)
     if c.get("run_id") in superseded_by(rec.get("experiment", ""), root):
         problems.append(f"claim {cid}: run {c.get('run_id')} is superseded by a later record")
     problems += [f"claim {cid}: run: {m}" for m in check_record(rec, root)]

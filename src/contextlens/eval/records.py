@@ -125,11 +125,18 @@ def label_source(scenario_source: str) -> str:
     return LABEL_SOURCE[scenario_source]
 
 
+def record_label_source(rec: dict[str, Any]) -> str | None:
+    """Whose labels a saved record carries, decided from its scenario_source (which check_run ties to the
+    source's manifest), never from its own label_source field. None when the source is missing or unknown."""
+    source = rec.get("scenario_source")
+    return LABEL_SOURCE.get(source) if isinstance(source, str) else None
+
+
 def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
     """Whether a person has signed off the labels of this record's source. Only the main folder holds live state,
     so a linked worktree reads the main folder's, never its own possibly stale copy. `scenarios` needs H2 done in
-    tasks.json; `ami_rule` needs the signed line in AMI_SIGNED_REL, separate from H2; `publisher` labels are not
-    reviewed here. Missing or unreadable state means false. This is the only place the flag is set; a runner's
+    tasks.json; `ami_rule` needs the signed line in AMI_SIGNED_REL, separate from H2; `publisher` labels (DECODE,
+    QMSum) count as reviewed, by the person's decision of 2026-11-03, and claims on them must say so. Missing or unreadable state means false. This is the only place the flag is set; a runner's
     config cannot override it."""
     from contextlens.llm.client import shared_root
 
@@ -143,7 +150,7 @@ def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
             return bool((main / AMI_SIGNED_REL).read_text(encoding="utf-8").strip())
     except (OSError, ValueError, KeyError, TypeError):
         return False
-    return False
+    return kind == "publisher"
 
 
 SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
