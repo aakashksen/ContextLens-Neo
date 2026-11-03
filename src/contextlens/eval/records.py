@@ -62,6 +62,8 @@ SCENARIO_SOURCES = {
     "scenarios": (MANIFEST_REL, Path("datasets/scenarios")),
     "qmsum": (Path("datasets/splits/qmsum-scenarios.json"), Path("datasets/raw/scenarios/qmsum")),
     "decode": (Path("datasets/splits/decode-scenarios.json"), Path("datasets/raw/scenarios/decode")),
+    # Invented dev-only pairs (docs/extra-cases.md), committed in full; no person has reviewed their labels.
+    "scenarios_extra": (Path("datasets/splits/scenarios-extra.json"), Path("datasets/scenarios_extra")),
 }
 # Prediction rows of these sources may hold ids and metrics data only (a bare label is fine): no quotes, cards or raw output.
 IDS_ONLY_SOURCES = {"qmsum", "decode"}
@@ -118,7 +120,8 @@ TASKS_REL = Path("orchestration/tasks.json")
 AMI_SIGNED_REL = Path("orchestration/evidence/signed-ami-labels.txt")  # git-ignored; written by a person or reader
 # Whose labels a scenario source carries. The record keeps this beside labels_reviewed, so a later decision about
 # which of them count as reviewed needs no rerun.
-LABEL_SOURCE = {"scenarios": "scenarios", "ami": "ami_rule", "qmsum": "publisher", "decode": "publisher"}
+LABEL_SOURCE = {"scenarios": "scenarios", "ami": "ami_rule", "qmsum": "publisher", "decode": "publisher",
+                "scenarios_extra": "unreviewed_extra"}
 
 
 def label_source(scenario_source: str) -> str:
