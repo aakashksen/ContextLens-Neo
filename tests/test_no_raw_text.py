@@ -14,6 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW_DIRS = [ROOT / "datasets/raw/qmsum", ROOT / "datasets/raw/decode"]
 WINDOW = 8  # a run of this many words in a row counts as copied text
 
+# Everyday 8-word phrases that appear in both our scenarios and DECODE. Exact match on the normalized window only.
+ALLOWED_WINDOWS = {
+    "that s a lot of work for one": "stock complaint, not DECODE-specific",
+    "s a lot of work for one person": "same idiom, shifted one word",
+    "that makes a lot of sense i ve": "common agreement phrase",
+    "can you give me an example of a": "common request phrase",
+    "i ll believe it when i see it": "proverb",
+}
+
 
 def _strings(x: object) -> Iterator[str]:
     if isinstance(x, str):
@@ -42,16 +51,18 @@ def _texts(path: Path) -> Iterator[str]:
         yield from raw.splitlines()
 
 
-def _windows(text: str) -> Iterator[int]:
+def _windows(text: str, allowed: frozenset[str] | set[str] = frozenset()) -> Iterator[int]:
     words = re.findall(r"\w+", text.lower())
     for i in range(len(words) - WINDOW + 1):
-        yield int.from_bytes(hashlib.blake2b(" ".join(words[i : i + WINDOW]).encode(), digest_size=8).digest(), "big")
+        window = " ".join(words[i : i + WINDOW])
+        if window not in allowed:
+            yield int.from_bytes(hashlib.blake2b(window.encode(), digest_size=8).digest(), "big")
 
 
-def leaked_files(raw_dirs: list[Path], files: list[Path]) -> list[str]:
-    """Files among `files` that share a run of WINDOW words with any file under `raw_dirs`."""
+def leaked_files(raw_dirs: list[Path], files: list[Path], allowed: set[str] | frozenset[str] = frozenset(ALLOWED_WINDOWS)) -> list[str]:
+    """Files among `files` that share a run of WINDOW words with any file under `raw_dirs`, ignoring `allowed` windows."""
     seen = {h for d in raw_dirs if d.is_dir() for f in d.rglob("*") if f.is_file() for t in _texts(f) for h in _windows(t)}
-    return [f.as_posix() for f in files if any(h in seen for t in _texts(f) for h in _windows(t))]
+    return [f.as_posix() for f in files if any(h in seen for t in _texts(f) for h in _windows(t, allowed))]
 
 
 def test_detector_flags_copied_text_and_nothing_else(tmp_path: Path) -> None:
@@ -67,6 +78,23 @@ def test_detector_flags_copied_text_and_nothing_else(tmp_path: Path) -> None:
     clean.write_text("ids only: invented1 invented2 invented3, and some other words entirely unrelated here", encoding="utf-8")
     found = leaked_files([raw], [copied, as_json, clean])
     assert found == [copied.as_posix(), as_json.as_posix()]
+
+
+def test_allowlist_is_exact_and_nothing_else_is_forgiven(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "a.txt").write_text(
+        "\n".join(list(ALLOWED_WINDOWS) + ["that s a lot of work for two", "zorp blat quux flim flam wibble wobble snork plonk"]), encoding="utf-8")
+    allowed_only = tmp_path / "allowed_only.md"
+    allowed_only.write_text("Well, " + "\n".join(p.upper() for p in ALLOWED_WINDOWS), encoding="utf-8")
+    one_word_off = tmp_path / "one_word_off.md"
+    one_word_off.write_text("that s a lot of work for two", encoding="utf-8")
+    new_phrase = tmp_path / "new_phrase.md"
+    new_phrase.write_text("intro. zorp blat quux flim flam wibble wobble snork. end", encoding="utf-8")
+    longer = tmp_path / "longer.md"  # contains an allowed phrase plus other copied words
+    longer.write_text("zorp blat quux flim flam wibble wobble snork plonk that s a lot of work for one", encoding="utf-8")
+    files = [allowed_only, one_word_off, new_phrase, longer]
+    assert leaked_files([raw], files) == [one_word_off.as_posix(), new_phrase.as_posix(), longer.as_posix()]
 
 
 def _committable_files() -> list[Path]:
