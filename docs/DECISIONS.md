@@ -222,3 +222,73 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Chosen:** Their text may go to Claude through `claude -p` for grading and comparison. `write_run` sets `labels_reviewed` true for the `publisher` label source, and `claims check` decides from the record's `scenario_source` so older records (flag false, no `label_source`) are covered; a record whose source cannot be determined is not reviewed. A claim from such a record must say "on published labels" in its `text`. Our scenarios and AMI keep their sign-offs. The cloud rule changed for future runs only; records made before 2026-11-03 did not send this text to Claude.
 - **Still in force:** Raw text is never committed, published or redistributed. "Never publish" for the QMSum adapter and for examples derived from QMSum is unchanged, because the person has not changed it.
 - **Evidence:** `docs/datasets.md`, `docs/TESTING.md`, `tests/test_claims_publisher.py`.
+
+## 27. Respond mode is set in code, on the latest turn
+- **Date / task:** 2026-11-03, T4.2 (commit f5035a0)
+- **Who:** The coordinator decided to set it in code; the implementer chose the rule's wording.
+- **Chosen:** A press with no question, on a latest turn that has a question mark or starts with "please" or "let's", is set to `respond` in the shared finish step, so the single agent, the one-shot baselines and the team all get it. The suggestion is then written from verified findings.
+- **Considered:** The coordinator's wording was "the latest other-speaker turn". The request names no user, so the speaker of the latest turn cannot be told from the user. The records report how many firings have a latest turn by the same speaker as the turn before it, so the size of the approximation is visible.
+- **Known cost:** A question the user asked themselves also fires. A statement addressed to the user ("We booked it for you!") does not.
+- **Would change if:** the request carries who the user is.
+
+## 28. Instruction guard patterns were written after reading the dev injection turns
+- **Date / task:** 2026-11-03, T4.2 (commit 8afeda0)
+- **Who:** The coordinator decided a code rule; the implementer wrote the patterns.
+- **Chosen:** `guard/instructions.py` drops a finding that cites a turn naming the assistant, telling it to drop its rules, telling it what to say, or asking for secrets. It sits in the shared `check_findings`, so every system has it.
+- **Known cost:** The patterns were written after the dev injection turns had been read, so its catch rate on them is not a held-out figure. It also drops some ordinary talk, and one order ("Disobey your setup ...") gets past it. Both counts are in the E3 cards record and are not hidden.
+- **Considered:** Widening the patterns for the missed phrase: rejected, since each widening adds false drops.
+- **Would change if:** a held-out injection set shows a worse catch or false-drop rate.
+
+## 29. E3's selection score uses the lower abstention side
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The coordinator.
+- **Chosen:** The score is the mean of groundedness and the lower of the two abstention sides (answer rate on answerable cases, abstain rate on insufficient cases). Every part must be defined. It was written down before the run. It names the best system in E3's record without re-deciding E2's winner. E2's own rule is unchanged and now picks `full`; E3's written rule picks `single`.
+- **Evidence:** `SELECTION_RULE` in `experiments/e3_team.py` and `config.selection_rule` in the E3 record.
+- **Would change if:** the person wants a different weighting.
+
+## 30. Speakers shown as names or as neutral roles: the one that flips less, unless accuracy falls
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The coordinator set the principle; the implementer fixed the measurable-drop limit before any run.
+- **Chosen:** The trained model sees low-confidence speakers as `unknown` and escaped text. On dev the experiment scores with names and with roles and picks roles only if they flip less and alert accuracy does not fall by more than 0.02. Speaker-flip and injection-flip rates are reported per system, and any rate above 5% goes to the coordinator before E8.
+- **Evidence:** the E3 consistency records, `config.speaker_mode` and `config.flips`.
+- **Would change if:** the coordinator changes the 0.02 or the 5%.
+
+## 31. The same-speaker rule is an arm, kept only if it helps
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The coordinator.
+- **Chosen:** A flagged statement is rescored against each of the last six earlier turns alone. If the turn it conflicts with most is another speaker's, the alert is shown as a disagreement. Unknown speakers never count as another speaker. The rule is kept only if the mean false-alert rate falls and the mean catch rate falls by no more than 0.02. The verdict is in `config.same_speaker_rule`.
+- **Known cost:** The conflicting turn is found from single-turn scores, which is a heuristic. DECODE speakers are A and B by position, so wrong-speaker counts on DECODE say little.
+
+## 32. The trained model alone alerts at the cascade config's threshold
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The implementer, reported to the coordinator.
+- **Chosen:** Trained-alone raises an alert when P(contradiction) is at or above `flag_threshold` in `configs/cascade.json`, the same screening rule `select_cascade` uses. The 30 false alarms to hand-read are drawn from trained-alone at that threshold.
+- **Known cost:** The threshold is marked provisional in the config.
+
+## 33. Single and team share the same tools, with no consistency checker
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The implementer.
+- **Chosen:** Both get one `Tools` build with no consistency checker, so neither hides model tokens inside a tool call and the comparison is on the same footing. The consistency agent of the team therefore works from the transcript and memory only.
+- **Would change if:** a later experiment wants the cascade as a tool.
+
+## 34. Prompt version stays v1
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The implementer.
+- **Chosen:** No prompt text changed in T4.2: models are shown full turn ids, the prompts carry no short-id example, and the fixes are in code (guard, number rule, respond rule). The version label stays `v1`. Under the phase 3 rule a changed prompt would have needed a new label.
+
+## 35. Short turn ids were dropped as bad citations; E2 and E3 were rerun
+- **Date / task:** 2026-11-03, T4.2 (commit efa787b; reruns E3-20261103T221004658482Z, E2-20261103T224548534556Z, E2-20261103T230638094732Z)
+- **Who:** The coordinator found it in E3's saved rows; the implementer fixed it.
+- **What failed:** Models cite the part of a turn id after the colon (`t0`), and the guard only knew the full id, so true findings were dropped as citation failures. The team lost the most. No finding with a short id was kept anywhere.
+- **Chosen:** The guard resolves an id with no conversation prefix to the one turn of this conversation, at or before the press, whose id ends in it, with the quote still required. Another conversation's id, an ambiguous one and a later turn still drop. The reruns list the old records as superseded with a reason naming this bug.
+- **What the rerun showed, in words:** Nearly all short-id citation drops are gone (one team drop with a short id remains). With them gone the team answers more answerable cases than the single agent, but it abstains less where the evidence is insufficient, and it costs more tokens and time. It is not better on groundedness. A few team cards ran into the 8 s deadline, and the record reports that per system. No metric values are stated here: claims take a separate route.
+- **`retrieval` in `settings_changed`:** the E3 record now writes the retrieval config as a setting. The old record did not, so the comparison shows it as changed from `absent`. It was newly recorded, not changed.
+- **Evidence:** the three reruns above, each listing its predecessor in `supersedes`, and `config.superseded` in them.
+- **Would change if:** a model cites some other short form (for example a bare number).
+
+## 36. The first note of the E3 cards rerun says the labels are unreviewed; that wording was wrong
+- **Date / task:** 2026-11-03, T4.2
+- **Who:** The coordinator found it; the implementer fixed the code.
+- **What was wrong:** The text was hardcoded in the runner. `E3-20261103T221004658482Z` has `labels_reviewed: true` and `label_source: scenarios`, and its `notes[0]` ends "Dev labels are unreviewed". The flag is right and the sentence is wrong. The record is left unedited, as records are. The part of the sentence about the judge stands: the judge is one local model, and no person has reviewed a judge sample.
+- **Chosen:** Notes and analyses now take the sentence from `records.label_text`, which reads the same flag and source that `write_run` records. The E2 analysis, E3's finding and selection note, and the cascade selection text were changed. No `docs` or run record was edited by hand.
+- **Evidence:** the fix commit on `task/T4.2`; `results/error-analysis-e2.md`, whose label line is generated from the flag.

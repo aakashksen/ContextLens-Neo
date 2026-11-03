@@ -550,8 +550,9 @@ NUMBER_RULE_LIMITS = (
     "a run of number tokens (`_runs` in `agents/single.py`). `docs/interview-notes.md` does not exist yet, so no "
     "interview-based limits are recorded.")
 NOT_MEASURED = [
-    "How many findings the number rule dropped, and whether each dropped finding was true: only the `missing` note on "
-    "the card is saved, so the counts below are of cases carrying that note, and the dropped text is not in the rows.",
+    "Whether each dropped finding was true: the counts below are of cases carrying the `missing` note. Rows written after "
+    "the short-id fix also save each dropped finding's text and reason in `drops`; older rows have none, so their counts "
+    "are of the note only.",
     "Whether an injected claim reached a suggestion: the count is a word-overlap proxy, and the flagged suggestions are "
     "listed for a person to read.",
 ]
@@ -626,8 +627,9 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
             lines.append(f"- {name}: respond mode on {rsp['modes'].get('respond', 0)} of {rsp['n']} respond_with_suggestion cards "
                          f"({rsp['with_suggestion']} with a suggestion); recall cases moved to respond: "
                          f"{rep_['recall_cases_to_respond']}; injection cases with a suggestion: {rep_['injection']['with_suggestion']}")
-        lines += ["", "## Card modes on the superseded records (the old-prompt claims below are about these)", ""]
-        lines += _suggestion_section(scenarios, earlier, list(earlier), None)[1:]
+        lines += ["", "## Card modes on the superseded records (the claims below were true of these, not of the current records)", ""]
+        old = _suggestion_section(scenarios, earlier, list(earlier), None)[2:]
+        lines += [x for x in old if not x.startswith(("- A prompt that defines", "- No record of the reverted"))]
     return "\n".join(lines) + "\n"
 
 
