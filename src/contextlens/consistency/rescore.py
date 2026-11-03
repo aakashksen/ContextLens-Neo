@@ -4,7 +4,7 @@ T5.2's DECODE records hold only labels for the trained model. This saves the ful
 threshold can be chosen afterwards. Output is ids and probabilities only (DECODE text must not be tracked), written
 under the git-ignored results/local/.
 
-Run (CPU is enough): CUDA_VISIBLE_DEVICES= python -m contextlens.consistency.rescore --data-root <folder with models/ and datasets/raw/>
+Run (CPU is the default and enough): python -m contextlens.consistency.rescore --data-root <folder with models/ and datasets/raw/>
 """
 import argparse
 import hashlib
@@ -50,8 +50,10 @@ def load_dev(manifest: Path, data: Path) -> list[Scenario]:
     if sha256_file(data) != entry["hash"]:
         raise ValueError(f"{data.name} does not match the hash in {manifest.name}")
     scs = [Scenario.model_validate_json(ln) for ln in data.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    if [s.id for s in scs] != entry["ids"]:
+    if "ids" in entry and [s.id for s in scs] != entry["ids"]:  # our scenario manifest keeps the count only
         raise ValueError(f"the ids in {data.name} do not match {manifest.name}")
+    if len(scs) != entry["n"]:
+        raise ValueError(f"the count in {data.name} does not match {manifest.name}")
     return scs
 
 
@@ -102,17 +104,14 @@ def main() -> int:
     ap.add_argument("--data-root", type=Path, default=ROOT,
                     help="folder holding models/e4/ and datasets/raw/ (git-ignored, so not in a worktree)")
     ap.add_argument("--root", type=Path, default=ROOT, help="folder holding the committed manifests and results/runs/")
+    ap.add_argument("--device", default="cpu", help="cpu (default) or cuda")
     args = ap.parse_args()
-    import torch
-
-    if torch.cuda.is_available():
-        print("note: a GPU is visible; set CUDA_VISIBLE_DEVICES= to score on the CPU", file=sys.stderr)
     ckpt = args.data_root / CHECKPOINT_REL
     sha = verify_checkpoint(ckpt, [args.root / "results/runs" / f"{r}.json" for r in RECORDS.values()])
     print(f"checkpoint sha256 matches both records: {sha}")
     start = time.perf_counter()
     model, tokenizer, labels = cm.load_checkpoint(ckpt)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = args.device
     model.to(device)
     for source, run_id in RECORDS.items():
         manifest_rel, dir_rel = SCENARIO_SOURCES[source]

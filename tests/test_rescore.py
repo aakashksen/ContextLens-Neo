@@ -87,3 +87,15 @@ def test_agreement_with_the_saved_trained_predictions() -> None:
 def test_agreement_stops_when_ids_differ() -> None:
     with pytest.raises(ValueError, match="ids"):
         rs.agreement([{"id": "a", "probs": {}}], [Prediction(scenario_id="b", label="consistent")], binary=True)
+
+
+def test_a_manifest_without_ids_is_checked_by_hash_and_count(tmp_path: Path) -> None:
+    manifest, data = write_dev(tmp_path, [scenario("a"), scenario("b")])
+    entry = json.loads(manifest.read_text())
+    del entry["splits"]["dev"]["ids"]
+    manifest.write_text(json.dumps(entry))
+    assert len(rs.load_dev(manifest, data)) == 2
+    entry["splits"]["dev"]["n"] = 3
+    manifest.write_text(json.dumps(entry))
+    with pytest.raises(ValueError, match="count"):
+        rs.load_dev(manifest, data)
