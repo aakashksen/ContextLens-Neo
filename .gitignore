@@ -14,7 +14,8 @@ mlruns/
 *.gguf
 *.ckpt
 orchestration/evidence/
-results/claude_calls.json
+results/claude_calls.json*
+results/partial/
 orchestration/run_loop.log
 *.egg-info/
 orchestration/.state.lock

@@ -281,3 +281,62 @@ def test_ollama_defaults_use_ipv4_loopback():
     for cls in (c.OllamaClient, c.Embedder):
         default = inspect.signature(cls.__init__).parameters["base_url"].default
         assert default == "http://127.0.0.1:11434", cls.__name__
+
+
+# ---------------------------------------------------------------- one project-wide counter
+
+def _git(root, *args):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True, capture_output=True)
+
+
+def test_a_worktree_shares_the_counter_of_the_main_folder(tmp_path):
+    main = tmp_path / "main"
+    (main / ".git" / "worktrees" / "w").mkdir(parents=True)
+    (main / ".git" / "worktrees" / "w" / "commondir").write_text("../..\n")
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    (wt / ".git").write_text(f"gitdir: {(main / '.git' / 'worktrees' / 'w').as_posix()}\n")
+    assert c.shared_root(wt).resolve() == main.resolve()
+    assert c.shared_root(main).resolve() == main.resolve()  # a plain checkout is its own root
+    assert c.CLAUDE_CALLS_PATH == c.shared_root(c.REPO_ROOT) / "results" / "claude_calls.json"
+
+
+def test_a_worktree_counter_is_carried_into_the_shared_one_and_never_lowered(tmp_path):
+    local, shared = tmp_path / "wt" / "claude_calls.json", tmp_path / "main" / "claude_calls.json"
+    local.parent.mkdir()
+    local.write_text(json.dumps({"count": 102, "input_tokens": 204, "output_tokens": 69418, "cost_usd": 0.12}))
+    c.carry_over_counter(local, shared)
+    got = json.loads(shared.read_text())
+    assert got["count"] == 102 and got["output_tokens"] == 69418
+    assert not local.exists() and local.with_name("claude_calls.json.carried").exists()
+    c.carry_over_counter(local, shared)  # nothing left to carry
+    assert json.loads(shared.read_text())["count"] == 102
+    local.write_text(json.dumps({"count": 5, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
+    c.carry_over_counter(local, shared)  # a second worktree's calls add to the total
+    assert json.loads(shared.read_text())["count"] == 107
+
+
+def test_the_files_the_client_creates_do_not_dirty_a_git_tree(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from contextlens.eval.records import is_dirty
+
+    (tmp_path / ".gitignore").write_text((Path(c.REPO_ROOT) / ".gitignore").read_text())
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    monkeypatch.setattr(c.shutil, "which", lambda name: "/bin/claude")
+
+    class P:
+        stdout = '{"is_error": false, "result": "x", "usage": {}}'
+        returncode = 0
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: P())
+    counter = tmp_path / "results" / "claude_calls.json"
+    ClaudeCodeClient(calls_path=counter, cap=1).complete(MSGS)
+    with pytest.raises(LLMError):
+        ClaudeCodeClient(calls_path=counter, cap=1).complete(MSGS)  # the cap path locks too
+    assert (counter.parent / "claude_calls.json.lock").exists()
+    monkeypatch.undo()  # git runs through subprocess too
+    assert not is_dirty(tmp_path)

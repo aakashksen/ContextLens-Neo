@@ -18,7 +18,23 @@ from typing import Protocol
 from pydantic import BaseModel, ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CLAUDE_CALLS_PATH = REPO_ROOT / "results" / "claude_calls.json"
+
+
+def shared_root(repo_root: Path) -> Path:
+    """The main folder: the repo root itself, or, in a linked worktree, the folder that holds the common .git."""
+    dot_git = repo_root / ".git"
+    if not dot_git.is_file():
+        return repo_root
+    try:
+        gitdir = Path(dot_git.read_text().split(":", 1)[1].strip())
+        if not gitdir.is_absolute():
+            gitdir = repo_root / gitdir
+        return (gitdir / (gitdir / "commondir").read_text().strip()).resolve().parent
+    except (OSError, IndexError):
+        return repo_root
+
+
+CLAUDE_CALLS_PATH = shared_root(REPO_ROOT) / "results" / "claude_calls.json"  # one counter for every worktree
 CLAUDE_CALL_CAP = 1000
 
 
@@ -302,6 +318,17 @@ def _save_calls(path: Path, calls: dict) -> None:
         os.replace(tmp, path)
     except OSError as err:
         raise LLMError(f"cannot write call counter {path}: {err}") from err
+
+
+def carry_over_counter(local: Path, shared: Path) -> None:
+    """Add a worktree's own counter to the shared one, once; the old file is kept beside it as `.carried`."""
+    local, shared = Path(local), Path(shared)
+    if local == shared or not local.exists():
+        return
+    with _locked(shared, LOCK_TIMEOUT_S):
+        mine, total = _load_calls(local), _load_calls(shared)
+        _save_calls(shared, {k: total[k] + mine[k] for k in _COUNTER_KEYS})
+        os.replace(local, local.with_name(local.name + ".carried"))
 
 
 class ClaudeCodeClient(_Base):
