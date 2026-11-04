@@ -10,6 +10,10 @@
   "T9.1": 6500,
   "TEAM": 3000,
   "STRIP": 3000,
+  "_non_task": [
+    "TEAM",
+    "STRIP"
+  ],
   "_exclusive": [
     "TEAM",
     "T7.1",
