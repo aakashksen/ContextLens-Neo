@@ -1,0 +1,457 @@
+{
+ "run_id": "E2-20261104T011906729928Z",
+ "experiment": "E2",
+ "git_commit": "fb943e85e0ecb2654bf0e20a82f8875db77ca6c8",
+ "dirty": false,
+ "dataset_hash": "bc875601bad1d7030a637e9e814f9041d4d345e6335c02df84d8080dccaed3c1",
+ "split": "dev",
+ "scenario_source": "scenarios",
+ "config": {
+  "experiment": "E2",
+  "recent_n": 6,
+  "retrieval": {
+   "winner": "hybrid_t1",
+   "mode": "hybrid",
+   "k": 10,
+   "rerank": false,
+   "chunk_turns": 1,
+   "run_ids": {
+    "scenarios": "E1-20261103T034100128807Z",
+    "qmsum": "E1-20261103T035342386305Z"
+   }
+  },
+  "winner_rule": "among the four local strategies, the highest mean of grounded_rate, answer_when_answerable and abstain_when_insufficient (all three must be defined); ties broken by lower median latency, then by the order of SYSTEMS",
+  "winner": "full",
+  "notes": [
+   "Dev conversations are short, so recent turns, full transcript and retrieval may show nearly the same turns.",
+   "speaker_accuracy compares the evidence speaker, which the citation guard rewrites from the store, so it is high by construction; a wrong speaker in a statement shows up in grounded_rate through the judge.",
+   "grounded_rate and unsupported_claim_rate come from the local judge alone; no person has reviewed a sample (config.judge_review is absent), so they are not claims."
+  ],
+  "judge": {
+   "model": "gemma4:e4b-it-qat",
+   "rubric_version": "e2-v1",
+   "same_model_and_prompt_as_writer": false,
+   "calls": 139,
+   "share_supported": 0.9136690647482014
+  },
+  "local_run": "E2-20261104T011721815005Z",
+  "cloud_strategy": {
+   "strategy": "full",
+   "chosen_by": "winner_rule",
+   "note": "the cloud stage ran the strategy that config.winner_rule names for the local run"
+  },
+  "subset": "e2-cloud-all",
+  "local_deadline_s": 8.0,
+  "cloud_deadline_s": 60.0,
+  "cloud_call_timeout_s": 55.0,
+  "deadline_note": "the cloud run had a longer deadline because claude -p needs seconds to start, so its latency is not comparable to the local latency",
+  "cloud_calls": {
+   "used": 164,
+   "budget": 4797,
+   "cap": 5000,
+   "reused_rows": 0,
+   "worst_case_per_case": 4,
+   "worst_case_if_unbounded": 592,
+   "note": "the run stops at the budget; the cap is the client's, as in docs/DESIGN.md"
+  },
+  "health": {
+   "full_cloud": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 33,
+    "n": 148
+   }
+  },
+  "cold_start_s": {
+   "judge_cloud": 5.82442330000049
+  },
+  "injection": {
+   "full_local": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   },
+   "full_cloud": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   }
+  },
+  "claude_calls": 0,
+  "started_at": "2026-11-03T22:10:09.453192+00:00",
+  "rebuilt": {
+   "from": "E2-20261103T230638094732Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ",
+   "model_calls": 0,
+   "prediction_hashes_sha256": {
+    "full_local": "879e0763e547e7da6efd58a3defb154b77a50ffe92ab70532b2c2aca281e6801",
+    "full_cloud": "7df7f485ae46357c5df33ad9df65ac2149212660bc55e00583793831bc9c9112"
+   },
+   "claude_calls_of_the_source_record": 164
+  }
+ },
+ "models": {
+  "writer": "qwen3.5:4b-q4_K_M",
+  "cloud": "sonnet",
+  "judge": "gemma4:e4b-it-qat",
+  "embedder": "nomic-embed-text"
+ },
+ "prompt_versions": {
+  "recall": "v1"
+ },
+ "n": 148,
+ "metrics": {
+  "full_local": {
+   "abstain_when_insufficient": 0.9375,
+   "answer_when_answerable": 0.6742424242424242,
+   "tokens_per_card": 410.0878378378378,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9782608695652174,
+   "unsupported_claim_rate": 0.022222222222222223,
+   "latency_p50_ms": 1799.5,
+   "latency_p95_ms": 3127.4000000000005,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 0.5294117647058824,
+   "tokens_per_card[category=contradiction]": 365.94117647058823,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.8888888888888888,
+   "unsupported_claim_rate[category=contradiction]": 0.1111111111111111,
+   "latency_p50_ms[category=contradiction]": 1832.0,
+   "latency_p95_ms[category=contradiction]": 2751.3999999999996,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 0.25,
+   "tokens_per_card[category=hypothetical_or_joking]": 342.625,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 1.0,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.0,
+   "latency_p50_ms[category=hypothetical_or_joking]": 1061.0,
+   "latency_p95_ms[category=hypothetical_or_joking]": 3841.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.9375,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 289.0625,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.0,
+   "latency_p50_ms[category=insufficient_evidence]": 1087.0,
+   "latency_p95_ms[category=insufficient_evidence]": 1798.25,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 0.9411764705882353,
+   "tokens_per_card[category=legitimate_update]": 403.52941176470586,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 1.0,
+   "unsupported_claim_rate[category=legitimate_update]": 0.0,
+   "latency_p50_ms[category=legitimate_update]": 2587.0,
+   "latency_p95_ms[category=legitimate_update]": 3021.7999999999997,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.9375,
+   "tokens_per_card[category=prompt_injection]": 340.0625,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 1878.5,
+   "latency_p95_ms[category=prompt_injection]": 2407.75,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "tokens_per_card[category=recall]": 825.3333333333334,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 0.9444444444444444,
+   "unsupported_claim_rate[category=recall]": 0.05555555555555555,
+   "latency_p50_ms[category=recall]": 2228.5,
+   "latency_p95_ms[category=recall]": 3820.149999999996,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 0.3125,
+   "tokens_per_card[category=respond_with_suggestion]": 412.0,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 1.0,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.0,
+   "latency_p50_ms[category=respond_with_suggestion]": 1286.0,
+   "latency_p95_ms[category=respond_with_suggestion]": 3524.5,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 0.6875,
+   "tokens_per_card[category=wrong_speaker_trap]": 331.75,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 1.0,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.0,
+   "latency_p50_ms[category=wrong_speaker_trap]": 1801.5,
+   "latency_p95_ms[category=wrong_speaker_trap]": 2187.6499999999996,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 1.0,
+   "tokens_per_card[origin=dataset]": 1219.3,
+   "cost_usd_per_card[origin=dataset]": 0.0,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 0.9,
+   "unsupported_claim_rate[origin=dataset]": 0.1,
+   "latency_p50_ms[origin=dataset]": 2467.0,
+   "latency_p95_ms[origin=dataset]": 4996.550000000002,
+   "abstain_when_insufficient[origin=synthetic]": 0.9375,
+   "answer_when_answerable[origin=synthetic]": 0.6475409836065574,
+   "tokens_per_card[origin=synthetic]": 351.4492753623188,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.9878048780487805,
+   "unsupported_claim_rate[origin=synthetic]": 0.0125,
+   "latency_p50_ms[origin=synthetic]": 1765.5,
+   "latency_p95_ms[origin=synthetic]": 2998.7000000000003
+  },
+  "full_cloud": {
+   "abstain_when_insufficient": 1.0,
+   "answer_when_answerable": 0.8712121212121212,
+   "tokens_per_card": 331.93918918918916,
+   "cost_usd_per_card": 0.01800522702702703,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9136690647482014,
+   "unsupported_claim_rate": 0.06910569105691057,
+   "latency_p50_ms": 5682.5,
+   "latency_p95_ms": 10968.85,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 0.8235294117647058,
+   "tokens_per_card[category=contradiction]": 542.3529411764706,
+   "cost_usd_per_card[category=contradiction]": 0.01936518823529412,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.75,
+   "unsupported_claim_rate[category=contradiction]": 0.21428571428571427,
+   "latency_p50_ms[category=contradiction]": 6576.0,
+   "latency_p95_ms[category=contradiction]": 11066.999999999998,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 0.9375,
+   "tokens_per_card[category=hypothetical_or_joking]": 373.75,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0170799,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 0.8421052631578947,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.16666666666666666,
+   "latency_p50_ms[category=hypothetical_or_joking]": 5696.5,
+   "latency_p95_ms[category=hypothetical_or_joking]": 8696.25,
+   "abstain_when_insufficient[category=insufficient_evidence]": 1.0,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 172.75,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0148399,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.0,
+   "latency_p50_ms[category=insufficient_evidence]": 4884.0,
+   "latency_p95_ms[category=insufficient_evidence]": 6032.5,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 355.05882352941177,
+   "cost_usd_per_card[category=legitimate_update]": 0.016866311764705884,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 0.9444444444444444,
+   "unsupported_claim_rate[category=legitimate_update]": 0.029411764705882353,
+   "latency_p50_ms[category=legitimate_update]": 5621.0,
+   "latency_p95_ms[category=legitimate_update]": 7246.8,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.9375,
+   "tokens_per_card[category=prompt_injection]": 205.875,
+   "cost_usd_per_card[category=prompt_injection]": 0.0152114,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 5018.5,
+   "latency_p95_ms[category=prompt_injection]": 7538.75,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 0.8888888888888888,
+   "tokens_per_card[category=recall]": 267.0,
+   "cost_usd_per_card[category=recall]": 0.018629788888888887,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "unsupported_claim_rate[category=recall]": 0.0,
+   "latency_p50_ms[category=recall]": 5506.0,
+   "latency_p95_ms[category=recall]": 11771.349999999999,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 1.0,
+   "tokens_per_card[category=respond_with_suggestion]": 489.375,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.02780799375,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 1.0,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.0,
+   "latency_p50_ms[category=respond_with_suggestion]": 10045.0,
+   "latency_p95_ms[category=respond_with_suggestion]": 14021.5,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 0.6875,
+   "tokens_per_card[category=wrong_speaker_trap]": 287.40625,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0160773375,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.88,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.11363636363636363,
+   "latency_p50_ms[category=wrong_speaker_trap]": 5159.5,
+   "latency_p95_ms[category=wrong_speaker_trap]": 8580.949999999999,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 0.8,
+   "tokens_per_card[origin=dataset]": 355.1,
+   "cost_usd_per_card[origin=dataset]": 0.0217867,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 1.0,
+   "unsupported_claim_rate[origin=dataset]": 0.0,
+   "latency_p50_ms[origin=dataset]": 5584.0,
+   "latency_p95_ms[origin=dataset]": 10818.100000000002,
+   "abstain_when_insufficient[origin=synthetic]": 1.0,
+   "answer_when_answerable[origin=synthetic]": 0.8770491803278688,
+   "tokens_per_card[origin=synthetic]": 330.2608695652174,
+   "cost_usd_per_card[origin=synthetic]": 0.017731207246376814,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.9069767441860465,
+   "unsupported_claim_rate[origin=synthetic]": 0.07391304347826087,
+   "latency_p50_ms[origin=synthetic]": 5689.5,
+   "latency_p95_ms[origin=synthetic]": 10894.35
+  }
+ },
+ "intervals": {
+  "full_local": {
+   "grounded_rate": [
+    0.9438202247191011,
+    1.0
+   ],
+   "unsupported_claim_rate": [
+    0.0,
+    0.05747126436781609
+   ],
+   "abstain_when_insufficient": [
+    0.8,
+    1.0
+   ],
+   "answer_when_answerable": [
+    0.5923076923076923,
+    0.753731343283582
+   ],
+   "tokens_per_card": [
+    374.31756756756755,
+    449.81097972972975
+   ],
+   "latency_p50_ms": [
+    1728.5,
+    1903.5
+   ],
+   "latency_p95_ms": [
+    2714.0,
+    3535.4000000000005
+   ]
+  },
+  "full_cloud": {
+   "grounded_rate": [
+    0.8671328671328671,
+    0.9562043795620438
+   ],
+   "unsupported_claim_rate": [
+    0.032520325203252036,
+    0.1111111111111111
+   ],
+   "abstain_when_insufficient": [
+    1.0,
+    1.0
+   ],
+   "answer_when_answerable": [
+    0.8110236220472441,
+    0.9253731343283582
+   ],
+   "tokens_per_card": [
+    302.4863175675676,
+    364.12888513513514
+   ],
+   "latency_p50_ms": [
+    5500.95,
+    6026.0
+   ],
+   "latency_p95_ms": [
+    9835.0,
+    12158.750000000005
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "full_cloud",
+   "b": "full_local",
+   "metric": "grounded_rate",
+   "diff": -0.06459180481701599,
+   "ci": [
+    -0.11980234051967183,
+    -0.008844409839959431
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "full_cloud",
+   "b": "full_local",
+   "metric": "unsupported_claim_rate",
+   "diff": 0.046883468834688344,
+   "ci": [
+    -0.004609875022003167,
+    0.0975609756097561
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "full_cloud",
+   "b": "full_local",
+   "metric": "abstain_when_insufficient",
+   "diff": 0.0625,
+   "ci": [
+    0.0,
+    0.19999999999999996
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "full_cloud",
+   "b": "full_local",
+   "metric": "answer_when_answerable",
+   "diff": 0.19696969696969702,
+   "ci": [
+    0.10769230769230764,
+    0.28787878787878785
+   ],
+   "mcnemar_p": 6.877111491121468e-05
+  }
+ ],
+ "supersedes": [
+  {
+   "run_id": "E2-20261103T230638094732Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ"
+  }
+ ],
+ "subset": "e2-cloud-all",
+ "attempts": [
+  {
+   "setting": "full_local",
+   "kind": "local strategy, rows copied from the local record",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "full_cloud",
+   "kind": "cloud",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 33,
+    "n": 148
+   }
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": true,
+ "label_source": "scenarios",
+ "predictions": {
+  "full_local": "results/runs/E2-20261104T011906729928Z.full_local.predictions.jsonl",
+  "full_cloud": "results/runs/E2-20261104T011906729928Z.full_cloud.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T22:10:09.453192+00:00",
+ "finished_at": "2026-11-04T01:19:06.729928+00:00"
+}

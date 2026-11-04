@@ -103,7 +103,7 @@ def claude(tmp_path, monkeypatch):
 
 def test_call_cap_refuses_and_makes_no_call(tmp_path, monkeypatch):
     path = tmp_path / "claude_calls.json"
-    path.write_text(json.dumps({"count": 1000, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}))
+    path.write_text(json.dumps({"count": c.CLAUDE_CALL_CAP, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0}))
     monkeypatch.setattr(c.shutil, "which", lambda name: "/bin/claude")
 
     def no_run(*a, **k):
@@ -112,7 +112,12 @@ def test_call_cap_refuses_and_makes_no_call(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", no_run)
     with pytest.raises(LLMError):
         ClaudeCodeClient(calls_path=path).complete(MSGS)
-    assert json.loads(path.read_text())["count"] == 1000
+    assert json.loads(path.read_text())["count"] == c.CLAUDE_CALL_CAP
+
+
+def test_the_cap_is_5000_and_the_default_model_is_sonnet():
+    assert c.CLAUDE_CALL_CAP == 5000
+    assert ClaudeCodeClient().model == "sonnet"
 
 
 def test_claude_client_builds_expected_command_with_no_tools(claude, monkeypatch):
@@ -126,7 +131,7 @@ def test_claude_client_builds_expected_command_with_no_tools(claude, monkeypatch
     res = claude.complete(MSGS)
     cmd = seen["cmd"]
     assert cmd[0] == "/bin/claude" and "-p" in cmd
-    assert cmd[cmd.index("--model") + 1] == "haiku"
+    assert cmd[cmd.index("--model") + 1] == "sonnet"
     assert cmd[cmd.index("--output-format") + 1] == "json"
     assert cmd[cmd.index("--tools") + 1] == ""
     assert cmd[cmd.index("--setting-sources") + 1] == ""
@@ -166,7 +171,7 @@ def test_ollama_round_trip():
 
 
 @pytest.mark.real
-def test_claude_haiku_round_trip():
+def test_claude_sonnet_round_trip():
     res = ClaudeCodeClient().complete(MSGS, timeout_s=120)
     assert res.text
 
@@ -259,7 +264,7 @@ def test_cap_holds_across_threads(claude, monkeypatch, tmp_path):
     from concurrent.futures import ThreadPoolExecutor
 
     path = tmp_path / "claude_calls.json"
-    path.write_text(json.dumps({"count": 990, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
+    path.write_text(json.dumps({"count": c.CLAUDE_CALL_CAP - 10, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: Proc(_ok()))
 
     def one(_):
@@ -272,7 +277,7 @@ def test_cap_holds_across_threads(claude, monkeypatch, tmp_path):
     with ThreadPoolExecutor(40) as pool:
         started = sum(pool.map(one, range(40)))
     assert started == 10
-    assert json.loads(path.read_text())["count"] == 1000
+    assert json.loads(path.read_text())["count"] == c.CLAUDE_CALL_CAP
 
 
 def test_ollama_defaults_use_ipv4_loopback():
@@ -340,3 +345,16 @@ def test_the_files_the_client_creates_do_not_dirty_a_git_tree(tmp_path, monkeypa
     assert (counter.parent / "claude_calls.json.lock").exists()
     monkeypatch.undo()  # git runs through subprocess too
     assert not is_dirty(tmp_path)
+
+
+def test_claude_reply_with_null_cost_or_usage_is_still_a_result(claude, monkeypatch):
+    body = json.dumps({"is_error": False, "result": "hi", "total_cost_usd": None, "usage": None})
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: Proc(body))
+    res = claude.complete(MSGS)
+    assert res.text == "hi" and res.cost_usd == 0.0
+
+
+def test_claude_reply_that_is_not_an_object_is_an_llm_error(claude, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: Proc("[1, 2]"))
+    with pytest.raises(LLMError):
+        claude.complete(MSGS)

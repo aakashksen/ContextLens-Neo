@@ -3,7 +3,7 @@
  "flag_threshold": 0.95,
  "catch_floor": 0.5,
  "selection_rule": "lowest mean false-alert rate over the sources among points with catch rate >= catch_floor on every source; ties to higher catch, then the trained model alone, then the higher threshold",
- "selection_data": "dev (selection data, not held out); dev labels are unreviewed",
+ "selection_data": "dev (selection data, not held out); the labels' review status is in each record's labels_reviewed",
  "provisional": true,
  "thresholds_swept": [
   0.0,

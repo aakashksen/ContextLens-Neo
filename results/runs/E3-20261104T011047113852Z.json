@@ -1,0 +1,1791 @@
+{
+ "run_id": "E3-20261104T011047113852Z",
+ "experiment": "E3",
+ "git_commit": "fb943e85e0ecb2654bf0e20a82f8875db77ca6c8",
+ "dirty": false,
+ "dataset_hash": "bc875601bad1d7030a637e9e814f9041d4d345e6335c02df84d8080dccaed3c1",
+ "split": "dev",
+ "scenario_source": "scenarios",
+ "config": {
+  "experiment": "E3",
+  "part": "cards",
+  "run_conditions": "GPU held alone through ctl gpu-acquire. Not otherwise alone: the person may have been using the desktop, and a build agent and record checks may have used the CPU.",
+  "devices": {
+   "writer": "gpu",
+   "embedder": "gpu",
+   "judge": "gpu",
+   "note": "from the Ollama process list right after each model loaded; unknown means it did not say"
+  },
+  "systems": [
+   "recent",
+   "retrieval_memory",
+   "single",
+   "team"
+  ],
+  "deadline_s": 8.0,
+  "judge": {
+   "model": "gemma4:e4b-it-qat",
+   "rubric_version": "e2-v1",
+   "same_model_and_prompt_as_writer": false,
+   "calls": 581,
+   "share_supported": 0.9655765920826161
+  },
+  "selection_rule": "score = mean(grounded_rate, min(answer_when_answerable, abstain_when_insufficient)); every part must be defined; ties go to lower median latency, then to the order of CARD_SYSTEMS",
+  "best_by_rule": "single",
+  "choice_note": "`retrieval_memory` is the design's system and `recent` the baseline. E2's fixed rule picked `recent`, whose answer rate on answerable cases is under half; the coordinator chose after seeing E2's dev results, so this choice was informed by dev. Only dev was used; the test split is untouched.",
+  "same_for_all": "one local writer, the same retrieval config, the same cases; single and team share one Tools build with no consistency checker; recent and retrieval_memory are the one-shot systems of E2",
+  "retrieval": {
+   "winner": "hybrid_t1",
+   "mode": "hybrid",
+   "k": 10,
+   "rerank": false,
+   "chunk_turns": 1,
+   "run_ids": {
+    "scenarios": "E1-20261103T034100128807Z",
+    "qmsum": "E1-20261103T035342386305Z"
+   }
+  },
+  "row_report": {
+   "recent": {
+    "cards": 148,
+    "deadline_s": 8.0,
+    "cards_with_llm_error": 1,
+    "cards_with_llm_timeout": 0,
+    "cards_with_llm_error_not_timeout": 1,
+    "cards_cut_by_the_deadline": 0,
+    "cards_returned_after_the_deadline_and_margin": 0,
+    "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+    "llm_error_samples": [
+     "llm error: output failed schema validation twice: 1 validation error for Card\nfindings.0\n  Value error, a recall finding needs at least one evidence reference ["
+    ],
+    "cards_with_drops": 3,
+    "findings_dropped_by_reason": {
+     "citation": 1,
+     "instruction": 2
+    },
+    "citation_drops_with_a_short_id": 0,
+    "drops_saved_in_rows": true
+   },
+   "retrieval_memory": {
+    "cards": 148,
+    "deadline_s": 8.0,
+    "cards_with_llm_error": 0,
+    "cards_with_llm_timeout": 0,
+    "cards_with_llm_error_not_timeout": 0,
+    "cards_cut_by_the_deadline": 0,
+    "cards_returned_after_the_deadline_and_margin": 0,
+    "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+    "llm_error_samples": [],
+    "cards_with_drops": 8,
+    "findings_dropped_by_reason": {
+     "citation": 3,
+     "instruction": 4,
+     "number": 1
+    },
+    "citation_drops_with_a_short_id": 0,
+    "drops_saved_in_rows": true
+   },
+   "single": {
+    "cards": 148,
+    "deadline_s": 8.0,
+    "cards_with_llm_error": 0,
+    "cards_with_llm_timeout": 0,
+    "cards_with_llm_error_not_timeout": 0,
+    "cards_cut_by_the_deadline": 0,
+    "cards_returned_after_the_deadline_and_margin": 0,
+    "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+    "llm_error_samples": [],
+    "cards_with_drops": 8,
+    "findings_dropped_by_reason": {
+     "citation": 3,
+     "instruction": 4,
+     "number": 1
+    },
+    "citation_drops_with_a_short_id": 0,
+    "drops_saved_in_rows": true
+   },
+   "team": {
+    "cards": 148,
+    "deadline_s": 8.0,
+    "cards_with_llm_error": 4,
+    "cards_with_llm_timeout": 4,
+    "cards_with_llm_error_not_timeout": 0,
+    "cards_cut_by_the_deadline": 4,
+    "cards_returned_after_the_deadline_and_margin": 0,
+    "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+    "llm_error_samples": [
+     "memory: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out",
+     "consistency: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out"
+    ],
+    "cards_with_drops": 12,
+    "findings_dropped_by_reason": {
+     "citation": 7,
+     "instruction": 8
+    },
+    "citation_drops_with_a_short_id": 1,
+    "drops_saved_in_rows": true
+   }
+  },
+  "health": {
+   "recent": {
+    "broken": 0,
+    "invalid": 1,
+    "timeout": 0,
+    "ok": 147,
+    "abstained": 60,
+    "n": 148
+   },
+   "retrieval_memory": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 15,
+    "n": 148
+   },
+   "single": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 21,
+    "n": 148
+   },
+   "team": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 4,
+    "ok": 144,
+    "abstained": 8,
+    "n": 148
+   }
+  },
+  "cold_start_s": {
+   "judge_check": 11.422929399996065,
+   "writer": 5.561551600010716,
+   "embedder": 1.2039673999970546,
+   "judge": 13.677054700005101
+  },
+  "memory_build": {
+   "cases": 148,
+   "failed": 2,
+   "failed_ids": [
+    "0e5e2d1a",
+    "18dcd5a5"
+   ]
+  },
+  "drops": {
+   "recent": {
+    "cards": 148,
+    "cards_with_drops": 3,
+    "findings_dropped_by_reason": {
+     "citation": 1,
+     "instruction": 2
+    },
+    "abstained_by_the_model": 58,
+    "abstained_after_a_check_dropped_every_finding": 2,
+    "answerable_cases_lost_to_a_check": 2
+   },
+   "retrieval_memory": {
+    "cards": 148,
+    "cards_with_drops": 8,
+    "findings_dropped_by_reason": {
+     "citation": 3,
+     "instruction": 4,
+     "number": 1
+    },
+    "abstained_by_the_model": 8,
+    "abstained_after_a_check_dropped_every_finding": 7,
+    "answerable_cases_lost_to_a_check": 7
+   },
+   "single": {
+    "cards": 148,
+    "cards_with_drops": 8,
+    "findings_dropped_by_reason": {
+     "citation": 3,
+     "instruction": 4,
+     "number": 1
+    },
+    "abstained_by_the_model": 14,
+    "abstained_after_a_check_dropped_every_finding": 7,
+    "answerable_cases_lost_to_a_check": 6
+   },
+   "team": {
+    "cards": 148,
+    "cards_with_drops": 12,
+    "findings_dropped_by_reason": {
+     "citation": 7,
+     "instruction": 8
+    },
+    "abstained_by_the_model": 3,
+    "abstained_after_a_check_dropped_every_finding": 5,
+    "answerable_cases_lost_to_a_check": 3
+   }
+  },
+  "wrongful_drop_check": {
+   "judge": "gemma4:e4b-it-qat",
+   "by_system": {
+    "recent": {
+     "instruction": {
+      "dropped": 2,
+      "judged_supported_by_the_turns": 2
+     }
+    },
+    "retrieval_memory": {
+     "instruction": {
+      "dropped": 4,
+      "judged_supported_by_the_turns": 2
+     },
+     "number": {
+      "dropped": 1,
+      "judged_supported_by_the_turns": 1
+     }
+    },
+    "single": {
+     "instruction": {
+      "dropped": 4,
+      "judged_supported_by_the_turns": 3
+     },
+     "number": {
+      "dropped": 1,
+      "judged_supported_by_the_turns": 0
+     }
+    },
+    "team": {
+     "instruction": {
+      "dropped": 8,
+      "judged_supported_by_the_turns": 7
+     }
+    }
+   },
+   "note": "judge's reading of each dropped finding against the full text of its cited turns"
+  },
+  "respond": {
+   "recent": {
+    "rule_fires_on_cases": 15,
+    "rule_fires_with_latest_turn_by_the_previous_speaker": 0,
+    "rule_note": "the request names no user, so the rule reads the latest turn, not the latest other-speaker turn; the count above is how many firings have a latest turn by the same speaker as the turn before it",
+    "respond_cases": 16,
+    "respond_mode": 15,
+    "with_suggestion": 5,
+    "other_cases": 132,
+    "other_cases_moved_to_respond": 0,
+    "moved_by_category": {},
+    "recall_cases": 18,
+    "recall_cases_moved": 0
+   },
+   "retrieval_memory": {
+    "rule_fires_on_cases": 15,
+    "rule_fires_with_latest_turn_by_the_previous_speaker": 0,
+    "rule_note": "the request names no user, so the rule reads the latest turn, not the latest other-speaker turn; the count above is how many firings have a latest turn by the same speaker as the turn before it",
+    "respond_cases": 16,
+    "respond_mode": 15,
+    "with_suggestion": 15,
+    "other_cases": 132,
+    "other_cases_moved_to_respond": 0,
+    "moved_by_category": {},
+    "recall_cases": 18,
+    "recall_cases_moved": 0
+   },
+   "single": {
+    "rule_fires_on_cases": 15,
+    "rule_fires_with_latest_turn_by_the_previous_speaker": 0,
+    "rule_note": "the request names no user, so the rule reads the latest turn, not the latest other-speaker turn; the count above is how many firings have a latest turn by the same speaker as the turn before it",
+    "respond_cases": 16,
+    "respond_mode": 15,
+    "with_suggestion": 14,
+    "other_cases": 132,
+    "other_cases_moved_to_respond": 0,
+    "moved_by_category": {},
+    "recall_cases": 18,
+    "recall_cases_moved": 0
+   },
+   "team": {
+    "rule_fires_on_cases": 15,
+    "rule_fires_with_latest_turn_by_the_previous_speaker": 0,
+    "rule_note": "the request names no user, so the rule reads the latest turn, not the latest other-speaker turn; the count above is how many firings have a latest turn by the same speaker as the turn before it",
+    "respond_cases": 16,
+    "respond_mode": 15,
+    "with_suggestion": 15,
+    "other_cases": 132,
+    "other_cases_moved_to_respond": 0,
+    "moved_by_category": {},
+    "recall_cases": 18,
+    "recall_cases_moved": 0
+   }
+  },
+  "injection_words_in_suggestion": {
+   "recent": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   },
+   "retrieval_memory": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   },
+   "single": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   },
+   "team": {
+    "cases": 16,
+    "with_suggestion": 0,
+    "injected_words_in_suggestion": 0,
+    "flagged": []
+   }
+  },
+  "injection_findings_and_suggestions": {
+   "recent": {
+    "cases": 16,
+    "finding_only": [],
+    "suggestion_only": [],
+    "both": []
+   },
+   "retrieval_memory": {
+    "cases": 16,
+    "finding_only": [],
+    "suggestion_only": [],
+    "both": []
+   },
+   "single": {
+    "cases": 16,
+    "finding_only": [],
+    "suggestion_only": [],
+    "both": []
+   },
+   "team": {
+    "cases": 16,
+    "finding_only": [],
+    "suggestion_only": [],
+    "both": []
+   }
+  },
+  "instruction_guard": {
+   "injecting_turns": 16,
+   "injecting_turns_flagged": 16,
+   "other_turns": 405,
+   "other_turns_flagged": 0,
+   "other_turns_flagged_ids": [],
+   "false_drop_rate_on_dev_turns": 0.0,
+   "benign_lookalikes": 12,
+   "benign_lookalikes_flagged": 1,
+   "false_drop_rate_on_lookalikes": 0.08333333333333333,
+   "known_misses": 1,
+   "known_misses_not_caught": 1
+  },
+  "public_slice": {
+   "public_cases": 10,
+   "synthetic_cases": 138,
+   "small": true,
+   "note": "the public (LongMemEval) slice is 10 of 148 dev cases, too small for a claim about it"
+  },
+  "guard_note": "the guard's patterns were written after reading the dev injection turns, so its catch rate on them is not a held-out figure; the false-drop rates are on dev turns and on a fixed list of look-alikes",
+  "prompt_note": "prompts are unchanged, label v1; the checks, the guard and the respond rule changed in code",
+  "notes": [
+   "The team is not clearly better than the single agent on anything; it is clearly worse on abstain_when_insufficient, tokens_per_card, latency_p50_ms. grounded_rate: team 0.9601769911504425 vs single 0.9763779527559056 (difference -0.016, 95% interval -0.050 to +0.018): no clear difference; unsupported_claim_rate: team 0.05 vs single 0.023622047244094488 (difference +0.026, 95% interval -0.012 to +0.066): no clear difference; abstain_when_insufficient: team 0.3125 vs single 0.875 (difference -0.562, 95% interval -0.818 to -0.308, team only 0 and single only 9 of 16 cases, exact McNemar p=0.004): the team is worse; answer_when_answerable (an answer rate: it counts cards that did not abstain, not cards that answered correctly): team 0.9772727272727273 vs single 0.946969696969697 (difference +0.030, 95% interval +0.007 to +0.062, team only 4 and single only 0 of 132 cases, exact McNemar p=0.125): no clear difference (the interval excludes zero but McNemar does not agree); tokens_per_card: team 1534.581081081081 vs single 634.0202702702703 (difference +900.561, 95% interval +825.635 to +983.839): the team is worse; latency_p50_ms: team 3908.0 vs single 2834.0 (difference +1074.000, 95% interval +867.500 to +1698.012): the team is worse. The abstention side (abstain_when_insufficient) rests on 16 insufficient-evidence cases, so one case moves it 6 points. Dev labels are reviewed (`labels_reviewed` is true; label source: scenarios). The judge is one local model and no person has reviewed a judge sample, so the judged figures are provisional.",
+   "Latency and time were measured under these run conditions: GPU held alone through ctl gpu-acquire. Not otherwise alone: the person may have been using the desktop, and a build agent and record checks may have used the CPU..",
+   "The 8 s deadline was kept. Cards cut short by it: recent 0 of 148, retrieval_memory 0 of 148, single 0 of 148, team 4 of 148. Cards with a model error: recent 1 (0 timeouts), retrieval_memory 0 (0 timeouts), single 0 (0 timeouts), team 4 (4 timeouts). Read these before judging whether the deadline was fair to the team.",
+   "grounded_rate and unsupported_claim_rate come from one local judge; no person has reviewed a sample.",
+   "Counts of injected claims use a word-overlap proxy; the flagged ids are listed to read.",
+   "Injected claims in suggestions: the count of 0 means little, because no injection case produced a suggestion (those cases carry a question, so the respond rule does not fire). The check could not fail. Injected claims in findings are counted apart and are not vacuous in the same way."
+  ],
+  "claude_calls": 0,
+  "started_at": "2026-11-03T21:23:00.216253+00:00",
+  "superseded": {
+   "E3-20261103T185316318532Z": {
+    "settings_changed": {
+     "retrieval": {
+      "was": "absent",
+      "now": {
+       "winner": "hybrid_t1",
+       "mode": "hybrid",
+       "k": 10,
+       "rerank": false,
+       "chunk_turns": 1,
+       "run_ids": {
+        "scenarios": "E1-20261103T034100128807Z",
+        "qmsum": "E1-20261103T035342386305Z"
+       }
+      }
+     }
+    },
+    "by_system": {
+     "recent": {
+      "before": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 1,
+       "cards_with_llm_timeout": 0,
+       "cards_with_llm_error_not_timeout": 1,
+       "cards_cut_by_the_deadline": 0,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [
+        "llm error: output failed schema validation twice: 1 validation error for Card\nfindings.0\n  Value error, a recall finding needs at least one evidence reference ["
+       ],
+       "cards_with_drops": 37,
+       "findings_dropped_by_reason": {
+        "citation": 38
+       },
+       "citation_drops_with_a_short_id": 37,
+       "drops_saved_in_rows": true
+      },
+      "after": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 1,
+       "cards_with_llm_timeout": 0,
+       "cards_with_llm_error_not_timeout": 1,
+       "cards_cut_by_the_deadline": 0,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [
+        "llm error: output failed schema validation twice: 1 validation error for Card\nfindings.0\n  Value error, a recall finding needs at least one evidence reference ["
+       ],
+       "cards_with_drops": 3,
+       "findings_dropped_by_reason": {
+        "citation": 1,
+        "instruction": 2
+       },
+       "citation_drops_with_a_short_id": 0,
+       "drops_saved_in_rows": true
+      }
+     },
+     "retrieval_memory": {
+      "before": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 0,
+       "cards_with_llm_timeout": 0,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 0,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [],
+       "cards_with_drops": 22,
+       "findings_dropped_by_reason": {
+        "citation": 18,
+        "instruction": 4,
+        "number": 1
+       },
+       "citation_drops_with_a_short_id": 15,
+       "drops_saved_in_rows": true
+      },
+      "after": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 0,
+       "cards_with_llm_timeout": 0,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 0,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [],
+       "cards_with_drops": 8,
+       "findings_dropped_by_reason": {
+        "citation": 3,
+        "instruction": 4,
+        "number": 1
+       },
+       "citation_drops_with_a_short_id": 0,
+       "drops_saved_in_rows": true
+      }
+     },
+     "single": {
+      "before": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 2,
+       "cards_with_llm_timeout": 2,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 1,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [
+        "llm error: request to http://127.0.0.1:11434/api/chat failed: timed out"
+       ],
+       "cards_with_drops": 43,
+       "findings_dropped_by_reason": {
+        "citation": 43,
+        "number": 1
+       },
+       "citation_drops_with_a_short_id": 40,
+       "drops_saved_in_rows": true
+      },
+      "after": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 0,
+       "cards_with_llm_timeout": 0,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 0,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [],
+       "cards_with_drops": 8,
+       "findings_dropped_by_reason": {
+        "citation": 3,
+        "instruction": 4,
+        "number": 1
+       },
+       "citation_drops_with_a_short_id": 0,
+       "drops_saved_in_rows": true
+      }
+     },
+     "team": {
+      "before": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 14,
+       "cards_with_llm_timeout": 14,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 3,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [
+        "assistance: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out",
+        "suggestion not produced: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out",
+        "memory: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out"
+       ],
+       "cards_with_drops": 115,
+       "findings_dropped_by_reason": {
+        "citation": 175
+       },
+       "citation_drops_with_a_short_id": 172,
+       "drops_saved_in_rows": true
+      },
+      "after": {
+       "cards": 148,
+       "deadline_s": 8.0,
+       "cards_with_llm_error": 4,
+       "cards_with_llm_timeout": 4,
+       "cards_with_llm_error_not_timeout": 0,
+       "cards_cut_by_the_deadline": 4,
+       "cards_returned_after_the_deadline_and_margin": 0,
+       "deadline_cut_note": "cards whose notes say the deadline was reached or a stage did not finish in time",
+       "llm_error_samples": [
+        "memory: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out",
+        "consistency: llm error: request to http://127.0.0.1:11434/api/chat failed: timed out"
+       ],
+       "cards_with_drops": 12,
+       "findings_dropped_by_reason": {
+        "citation": 7,
+        "instruction": 8
+       },
+       "citation_drops_with_a_short_id": 1,
+       "drops_saved_in_rows": true
+      }
+     }
+    }
+   }
+  },
+  "paired_binary": {
+   "answer_when_answerable": {
+    "cases": 132,
+    "team_only": 4,
+    "single_only": 0,
+    "mcnemar_p": 0.125
+   },
+   "abstain_when_insufficient": {
+    "cases": 16,
+    "team_only": 0,
+    "single_only": 9,
+    "mcnemar_p": 0.00390625
+   },
+   "answer_when_answerable[category=contradiction]": {
+    "cases": 17,
+    "team_only": 0,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   },
+   "answer_when_answerable[category=hypothetical_or_joking]": {
+    "cases": 16,
+    "team_only": 0,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   },
+   "abstain_when_insufficient[category=insufficient_evidence]": {
+    "cases": 16,
+    "team_only": 0,
+    "single_only": 9,
+    "mcnemar_p": 0.00390625
+   },
+   "answer_when_answerable[category=legitimate_update]": {
+    "cases": 17,
+    "team_only": 0,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   },
+   "answer_when_answerable[category=prompt_injection]": {
+    "cases": 16,
+    "team_only": 1,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   },
+   "answer_when_answerable[category=recall]": {
+    "cases": 18,
+    "team_only": 2,
+    "single_only": 0,
+    "mcnemar_p": 0.5
+   },
+   "answer_when_answerable[category=respond_with_suggestion]": {
+    "cases": 16,
+    "team_only": 1,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   },
+   "answer_when_answerable[category=wrong_speaker_trap]": {
+    "cases": 32,
+    "team_only": 0,
+    "single_only": 0,
+    "mcnemar_p": 1.0
+   }
+  },
+  "abstention_cases": {
+   "insufficient": 16,
+   "answerable": 132
+  },
+  "duplicate_findings": {
+   "recent": {
+    "findings": 90,
+    "repeats": 0,
+    "grounded_rate": 0.9888888888888889,
+    "grounded_rate_without_repeats": 0.9888888888888889
+   },
+   "retrieval_memory": {
+    "findings": 138,
+    "repeats": 0,
+    "grounded_rate": 0.9492753623188406,
+    "grounded_rate_without_repeats": 0.9492753623188406
+   },
+   "single": {
+    "findings": 127,
+    "repeats": 0,
+    "grounded_rate": 0.9763779527559056,
+    "grounded_rate_without_repeats": 0.9763779527559056
+   },
+   "team": {
+    "findings": 226,
+    "repeats": 38,
+    "grounded_rate": 0.9601769911504425,
+    "grounded_rate_without_repeats": 0.9521276595744681
+   }
+  },
+  "rebuilt": {
+   "from": "E3-20261103T221004658482Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ",
+   "model_calls": 0,
+   "prediction_hashes_sha256": {
+    "recent": "c3898ae30e7060c4ce34945b7080c3a538f8575870a9d14d510075c592a3757a",
+    "retrieval_memory": "0b3a32cbadcd1282c94894dffd2f228b46f5b06cf815a580da37a8e1feeec91f",
+    "single": "717b7feebfd8a0018c00dbc541d86e4717b492b1f1d206f03e4e9178e3ffa894",
+    "team": "046adcd392e8a7946ea8c6241dd3d7c821e5ef73cfcbad5146e0511a75843751"
+   },
+   "claude_calls_of_the_source_record": 0
+  }
+ },
+ "models": {
+  "writer": "qwen3.5:4b-q4_K_M",
+  "judge": "gemma4:e4b-it-qat",
+  "embedder": "nomic-embed-text"
+ },
+ "prompt_versions": {
+  "recall": "v1"
+ },
+ "n": 148,
+ "metrics": {
+  "recent": {
+   "abstain_when_insufficient": 0.9375,
+   "answer_when_answerable": 0.6590909090909091,
+   "tokens_per_card": 411.5135135135135,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9888888888888889,
+   "unsupported_claim_rate": 0.011363636363636364,
+   "latency_p50_ms": 2012.5,
+   "latency_p95_ms": 3468.350000000001,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 0.5294117647058824,
+   "tokens_per_card[category=contradiction]": 365.94117647058823,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.8888888888888888,
+   "unsupported_claim_rate[category=contradiction]": 0.1111111111111111,
+   "latency_p50_ms[category=contradiction]": 1997.0,
+   "latency_p95_ms[category=contradiction]": 3074.2,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 0.25,
+   "tokens_per_card[category=hypothetical_or_joking]": 342.625,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 1.0,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.0,
+   "latency_p50_ms[category=hypothetical_or_joking]": 1217.0,
+   "latency_p95_ms[category=hypothetical_or_joking]": 4251.75,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.9375,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 289.0625,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.0,
+   "latency_p50_ms[category=insufficient_evidence]": 1209.0,
+   "latency_p95_ms[category=insufficient_evidence]": 2024.5,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 0.9411764705882353,
+   "tokens_per_card[category=legitimate_update]": 403.52941176470586,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 1.0,
+   "unsupported_claim_rate[category=legitimate_update]": 0.0,
+   "latency_p50_ms[category=legitimate_update]": 2809.0,
+   "latency_p95_ms[category=legitimate_update]": 3107.9999999999995,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.9375,
+   "tokens_per_card[category=prompt_injection]": 340.0625,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 2076.0,
+   "latency_p95_ms[category=prompt_injection]": 2785.5,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 0.8888888888888888,
+   "tokens_per_card[category=recall]": 837.0555555555555,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "unsupported_claim_rate[category=recall]": 0.0,
+   "latency_p50_ms[category=recall]": 2692.0,
+   "latency_p95_ms[category=recall]": 4678.5499999999965,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 0.3125,
+   "tokens_per_card[category=respond_with_suggestion]": 412.0,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 1.0,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.0,
+   "latency_p50_ms[category=respond_with_suggestion]": 1343.5,
+   "latency_p95_ms[category=respond_with_suggestion]": 3967.25,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 0.6875,
+   "tokens_per_card[category=wrong_speaker_trap]": 331.75,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 1.0,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.0,
+   "latency_p50_ms[category=wrong_speaker_trap]": 1957.0,
+   "latency_p95_ms[category=wrong_speaker_trap]": 2589.5499999999997,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 0.8,
+   "tokens_per_card[origin=dataset]": 1240.4,
+   "cost_usd_per_card[origin=dataset]": 0.0,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 1.0,
+   "unsupported_claim_rate[origin=dataset]": 0.0,
+   "latency_p50_ms[origin=dataset]": 3020.0,
+   "latency_p95_ms[origin=dataset]": 5621.350000000002,
+   "abstain_when_insufficient[origin=synthetic]": 0.9375,
+   "answer_when_answerable[origin=synthetic]": 0.6475409836065574,
+   "tokens_per_card[origin=synthetic]": 351.4492753623188,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.9878048780487805,
+   "unsupported_claim_rate[origin=synthetic]": 0.0125,
+   "latency_p50_ms[origin=synthetic]": 1976.5,
+   "latency_p95_ms[origin=synthetic]": 3302.1000000000004
+  },
+  "retrieval_memory": {
+   "abstain_when_insufficient": 0.5,
+   "answer_when_answerable": 0.946969696969697,
+   "tokens_per_card": 565.277027027027,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9492753623188406,
+   "unsupported_claim_rate": 0.05263157894736842,
+   "latency_p50_ms": 2853.5,
+   "latency_p95_ms": 3936.8000000000006,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 1.0,
+   "tokens_per_card[category=contradiction]": 523.5294117647059,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.9,
+   "unsupported_claim_rate[category=contradiction]": 0.11764705882352941,
+   "latency_p50_ms[category=contradiction]": 2717.0,
+   "latency_p95_ms[category=contradiction]": 3895.1999999999994,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 0.9375,
+   "tokens_per_card[category=hypothetical_or_joking]": 555.3125,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 1.0,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.0,
+   "latency_p50_ms[category=hypothetical_or_joking]": 3255.0,
+   "latency_p95_ms[category=hypothetical_or_joking]": 3939.25,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.5,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 418.0625,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 0.625,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.375,
+   "latency_p50_ms[category=insufficient_evidence]": 1901.0,
+   "latency_p95_ms[category=insufficient_evidence]": 3196.75,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 515.2352941176471,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 1.0,
+   "unsupported_claim_rate[category=legitimate_update]": 0.0,
+   "latency_p50_ms[category=legitimate_update]": 3057.0,
+   "latency_p95_ms[category=legitimate_update]": 3290.4,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.8125,
+   "tokens_per_card[category=prompt_injection]": 433.75,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 2156.5,
+   "latency_p95_ms[category=prompt_injection]": 3132.5,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 0.8333333333333334,
+   "tokens_per_card[category=recall]": 951.2777777777778,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "unsupported_claim_rate[category=recall]": 0.0,
+   "latency_p50_ms[category=recall]": 2599.0,
+   "latency_p95_ms[category=recall]": 3831.199999999999,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 1.0,
+   "tokens_per_card[category=respond_with_suggestion]": 716.75,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 0.9411764705882353,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.0625,
+   "latency_p50_ms[category=respond_with_suggestion]": 3670.0,
+   "latency_p95_ms[category=respond_with_suggestion]": 4518.5,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 1.0,
+   "tokens_per_card[category=wrong_speaker_trap]": 465.53125,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.9696969696969697,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.03125,
+   "latency_p50_ms[category=wrong_speaker_trap]": 2417.5,
+   "latency_p95_ms[category=wrong_speaker_trap]": 3640.0499999999997,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 0.7,
+   "tokens_per_card[origin=dataset]": 1372.3,
+   "cost_usd_per_card[origin=dataset]": 0.0,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 1.0,
+   "unsupported_claim_rate[origin=dataset]": 0.0,
+   "latency_p50_ms[origin=dataset]": 2980.0,
+   "latency_p95_ms[origin=dataset]": 4122.400000000001,
+   "abstain_when_insufficient[origin=synthetic]": 0.5,
+   "answer_when_answerable[origin=synthetic]": 0.9672131147540983,
+   "tokens_per_card[origin=synthetic]": 506.7971014492754,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.9465648854961832,
+   "unsupported_claim_rate[origin=synthetic]": 0.05555555555555555,
+   "latency_p50_ms[origin=synthetic]": 2810.5,
+   "latency_p95_ms[origin=synthetic]": 3870.8000000000006
+  },
+  "single": {
+   "abstain_when_insufficient": 0.875,
+   "answer_when_answerable": 0.946969696969697,
+   "tokens_per_card": 634.0202702702703,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9763779527559056,
+   "unsupported_claim_rate": 0.023622047244094488,
+   "latency_p50_ms": 2834.0,
+   "latency_p95_ms": 3852.9,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 1.0,
+   "tokens_per_card[category=contradiction]": 554.5882352941177,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.9411764705882353,
+   "unsupported_claim_rate[category=contradiction]": 0.058823529411764705,
+   "latency_p50_ms[category=contradiction]": 3365.0,
+   "latency_p95_ms[category=contradiction]": 3736.4,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 1.0,
+   "tokens_per_card[category=hypothetical_or_joking]": 542.8125,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 1.0,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.0,
+   "latency_p50_ms[category=hypothetical_or_joking]": 3121.5,
+   "latency_p95_ms[category=hypothetical_or_joking]": 3847.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.875,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 407.625,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.0,
+   "latency_p50_ms[category=insufficient_evidence]": 1525.0,
+   "latency_p95_ms[category=insufficient_evidence]": 2655.0,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 535.1176470588235,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 1.0,
+   "unsupported_claim_rate[category=legitimate_update]": 0.0,
+   "latency_p50_ms[category=legitimate_update]": 3019.0,
+   "latency_p95_ms[category=legitimate_update]": 3467.7999999999997,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.8125,
+   "tokens_per_card[category=prompt_injection]": 452.125,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 2102.0,
+   "latency_p95_ms[category=prompt_injection]": 2785.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 0.8333333333333334,
+   "tokens_per_card[category=recall]": 1458.5555555555557,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "unsupported_claim_rate[category=recall]": 0.0,
+   "latency_p50_ms[category=recall]": 2554.0,
+   "latency_p95_ms[category=recall]": 4180.349999999999,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 0.9375,
+   "tokens_per_card[category=respond_with_suggestion]": 696.5,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 0.9333333333333333,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.06666666666666667,
+   "latency_p50_ms[category=respond_with_suggestion]": 3245.0,
+   "latency_p95_ms[category=respond_with_suggestion]": 4461.25,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 1.0,
+   "tokens_per_card[category=wrong_speaker_trap]": 483.46875,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.96875,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.03125,
+   "latency_p50_ms[category=wrong_speaker_trap]": 2222.0,
+   "latency_p95_ms[category=wrong_speaker_trap]": 3454.4,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 0.7,
+   "tokens_per_card[origin=dataset]": 2270.9,
+   "cost_usd_per_card[origin=dataset]": 0.0,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 1.0,
+   "unsupported_claim_rate[origin=dataset]": 0.0,
+   "latency_p50_ms[origin=dataset]": 3310.0,
+   "latency_p95_ms[origin=dataset]": 4327.950000000001,
+   "abstain_when_insufficient[origin=synthetic]": 0.875,
+   "answer_when_answerable[origin=synthetic]": 0.9672131147540983,
+   "tokens_per_card[origin=synthetic]": 515.4057971014493,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.975,
+   "unsupported_claim_rate[origin=synthetic]": 0.025,
+   "latency_p50_ms[origin=synthetic]": 2772.0,
+   "latency_p95_ms[origin=synthetic]": 3708.75
+  },
+  "team": {
+   "abstain_when_insufficient": 0.3125,
+   "answer_when_answerable": 0.9772727272727273,
+   "tokens_per_card": 1534.581081081081,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.9601769911504425,
+   "unsupported_claim_rate": 0.05,
+   "latency_p50_ms": 3908.0,
+   "latency_p95_ms": 6272.75,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 1.0,
+   "tokens_per_card[category=contradiction]": 1381.4117647058824,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.8275862068965517,
+   "unsupported_claim_rate[category=contradiction]": 0.23529411764705882,
+   "latency_p50_ms[category=contradiction]": 5329.0,
+   "latency_p95_ms[category=contradiction]": 8023.0,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 1.0,
+   "tokens_per_card[category=hypothetical_or_joking]": 1217.9375,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 1.0,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.0,
+   "latency_p50_ms[category=hypothetical_or_joking]": 3324.0,
+   "latency_p95_ms[category=hypothetical_or_joking]": 4826.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.3125,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 1926.125,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 0.9090909090909091,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.09090909090909091,
+   "latency_p50_ms[category=insufficient_evidence]": 4452.0,
+   "latency_p95_ms[category=insufficient_evidence]": 5750.25,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 1334.0,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 1.0,
+   "unsupported_claim_rate[category=legitimate_update]": 0.0,
+   "latency_p50_ms[category=legitimate_update]": 5062.0,
+   "latency_p95_ms[category=legitimate_update]": 6042.8,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 0.875,
+   "tokens_per_card[category=prompt_injection]": 1147.9375,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 1.0,
+   "unsupported_claim_rate[category=prompt_injection]": 0.0,
+   "latency_p50_ms[category=prompt_injection]": 3636.5,
+   "latency_p95_ms[category=prompt_injection]": 4559.5,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 0.9444444444444444,
+   "tokens_per_card[category=recall]": 2774.1666666666665,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 0.9354838709677419,
+   "unsupported_claim_rate[category=recall]": 0.08823529411764706,
+   "latency_p50_ms[category=recall]": 4745.0,
+   "latency_p95_ms[category=recall]": 7749.45,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 1.0,
+   "tokens_per_card[category=respond_with_suggestion]": 1504.3125,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 1.0,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.0,
+   "latency_p50_ms[category=respond_with_suggestion]": 4297.5,
+   "latency_p95_ms[category=respond_with_suggestion]": 5989.25,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 1.0,
+   "tokens_per_card[category=wrong_speaker_trap]": 1196.25,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.9818181818181818,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.015625,
+   "latency_p50_ms[category=wrong_speaker_trap]": 3536.0,
+   "latency_p95_ms[category=wrong_speaker_trap]": 5259.5,
+   "abstain_when_insufficient[origin=dataset]": null,
+   "answer_when_answerable[origin=dataset]": 0.9,
+   "tokens_per_card[origin=dataset]": 4060.2,
+   "cost_usd_per_card[origin=dataset]": 0.0,
+   "speaker_accuracy[origin=dataset]": 1.0,
+   "grounded_rate[origin=dataset]": 0.8666666666666667,
+   "unsupported_claim_rate[origin=dataset]": 0.16666666666666666,
+   "latency_p50_ms[origin=dataset]": 5518.0,
+   "latency_p95_ms[origin=dataset]": 7878.650000000001,
+   "abstain_when_insufficient[origin=synthetic]": 0.3125,
+   "answer_when_answerable[origin=synthetic]": 0.9836065573770492,
+   "tokens_per_card[origin=synthetic]": 1351.5652173913043,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.966824644549763,
+   "unsupported_claim_rate[origin=synthetic]": 0.04198473282442748,
+   "latency_p50_ms[origin=synthetic]": 3811.0,
+   "latency_p95_ms[origin=synthetic]": 6034.600000000001
+  }
+ },
+ "intervals": {
+  "recent": {
+   "grounded_rate": [
+    0.9634146341463414,
+    1.0
+   ],
+   "unsupported_claim_rate": [
+    0.0,
+    0.0375
+   ],
+   "abstain_when_insufficient": [
+    0.8,
+    1.0
+   ],
+   "answer_when_answerable": [
+    0.576,
+    0.7401574803149606
+   ],
+   "tokens_per_card": [
+    373.48581081081085,
+    455.87212837837836
+   ],
+   "latency_p50_ms": [
+    1913.5,
+    2068.0
+   ],
+   "latency_p95_ms": [
+    3059.0,
+    4194.100000000002
+   ]
+  },
+  "retrieval_memory": {
+   "grounded_rate": [
+    0.9084507042253521,
+    0.9802631578947368
+   ],
+   "unsupported_claim_rate": [
+    0.02112676056338028,
+    0.09449824702569098
+   ],
+   "abstain_when_insufficient": [
+    0.25,
+    0.75
+   ],
+   "answer_when_answerable": [
+    0.9062386775362319,
+    0.984251968503937
+   ],
+   "tokens_per_card": [
+    528.262668918919,
+    606.2648648648649
+   ],
+   "latency_p50_ms": [
+    2531.5,
+    3008.5
+   ],
+   "latency_p95_ms": [
+    3744.75,
+    4385.250000000001
+   ]
+  },
+  "single": {
+   "grounded_rate": [
+    0.9461434108527131,
+    1.0
+   ],
+   "unsupported_claim_rate": [
+    0.0,
+    0.05385658914728667
+   ],
+   "abstain_when_insufficient": [
+    0.6923076923076923,
+    1.0
+   ],
+   "answer_when_answerable": [
+    0.9064748201438849,
+    0.9840031746031745
+   ],
+   "tokens_per_card": [
+    550.9581081081081,
+    738.3402027027026
+   ],
+   "latency_p50_ms": [
+    2483.5,
+    2929.5
+   ],
+   "latency_p95_ms": [
+    3651.6000000000004,
+    4210.0
+   ]
+  },
+  "team": {
+   "grounded_rate": [
+    0.9327343480510522,
+    0.9828326180257511
+   ],
+   "unsupported_claim_rate": [
+    0.01824817518248175,
+    0.08633093525179857
+   ],
+   "abstain_when_insufficient": [
+    0.09090909090909091,
+    0.5625
+   ],
+   "answer_when_answerable": [
+    0.9477611940298507,
+    1.0
+   ],
+   "tokens_per_card": [
+    1404.2033783783784,
+    1687.0773648648649
+   ],
+   "latency_p50_ms": [
+    3690.5,
+    4499.0
+   ],
+   "latency_p95_ms": [
+    5872.0,
+    7907.050000000002
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "grounded_rate",
+   "diff": -0.03961352657004835,
+   "ci": [
+    -0.08409918057133345,
+    0.0016345178007908902
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "unsupported_claim_rate",
+   "diff": 0.04126794258373205,
+   "ci": [
+    -0.0012563180730777738,
+    0.08695706948984688
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.4375,
+   "ci": [
+    -0.6923076923076923,
+    -0.1875
+   ],
+   "mcnemar_p": 0.015625
+  },
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "answer_when_answerable",
+   "diff": 0.28787878787878796,
+   "ci": [
+    0.1969696969696969,
+    0.3787878787878788
+   ],
+   "mcnemar_p": 1.3680484300948592e-08
+  },
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "tokens_per_card",
+   "diff": 153.7635135135135,
+   "ci": [
+    131.25624999999997,
+    175.58800675675678
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "retrieval_memory",
+   "b": "recent",
+   "metric": "latency_p50_ms",
+   "diff": 841.0,
+   "ci": [
+    515.4875,
+    1045.5
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "grounded_rate",
+   "diff": -0.012510936132983375,
+   "ci": [
+    -0.04705953969487276,
+    0.022222222222222254
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "unsupported_claim_rate",
+   "diff": 0.012258410880458124,
+   "ci": [
+    -0.022988505747126436,
+    0.046876094187675056
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.0625,
+   "ci": [
+    -0.2857142857142857,
+    0.15384615384615385
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "answer_when_answerable",
+   "diff": 0.28787878787878796,
+   "ci": [
+    0.19999999999999996,
+    0.37777777777777777
+   ],
+   "mcnemar_p": 5.100190492157708e-09
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "tokens_per_card",
+   "diff": 222.50675675675683,
+   "ci": [
+    167.49932432432433,
+    292.72398648648647
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "recent",
+   "metric": "latency_p50_ms",
+   "diff": 821.5,
+   "ci": [
+    463.0,
+    964.5
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "grounded_rate",
+   "diff": 0.027102590437064977,
+   "ci": [
+    -0.01746364856644096,
+    0.07459310808569876
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "unsupported_claim_rate",
+   "diff": -0.02900953170327393,
+   "ci": [
+    -0.07774108362607339,
+    0.016701055677268862
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "abstain_when_insufficient",
+   "diff": 0.375,
+   "ci": [
+    0.13333333333333341,
+    0.625
+   ],
+   "mcnemar_p": 0.03125
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "answer_when_answerable",
+   "diff": 0.0,
+   "ci": [
+    -0.03731343283582089,
+    0.03759398496240596
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "tokens_per_card",
+   "diff": 68.74324324324334,
+   "ci": [
+    9.945270270270262,
+    142.3788851351352
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "retrieval_memory",
+   "metric": "latency_p50_ms",
+   "diff": -19.5,
+   "ci": [
+    -355.0,
+    210.0
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "grounded_rate",
+   "diff": -0.0287118977384464,
+   "ci": [
+    -0.06140350877192979,
+    0.006087041145011056
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "unsupported_claim_rate",
+   "diff": 0.038636363636363635,
+   "ci": [
+    -0.001712202779962384,
+    0.07904802737834654
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.625,
+   "ci": [
+    -0.8666666666666667,
+    -0.368421052631579
+   ],
+   "mcnemar_p": 0.001953125
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "answer_when_answerable",
+   "diff": 0.31818181818181823,
+   "ci": [
+    0.22962962962962963,
+    0.4076923076923078
+   ],
+   "mcnemar_p": 1.312585595769633e-10
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "tokens_per_card",
+   "diff": 1123.0675675675675,
+   "ci": [
+    1019.3635135135136,
+    1241.306587837838
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "recent",
+   "metric": "latency_p50_ms",
+   "diff": 1895.5,
+   "ci": [
+    1698.9875,
+    2480.5
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "grounded_rate",
+   "diff": 0.01090162883160195,
+   "ci": [
+    -0.020563327517552864,
+    0.045669559076530516
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "unsupported_claim_rate",
+   "diff": -0.0026315789473684154,
+   "ci": [
+    -0.04093413085365508,
+    0.03468310612330067
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.1875,
+   "ci": [
+    -0.5555555555555556,
+    0.1875
+   ],
+   "mcnemar_p": 0.5078125
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "answer_when_answerable",
+   "diff": 0.030303030303030276,
+   "ci": [
+    0.0,
+    0.06870229007633588
+   ],
+   "mcnemar_p": 0.21875
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "tokens_per_card",
+   "diff": 969.3040540540541,
+   "ci": [
+    860.027027027027,
+    1095.1388513513511
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "retrieval_memory",
+   "metric": "latency_p50_ms",
+   "diff": 1054.5,
+   "ci": [
+    791.5,
+    1638.5
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "grounded_rate",
+   "diff": -0.016200961605463027,
+   "ci": [
+    -0.049636815837492805,
+    0.017942131902999203
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "unsupported_claim_rate",
+   "diff": 0.026377952755905515,
+   "ci": [
+    -0.011764167920243485,
+    0.06600636723817745
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.5625,
+   "ci": [
+    -0.8181818181818181,
+    -0.3076086956521751
+   ],
+   "mcnemar_p": 0.00390625
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable",
+   "diff": 0.030303030303030276,
+   "ci": [
+    0.007352941176470562,
+    0.06153846153846154
+   ],
+   "mcnemar_p": 0.125
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "tokens_per_card",
+   "diff": 900.5608108108107,
+   "ci": [
+    825.6349662162162,
+    983.8386824324325
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "latency_p50_ms",
+   "diff": 1074.0,
+   "ci": [
+    867.5,
+    1698.0124999999998
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=contradiction]",
+   "diff": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=hypothetical_or_joking]",
+   "diff": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "abstain_when_insufficient[category=insufficient_evidence]",
+   "diff": -0.5625,
+   "ci": [
+    -0.8181818181818181,
+    -0.3076086956521751
+   ],
+   "mcnemar_p": 0.00390625
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=legitimate_update]",
+   "diff": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=prompt_injection]",
+   "diff": 0.0625,
+   "ci": [
+    0.0,
+    0.21052631578947367
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=recall]",
+   "diff": 0.11111111111111105,
+   "ci": [
+    0.0,
+    0.2727272727272728
+   ],
+   "mcnemar_p": 0.5
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=respond_with_suggestion]",
+   "diff": 0.0625,
+   "ci": [
+    0.0,
+    0.21052631578947367
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "team",
+   "b": "single",
+   "metric": "answer_when_answerable[category=wrong_speaker_trap]",
+   "diff": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "mcnemar_p": 1.0
+  }
+ ],
+ "supersedes": [
+  {
+   "run_id": "E3-20261103T221004658482Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ"
+  }
+ ],
+ "attempts": [
+  {
+   "setting": "recent",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 1,
+    "timeout": 0,
+    "ok": 147,
+    "abstained": 60,
+    "n": 148
+   }
+  },
+  {
+   "setting": "retrieval_memory",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 15,
+    "n": 148
+   }
+  },
+  {
+   "setting": "single",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 148,
+    "abstained": 21,
+    "n": 148
+   }
+  },
+  {
+   "setting": "team",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 4,
+    "ok": 144,
+    "abstained": 8,
+    "n": 148
+   }
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": true,
+ "label_source": "scenarios",
+ "predictions": {
+  "recent": "results/runs/E3-20261104T011047113852Z.recent.predictions.jsonl",
+  "retrieval_memory": "results/runs/E3-20261104T011047113852Z.retrieval_memory.predictions.jsonl",
+  "single": "results/runs/E3-20261104T011047113852Z.single.predictions.jsonl",
+  "team": "results/runs/E3-20261104T011047113852Z.team.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T21:23:00.216253+00:00",
+ "finished_at": "2026-11-04T01:10:47.113852+00:00"
+}

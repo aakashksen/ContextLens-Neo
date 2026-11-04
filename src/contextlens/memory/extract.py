@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from contextlens.guard.citations import resolve_turn
 from contextlens.llm.client import LLMClient
 from contextlens.llm.untrusted import effective_speaker, escape, transcript_block
 from contextlens.schemas import MemoryItem, Turn
@@ -61,7 +62,7 @@ class MemoryExtractor:
         for raw in out.items:
             cites = []
             for i in raw.source_turn_ids:
-                real = prompt_ids.get(i) or by_id.get(i)
+                real = prompt_ids.get(i) or resolve_turn(by_id, i)
                 if real is not None and real.id not in cites:
                     cites.append(real.id)
             if not cites:

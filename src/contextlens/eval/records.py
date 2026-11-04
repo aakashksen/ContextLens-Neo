@@ -12,6 +12,7 @@ from contextlens.schemas import Scenario
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNS_REL = Path("results/runs")
+SUBSETS_REL = Path("datasets/splits/subsets")
 
 
 def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -61,6 +62,8 @@ SCENARIO_SOURCES = {
     "scenarios": (MANIFEST_REL, Path("datasets/scenarios")),
     "qmsum": (Path("datasets/splits/qmsum-scenarios.json"), Path("datasets/raw/scenarios/qmsum")),
     "decode": (Path("datasets/splits/decode-scenarios.json"), Path("datasets/raw/scenarios/decode")),
+    # Invented dev-only pairs (docs/extra-cases.md), committed in full; no person has reviewed their labels.
+    "scenarios_extra": (Path("datasets/splits/scenarios-extra.json"), Path("datasets/scenarios_extra")),
 }
 # Prediction rows of these sources may hold ids and metrics data only (a bare label is fine): no quotes, cards or raw output.
 IDS_ONLY_SOURCES = {"qmsum", "decode"}
@@ -69,6 +72,18 @@ IDS_ONLY_SOURCES = {"qmsum", "decode"}
 def split_hash(split: str, root: Path = ROOT, source: str = "scenarios") -> str:
     """Hash of the scenario file for a split: the cases a run is scored on."""
     return hashlib.sha256((root / SCENARIO_SOURCES[source][1] / f"{split}.jsonl").read_bytes()).hexdigest()
+
+
+def load_verified(source: str, split: str, root: Path = ROOT) -> tuple[list[Scenario], str]:
+    """A split's scenarios and the hash a record will carry; fails if the file no longer matches its manifest."""
+    from contextlens.data.scenarios import load_scenarios
+
+    manifest_rel, scenario_dir = SCENARIO_SOURCES[source]
+    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][split]
+    digest = split_hash(split, root, source)
+    if digest != entry["hash"]:
+        raise RuntimeError(f"the {source} scenario file does not match its manifest")
+    return load_scenarios(split, root / scenario_dir), digest
 
 
 def write_local_manifest(source: str, scenarios: dict[str, list[Scenario]], root: Path = ROOT) -> Path:
@@ -101,6 +116,55 @@ def write_scenarios_manifest(root: Path = ROOT) -> Path:
     return path
 
 
+TASKS_REL = Path("orchestration/tasks.json")
+AMI_SIGNED_REL = Path("orchestration/evidence/signed-ami-labels.txt")  # git-ignored; written by a person or reader
+# Whose labels a scenario source carries. The record keeps this beside labels_reviewed, so a later decision about
+# which of them count as reviewed needs no rerun.
+LABEL_SOURCE = {"scenarios": "scenarios", "ami": "ami_rule", "qmsum": "publisher", "decode": "publisher",
+                "scenarios_extra": "unreviewed_extra"}
+
+
+def label_source(scenario_source: str) -> str:
+    return LABEL_SOURCE[scenario_source]
+
+
+def record_label_source(rec: dict[str, Any]) -> str | None:
+    """Whose labels a saved record carries, decided from its scenario_source (which check_run ties to the
+    source's manifest), never from its own label_source field. None when the source is missing or unknown."""
+    source = rec.get("scenario_source")
+    return LABEL_SOURCE.get(source) if isinstance(source, str) else None
+
+
+def labels_reviewed(root: Path, scenario_source: str = "scenarios") -> bool:
+    """Whether a person has signed off the labels of this record's source. Only the main folder holds live state,
+    so a linked worktree reads the main folder's, never its own possibly stale copy. `scenarios` needs H2 done in
+    tasks.json; `ami_rule` needs the signed line in AMI_SIGNED_REL, separate from H2; `publisher` labels (DECODE,
+    QMSum) count as reviewed, by the person's decision of 2026-11-03, and claims on them must say so. Missing or unreadable state means false. This is the only place the flag is set; a runner's
+    config cannot override it."""
+    from contextlens.llm.client import shared_root
+
+    kind = LABEL_SOURCE.get(scenario_source)
+    main = shared_root(root)
+    try:
+        if kind == "scenarios":
+            tasks = json.loads((main / TASKS_REL).read_text(encoding="utf-8"))["tasks"]
+            return any(isinstance(t, dict) and t.get("id") == "H2" and t.get("status") == "done" for t in tasks)
+        if kind == "ami_rule":
+            return bool((main / AMI_SIGNED_REL).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return kind == "publisher"
+
+
+def label_text(root: Path, scenario_source: str = "scenarios") -> str:
+    """The sentence about the labels that notes and analyses may print: it follows the flag a record gets from
+    `labels_reviewed` and names `label_source`, so a runner never hardcodes the answer."""
+    reviewed, source = labels_reviewed(root, scenario_source), label_source(scenario_source)
+    if reviewed:
+        return f"Dev labels are reviewed (`labels_reviewed` is true; label source: {source})."
+    return f"Dev labels are unreviewed (`labels_reviewed` is false; label source: {source}), so figures here are provisional."
+
+
 SYSTEM_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -128,6 +192,8 @@ def write_run(
     bad = [name for name in predictions if not SYSTEM_NAME.match(name)]
     if not predictions or bad:
         raise ValueError(f"predictions must map system names (letters, digits, _ and -) to rows: {bad}")
+    if len({len(rows) for rows in predictions.values()}) > 1:
+        raise ValueError(f"every system must have the same number of rows: { {k: len(v) for k, v in predictions.items()} }")
     dirty = is_dirty(root)
     if dirty and not allow_dirty:
         raise RuntimeError("working tree has uncommitted changes; commit first")
@@ -159,7 +225,8 @@ def write_run(
         **({"subset": subset} if subset is not None else {}),
         "attempts": attempts,
         "claude_calls": config.get("claude_calls", 0),
-        "labels_reviewed": config.get("labels_reviewed", False),
+        "labels_reviewed": labels_reviewed(root, scenario_source),
+        "label_source": label_source(scenario_source),
         "predictions": pred_paths,
         "started_at": config.get("started_at", now.isoformat()),
         "finished_at": now.isoformat(),

@@ -15,7 +15,7 @@ keeps it useful: below half, it misses more real contradictions than it finds an
 higher floor would push the choice toward the many-false-alarms end the design warns against. The number comes from
 that reasoning, not from a result; the only results seen before fixing it were T5.2's headline scores, not any sweep.
 
-Dev is selection data here, so the chosen point's scores are not held out, and dev labels are unreviewed (provisional).
+Dev is selection data here, so the chosen point's scores are not held out, and whether the dev labels are reviewed is the records' labels_reviewed flag, not stated here.
 The test splits are never read.
 
 Run: python -m contextlens.consistency.select_cascade --data-root <folder with datasets/raw/>
@@ -118,7 +118,7 @@ def build_cases(dev: dict[str, list[Scenario]], rescored: dict[str, list[dict]],
         if [r["id"] for r in rescored[src]] != ids or [p.scenario_id for p in prompted[src]] != ids:
             raise ValueError(f"{src}: the dev, rescored and prompted ids do not line up")
         t_ms = {p.scenario_id: p.stage_latency_ms.get("total") for p in (trained or {}).get(src, [])}
-        for s, r, p in zip(scs, rescored[src], prompted[src]):
+        for s, r, p in zip(scs, rescored[src], prompted[src], strict=True):
             if s.gold_label is None:
                 continue
             out.append(Case(src, s.id, s.gold_label == "contradiction", r["probs"]["contradiction"],
@@ -137,7 +137,7 @@ def write_config(path: Path, point: Point, provenance: dict) -> None:
         "system": point.system, "flag_threshold": point.threshold, "catch_floor": CATCH_FLOOR,
         "selection_rule": "lowest mean false-alert rate over the sources among points with catch rate >= catch_floor on every "
                           "source; ties to higher catch, then the trained model alone, then the higher threshold",
-        "selection_data": "dev (selection data, not held out); dev labels are unreviewed",
+        "selection_data": "dev (selection data, not held out); the labels' review status is in each record's labels_reviewed",
         "provisional": True, "thresholds_swept": list(THRESHOLDS),
         "stage_two": {"model": PROMPTED_MODEL, "prompt": "consistency v1"}, **provenance,
     }
@@ -158,7 +158,7 @@ def _composed_ms(cases: list[Case], point: Point) -> str:
 
 
 def report(point: Point, points: list[Point], cases: list[Case] | None = None) -> str:
-    lines = ["# Operating point on dev (provisional: dev is selection data, labels unreviewed)", "",
+    lines = ["# Operating point on dev (dev is selection data; label status is the records' labels_reviewed flag)", "",
              f"Selected: system {point.system}, flag threshold {point.threshold}, catch floor {CATCH_FLOOR}.", "",
              "## Measured on dev (rate, with counts)", ""]
     for src in sorted(point.catch):

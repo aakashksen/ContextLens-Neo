@@ -9,7 +9,16 @@ from contextlens.eval import claims
 from contextlens.eval.check_run import check, recompute_metrics
 from contextlens.eval.records import split_hash, write_run, write_scenarios_manifest
 from contextlens.replay.runner import Prediction
-from contextlens.schemas import ButtonRequest, Card, Conversation, EvidenceRef, Finding, Scenario, Turn
+from contextlens.schemas import (
+    ButtonRequest,
+    Card,
+    Conversation,
+    EvidenceRef,
+    Finding,
+    Scenario,
+    Turn,
+)
+from tests.test_records import set_h2
 
 IDS = ["d1", "d2", "d3", "d4"]
 
@@ -175,7 +184,8 @@ def test_named_judge_passes(repo: Path) -> None:
 
 
 def _claim(repo: Path, config: dict, metric: str = "grounded_rate") -> list[str]:
-    _save(repo, [_row(i) for i in IDS], config={"labels_reviewed": True, "judge": JUDGE, **config})
+    set_h2(repo, "done")  # labels_reviewed comes from H2's signed state, not from the config
+    _save(repo, [_row(i) for i in IDS], config={"judge": JUDGE, **config})
     rec = json.loads(next((repo / "results/runs").glob("E2-*Z.json")).read_text(encoding="utf-8"))
     (repo / "results").mkdir(exist_ok=True)
     (repo / "results/claims.json").write_text(json.dumps({"claims": [

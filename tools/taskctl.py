@@ -8,6 +8,7 @@ import contextlib
 import datetime as dt
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -30,6 +31,8 @@ SHARED_FILES = (".env",)
 # Outputs every worktree must write to the main folder, so they outlive the worktree.
 SHARED_OUTPUTS = ("models", "mlruns")
 # Ignored files that are safe to lose when a worktree goes away.
+# Caches any checkout rewrites on its own. Never moved and never a reason to refuse; only these exact names.
+REGENERABLE = ("results/.check-cache.json", "results/.check-cache.json.lock")
 DISPOSABLE = ("__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "node_modules", ".egg-info", ".pyc", "dist", "build")
 GPU_BUDGET_MB = int(os.environ.get("CL_GPU_BUDGET_MB", "6400"))  # 8 GB less what the desktop keeps
 MAX_ATTEMPTS = 3
@@ -211,8 +214,8 @@ def unlink_shared(worktree):
                     os.rmdir(child) if os.path.isjunction(child) else child.unlink()
 
 
-def rescue_ignored(worktree):
-    """Moves git-ignored work out of a worktree before it's removed. Raises rather than overwrite anything."""
+def plan_rescue(worktree):
+    """The git-ignored files to move out of a worktree, and the ones that differ from the main folder's copy."""
     listed = git("status", "--porcelain", "--ignored", "--untracked-files=all", cwd=worktree)
     paths = [line[3:].strip().strip('"').rstrip("/") for line in listed.splitlines() if line.startswith("!! ")]
     keep = [rel for rel in paths if not any(part in DISPOSABLE or part.endswith(DISPOSABLE) for part in Path(rel).parts)]
@@ -221,11 +224,19 @@ def rescue_ignored(worktree):
         source = worktree / rel
         files = [source] if source.is_file() else [f for f in source.rglob("*") if f.is_file()]
         for file in files:
+            if file.relative_to(worktree).as_posix() in REGENERABLE:
+                continue
             target = ROOT / file.relative_to(worktree)
             if target.exists() and target.read_bytes() != file.read_bytes():
                 conflicts.append(str(file.relative_to(worktree)))
             elif not target.exists():
                 moves.append((file, target))
+    return moves, conflicts
+
+
+def rescue_ignored(worktree):
+    """Moves git-ignored work out of a worktree before it's removed. Raises rather than overwrite anything."""
+    moves, conflicts = plan_rescue(worktree)
     if conflicts:
         raise FileExistsError("; ".join(conflicts[:5]))
     for file, target in moves:
@@ -324,6 +335,22 @@ def verdict_commit(task_id):
     return verdict.get("commit")
 
 
+def decisions_problem(task, base):
+    """Why this task may not close yet, or None. Reads docs/DECISIONS.md under `base`: the folder holding the
+    copy that will be closed (the main folder for done, the task's worktree for land, so an entry the task
+    wrote on its own branch counts). Any mention of the id counts, including a line `<id>: no new decisions`,
+    and so does a mention inside another task's entry. The id must stand alone, so T1.1 is not found in T1.10."""
+    if task["owner"] != "agent" or task["status"] == "done":
+        return None
+    path = Path(base) / "docs" / "DECISIONS.md"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    task_id = task["id"]
+    if re.search(rf"(?<![A-Za-z0-9]){re.escape(task_id)}(?![A-Za-z0-9]|\.[0-9])", text):
+        return None
+    return (f"refused: docs/DECISIONS.md in {base} does not mention {task_id}. Add an entry for each choice made "
+            f"in the task, or a line `{task_id}: no new decisions`, and commit it.")
+
+
 def cmd_done(args):
     plan = load()
     task = find(plan, args.id)
@@ -331,6 +358,9 @@ def cmd_done(args):
         sys.exit(f"{args.id} belongs to the person; use human-done")
     if task.get("worktree"):
         sys.exit(f"refused: {args.id} is in a worktree; use land")
+    problem = decisions_problem(task, ROOT)
+    if problem:
+        sys.exit(problem)
     commit = head()
     if dirty():
         sys.exit("refused: uncommitted changes")
@@ -346,6 +376,24 @@ def cmd_done(args):
     print(f"done {args.id}")
 
 
+def merge_build_branch(task, worktree, branch):
+    """Brings the build branch into the task's worktree and reruns the acceptance commands on the result.
+    Exits, with nothing landed, if the merge conflicts or the merged code no longer passes."""
+    if not git_ok("merge-base", "--is-ancestor", branch, "HEAD", cwd=worktree).returncode:
+        return
+    verified_commit = head(worktree)
+    merged = git_ok("merge", "--no-edit", "-q", branch, cwd=worktree)
+    if merged.returncode:
+        git_ok("merge", "--abort", cwd=worktree)
+        print(f"MERGE CONFLICT: {task['id']} conflicts with {branch}. Nothing landed; send it back to the implementer.\n{merged.stdout[-1500:]}")
+        sys.exit(4)
+    _, passed, log_path = run_acceptance(task, worktree, f"{task['id']}.merged.log")
+    if not passed:
+        git("reset", "--hard", "-q", verified_commit, cwd=worktree)
+        print(f"MERGED CODE FAILED: {task['id']} no longer passes after merging {branch}. Nothing landed. See {log_path.relative_to(ROOT)}")
+        sys.exit(5)
+
+
 def cmd_land(args):
     """Merges a verified worktree task into the build branch. The build branch only ever moves forward
     to a commit that passed this task's acceptance commands after merging everything else that landed."""
@@ -353,6 +401,9 @@ def cmd_land(args):
     worktree = task.get("worktree")
     if not worktree:
         sys.exit(f"refused: {args.id} has no worktree; use done")
+    problem = decisions_problem(task, worktree)
+    if problem:
+        sys.exit(problem)
     if dirty(worktree):
         sys.exit("refused: uncommitted changes in the worktree")
     verified = task.get("verified") or {}
@@ -364,26 +415,23 @@ def cmd_land(args):
         if dirty():
             sys.exit("refused: the build branch has uncommitted changes")
         branch = git("branch", "--show-current")
-        if git_ok("merge-base", "--is-ancestor", branch, "HEAD", cwd=worktree).returncode:
-            merged = git_ok("merge", "--no-edit", "-q", branch, cwd=worktree)
-            if merged.returncode:
-                git_ok("merge", "--abort", cwd=worktree)
-                print(f"MERGE CONFLICT: {args.id} conflicts with {branch}. Nothing landed; send it back to the implementer.\n{merged.stdout[-1500:]}")
-                sys.exit(4)
-            _, passed, log_path = run_acceptance(task, worktree, f"{args.id}.merged.log")
-            if not passed:
-                print(f"MERGED CODE FAILED: {args.id} no longer passes after merging {branch}. Nothing landed. See {log_path.relative_to(ROOT)}")
-                sys.exit(5)
+        _, conflicts = plan_rescue(Path(worktree))
+        if conflicts:
+            sys.exit(f"refused: nothing landed, because these ignored files differ from the main folder's copies: {'; '.join(conflicts[:5])}")
+        merge_build_branch(task, worktree, branch)
         unlink_shared(Path(worktree))
         try:
             rescued = rescue_ignored(Path(worktree))
         except FileExistsError as err:
             link_shared(Path(worktree))
+            git("reset", "--hard", "-q", verified["commit"], cwd=worktree)
             sys.exit(f"refused: nothing landed, because these ignored files differ from the main folder's copies: {err}")
         if rescued:
             print(f"moved {rescued} git-ignored files from the worktree to the main folder")
         forward = git_ok("merge", "--ff-only", "-q", f"task/{args.id}")
         if forward.returncode:
+            link_shared(Path(worktree))
+            git("reset", "--hard", "-q", verified["commit"], cwd=worktree)
             sys.exit(f"refused: could not move {branch} forward: {forward.stderr.strip()}")
         with editing() as plan:
             task = find(plan, args.id)

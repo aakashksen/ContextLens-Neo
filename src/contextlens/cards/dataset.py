@@ -99,6 +99,12 @@ def _card(s: Scenario, turns: list[Turn], gold: list[int], abstain: bool) -> tup
         return Card(mode="recall", status="abstained", findings=[], missing=[q]), ""
     if not gold:
         return None, "dropped_unusable"
+    return _gold_card(turns, gold, abstain, q, label, answer)
+
+
+def _gold_card(turns: list[Turn], gold: list[int], abstain: bool, q: str | None, label: str | None,
+               answer: str | None) -> tuple[Card | None, str]:
+    """The card for a scenario that has gold evidence."""
     if q and answer and label is None:
         if abstain:
             return Card(mode="recall", status="abstained", findings=[], missing=[q]), ""
@@ -229,6 +235,24 @@ def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> Non
                                  f"with held-out scenario {hid}")
 
 
+def _cap_train(by_file: dict[str, dict[str, list[Example]]], abstain_cap: float, cap_seed: int,
+               stats: Counter) -> None:
+    """Thin abstained train examples over the combined train examples of every source; val is not touched."""
+    train = [e for by_split in by_file.values() for e in by_split["train"]]
+    kept = {e.id for e in cap_abstained(train, abstain_cap, cap_seed, stats)}
+    for by_split in by_file.values():
+        by_split["train"] = [e for e in by_split["train"] if e.id in kept]
+    _final_stats([e for by_split in by_file.values() for e in by_split["train"]], stats)
+
+
+def _write_examples(out_dir: Path, by_file: dict[str, dict[str, list[Example]]]) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for prefix, by_split in by_file.items():
+        for split, exs in by_split.items():
+            (out_dir / f"{prefix}-{split}.jsonl").write_text(
+                "".join(e.model_dump_json() + "\n" for e in exs), encoding="utf-8")
+
+
 def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Path("datasets/splits"),
                    out_dir: Path | None = None, train_scenarios: Path | None = None,
                    held_out_dir: Path = SCENARIOS_DIR, stats: Counter | None = None,
@@ -264,18 +288,9 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
                 by_split[split].append(ex)
         by_file["qmsum" if source == "qmsum" else "scenarios"] = by_split
     if abstain_cap is not None:
-        # over the combined train examples of every source; val is not touched
-        train = [e for by_split in by_file.values() for e in by_split["train"]]
-        kept = {e.id for e in cap_abstained(train, abstain_cap, cap_seed, stats)}
-        for by_split in by_file.values():
-            by_split["train"] = [e for e in by_split["train"] if e.id in kept]
-        _final_stats([e for by_split in by_file.values() for e in by_split["train"]], stats)
+        _cap_train(by_file, abstain_cap, cap_seed, stats)
     if out_dir is not None:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for prefix, by_split in by_file.items():
-            for split, exs in by_split.items():
-                (out_dir / f"{prefix}-{split}.jsonl").write_text(
-                    "".join(e.model_dump_json() + "\n" for e in exs), encoding="utf-8")
+        _write_examples(out_dir, by_file)
     return {split: sum(len(v[split]) for v in by_file.values()) for split in ("train", "val")}
 
 

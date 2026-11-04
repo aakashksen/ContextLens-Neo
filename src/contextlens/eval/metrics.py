@@ -38,9 +38,9 @@ def mrr(ranks: Sequence[int | None]) -> float | None:
 
 
 def _f1(gold: Sequence[str], pred: Sequence[str], label: str) -> float:
-    tp = sum(1 for g, p in zip(gold, pred) if g == label and p == label)
-    fp = sum(1 for g, p in zip(gold, pred) if g != label and p == label)
-    fn = sum(1 for g, p in zip(gold, pred) if g == label and p != label)
+    tp = sum(1 for g, p in zip(gold, pred, strict=True) if g == label and p == label)
+    fp = sum(1 for g, p in zip(gold, pred, strict=True) if g != label and p == label)
+    fn = sum(1 for g, p in zip(gold, pred, strict=True) if g == label and p != label)
     denom = 2 * tp + fp + fn
     return 2 * tp / denom if denom else 0.0
 
@@ -62,7 +62,7 @@ def macro_f1(gold: Sequence[str], pred: Sequence[str]) -> float | None:
 def false_alert_rate(gold: Sequence[str], pred: Sequence[str]) -> float | None:
     """Share of non-contradiction cases predicted as contradiction; None when there are none."""
     _same_length(gold, pred)
-    negatives = [p for g, p in zip(gold, pred) if g != "contradiction"]
+    negatives = [p for g, p in zip(gold, pred, strict=True) if g != "contradiction"]
     if not negatives:
         return None
     return sum(1 for p in negatives if p == "contradiction") / len(negatives)
@@ -75,7 +75,7 @@ def ece(correct: Sequence[bool], probabilities: Sequence[float], bins: int = 10)
     if not correct:
         return None
     grouped: list[list[tuple[bool, float]]] = [[] for _ in range(bins)]
-    for ok, p in zip(correct, probabilities):
+    for ok, p in zip(correct, probabilities, strict=True):
         grouped[min(int(p * bins), bins - 1)].append((ok, p))
     total = len(correct)
     return sum(len(g) / total * abs(sum(ok for ok, _ in g) / len(g) - sum(p for _, p in g) / len(g))
@@ -132,8 +132,8 @@ def abstention_accuracy(
     """Both sides: abstains when gold is insufficient, answers when gold has an answer.
     A side with no cases is None."""
     _same_length(abstained, gold_insufficient)
-    on_insuff = [a for a, g in zip(abstained, gold_insufficient) if g]
-    on_answer = [not a for a, g in zip(abstained, gold_insufficient) if not g]
+    on_insuff = [a for a, g in zip(abstained, gold_insufficient, strict=True) if g]
+    on_answer = [not a for a, g in zip(abstained, gold_insufficient, strict=True) if not g]
     return {
         "abstain_when_insufficient": sum(on_insuff) / len(on_insuff) if on_insuff else None,
         "answer_when_answerable": sum(on_answer) / len(on_answer) if on_answer else None,
@@ -145,4 +145,17 @@ def speaker_accuracy(pred_speakers: Sequence[str], gold_speakers: Sequence[str])
     _same_length(pred_speakers, gold_speakers)
     if not gold_speakers:
         return None
-    return sum(p == g for p, g in zip(pred_speakers, gold_speakers)) / len(gold_speakers)
+    return sum(p == g for p, g in zip(pred_speakers, gold_speakers, strict=True)) / len(gold_speakers)
+
+
+def cohen_kappa(a: Sequence[bool], b: Sequence[bool]) -> float | None:
+    """Agreement of two yes/no judges beyond chance. None when there are no pairs or chance agreement is
+    certain (both judges answered the same one way throughout), where kappa is undefined."""
+    _same_length(a, b)
+    n = len(a)
+    if n == 0:
+        return None
+    po = sum(x == y for x, y in zip(a, b, strict=True)) / n
+    pa, pb = sum(a) / n, sum(b) / n
+    pe = pa * pb + (1 - pa) * (1 - pb)
+    return None if pe == 1 else (po - pe) / (1 - pe)
