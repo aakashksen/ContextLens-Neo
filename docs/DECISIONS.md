@@ -402,6 +402,14 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Product default:** stays `team`; that decision is the person's.
 - **Would change it if:** the person decides otherwise on the product default or on the labels.
 
+### Entry 51 result (2026-11-04, dev)
+- **Records:** `E3TS-20261104T173517541324Z` (old), `E3TS-20261104T173526710888Z` (new), local judge, `check_run` passes. Cloud grader: `JC-20261104T144600470844Z` (`single` and `team_changed`, new) and `JC-20261104T175008137622Z` (`team_shipping_changed`, new).
+- **Written score on the new set:** local judge `team_shipping_changed` 0.792, `single` 0.713, `team_changed` 0.833. Cloud grader `team_shipping_changed` 0.712, `single` 0.631, `team_changed` 0.755.
+- **Applied as written:** `team_shipping_changed` beats `single` on the new set under both judges and could ship, so it is T9.1's primary. T9.1 is not held and measures `single` as well. This settles the arm for T9.1; it does not change the product default, which stays `team` and is the person's decision.
+- **What drives it:** abstain when insufficient 0.630 against 0.426, while answer rate on answerable cases is 1.0 for both. Under the cloud grader its grounded rate is lower than `single`'s (0.794 against 0.835), so the gain comes from abstention and not from accuracy of what it says. Local judge's grounded rate: 0.955 against 1.0.
+- **Rerun rows, a difference from the other arms:** the session closed during judging, and the resume reran the 10 rows that had broken (6 old, 4 new), which the other arms did not get. Answer and abstain counts did not change on either set. The first pass had 4 broken cards on the new set, and the record's 0 reflects the rerun. Those 4 cards hold 9 of the 155 graded claims, so at most they move the cloud score by 0.029, less than the 0.081 margin.
+- **Limits:** new-set labels are unreviewed by a person; a fresh agent's read found 0 disagreements on 72 of 108 labels, but the cases are templated. The cloud grader is a reference, not ground truth. Conditions differ from the other arms' session. No interval is stated on the written score itself.
+
 Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 to 39 after the judge-check entry took 27. Committed records and run notes that cite a T4.2 entry by its old number (for example "see entry 37" for the McNemar fix) mean the entry that is now one higher.
 
 ## 40. Judge for the final numbers, and selection recomputed under the cloud grader (2026-11-03, T9.1, written before seeing the recomputed numbers)
