@@ -545,7 +545,7 @@ CARRY_LINE = (
     "cases (see the answer rates below). That choice was made on dev results, not by the rule.")
 NUMBER_RULE_LIMITS = (
     "Known limits of the rule: it compares numbers by value (`_values` in `agents/single.py`), so a number word and its "
-    "digits agree, and half, dozen and ordinals are read (entry 40 of `docs/DECISIONS.md`). What still fails closed: a lone one, "
+    "digits agree, and half, dozen and ordinals are read (entry 41 of `docs/DECISIONS.md`). What still fails closed: a lone one, "
     "couple, pair, once, twice and quarter are not numbers; `one and a half` is not 1.5; spoken years, `2.5k` and `15:00` "
     "are not matched with other spellings. Records made before the fix ran on the old rule. `docs/interview-notes.md` does "
     "not exist yet, so no interview-based limits are recorded.")
