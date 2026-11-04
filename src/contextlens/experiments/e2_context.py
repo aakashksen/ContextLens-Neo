@@ -616,6 +616,10 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
         lines.append(f"- {name}: {r['cases']} cases, {r['with_suggestion']} with a suggestion, "
                      f"{r['injected_words_in_suggestion']} using words only the injected turn holds")
         lines += [f"    - {x['id']} {x['words']}: {x['suggestion']}" for x in r["flagged"]]
+    if systems and all(injection_report(scenarios, preds)["with_suggestion"] == 0 for preds in systems.values()):
+        lines.append("- Every count above is 0 because no injection case produced a suggestion: those cases carry a question, so "
+                     "the respond rule does not fire. The check could not fail, for these records as much as for any earlier ones, "
+                     "and 0 injected claims in suggestions is not evidence that none can get through.")
     lines += _injection_findings_section(scenarios, systems, respond)
     if old_prompt is not None:
         lines += _suggestion_section(scenarios, systems, old_prompt, respond, (earlier or {}).get(TRIED_PROMPT_SYSTEM))
@@ -1081,17 +1085,26 @@ def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = 
     extra: dict[str, Any] = {}
     superseded = superseded or [e["run_id"] for rec in (local, *([cloud] if cloud_run else [])) for e in rec.get("supersedes", [])]
     if superseded:
-        old = {r: load(r) for r in superseded}
+        old: dict[str, dict[str, Any]] = {}
+        todo = list(superseded)
+        while todo:  # follow the chain: a rebuilt record supersedes the rerun, which superseded the first record
+            rid = todo.pop(0)
+            if rid not in old:
+                old[rid] = load(rid)
+                todo += [e["run_id"] for e in old[rid].get("supersedes", [])]
+        everyone = (local, *([cloud] if cloud_run else []), *old.values())
+        earliest = {r: rec for r, rec in old.items() if not rec.get("supersedes")}  # their rows are the ones the old claims are about
         earlier_rows: dict[str, list[Prediction]] = {}
-        old_local = next((r for r, rec in old.items() if "subset" not in rec), None)
+        old_local = next((r for r, rec in sorted(earliest.items()) if "subset" not in rec), None)
         lines = []
         for rid, rec in old.items():
-            new = next((x for x in (local, *([cloud] if cloud_run else [])) if any(e.get("run_id") == rid for e in x["supersedes"])), None)
+            new = next((x for x in everyone if any(e.get("run_id") == rid for e in x.get("supersedes", []))), None)
             why = next((e["reason"] for e in new["supersedes"] if e.get("run_id") == rid), "no reason recorded") if new else "not listed by a new record"
             models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
             lines.append(f"{rid} (superseded{f' by {new['run_id']}' if new else ''}): {models}; {rec['n']} cases"
                          f"{f', subset {rec['subset']}' if 'subset' in rec else ''}; reason: {why}")
-            earlier_rows |= {(n if "subset" not in rec else f"{n} (superseded cloud)"): r for n, r in rows(rec).items()}
+            if rid in earliest:
+                earlier_rows |= {(n if "subset" not in rec else f"{n} (superseded cloud)"): r for n, r in rows(rec).items()}
         for rid, rec in ((local_run, local), *(((cloud_run, cloud),) if cloud_run else ())):
             models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
             lines.append(f"{rid} (current): {models}; {rec['n']} cases{f', subset {rec['subset']}' if 'subset' in rec else ''}")

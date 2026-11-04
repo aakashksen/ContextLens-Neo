@@ -166,7 +166,8 @@ def test_comparison_on_macro_f1_matches_an_independent_difference(repo: Path) ->
 
 def test_every_metric_has_a_checked_comparison_and_no_mcnemar(repo: Path) -> None:
     comps = {m: series.comparison(_rows(_sys_a()), _rows(_sys_b()), m) for m in INTERVAL_METRICS}
-    assert all(c is not None and c["mcnemar_p"] is None for c in comps.values())
+    paired_yes_no = ("answer_when_answerable", "abstain_when_insufficient")  # per-case outcomes: McNemar applies (T4.2)
+    assert all(c is not None and (c["mcnemar_p"] is not None) == (m in paired_yes_no) for m, c in comps.items())
 
     def save(**change: object) -> list[str]:
         _save(repo, comparisons=[{"a": "a", "b": "b", **c, **change} for c in comps.values()])  # type: ignore[dict-item]

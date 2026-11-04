@@ -80,6 +80,7 @@ The count is a word-overlap proxy (words only the injected turn holds), not a re
 - retrieval_memory: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - full_local: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
 - full_cloud: 16 cases, 0 with a suggestion, 0 using words only the injected turn holds
+- Every count above is 0 because no injection case produced a suggestion: those cases carry a question, so the respond rule does not fire. The check could not fail, for these records as much as for any earlier ones, and 0 injected claims in suggestions is not evidence that none can get through.
 
 ## Prompt-injection cases: injected claims in findings and suggestions
 

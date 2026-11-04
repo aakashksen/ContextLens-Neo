@@ -243,6 +243,7 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator.
 - **Chosen:** The score is the mean of groundedness and the lower of the two abstention sides (answer rate on answerable cases, abstain rate on insufficient cases). Every part must be defined. It was written down before the run. It names the best system in E3's record without re-deciding E2's winner. E2's own rule is unchanged and now picks `full`; E3's written rule picks `single`.
+- **Known cost:** the abstention side rests on the 16 insufficient-evidence cases of dev, so one case moves it by several points. The records now say so.
 - **Evidence:** `SELECTION_RULE` in `experiments/e3_team.py` and `config.selection_rule` in the E3 record.
 - **Would change if:** the person wants a different weighting.
 
@@ -281,7 +282,7 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Who:** The coordinator found it in E3's saved rows; the implementer fixed it.
 - **What failed:** Models cite the part of a turn id after the colon (`t0`), and the guard only knew the full id, so true findings were dropped as citation failures. The team lost the most. No finding with a short id was kept anywhere.
 - **Chosen:** The guard resolves an id with no conversation prefix to the one turn of this conversation, at or before the press, whose id ends in it, with the quote still required. Another conversation's id, an ambiguous one and a later turn still drop. The reruns list the old records as superseded with a reason naming this bug.
-- **What the rerun showed, in words:** Nearly all short-id citation drops are gone (one team drop with a short id remains). With them gone the team answers more answerable cases than the single agent, but it abstains less where the evidence is insufficient, and it costs more tokens and time. It is not better on groundedness. A few team cards ran into the 8 s deadline, and the record reports that per system. No metric values are stated here: claims take a separate route.
+- **What the rerun showed, in words:** Nearly all short-id citation drops are gone (one team drop with a short id remains). The team's answer rate on answerable cases is not clearly different from the single agent's: the interval excludes zero but the exact McNemar test, on a handful of discordant cases, does not agree. On the abstention side the team abstains less than the single agent where the evidence is insufficient, and there the interval and McNemar both say worse. The team costs more tokens and time. It is not better on groundedness. A few team cards ran into the 8 s deadline, and the record reports that per system. No metric values are stated here: claims take a separate route. An earlier version of this entry, and the first note of the record, said the team "beats" the single agent on answer rate; that was wrong, because the McNemar test had not been computed (see entry 37).
 - **`retrieval` in `settings_changed`:** the E3 record now writes the retrieval config as a setting. The old record did not, so the comparison shows it as changed from `absent`. It was newly recorded, not changed.
 - **Evidence:** the three reruns above, each listing its predecessor in `supersedes`, and `config.superseded` in them.
 - **Would change if:** a model cites some other short form (for example a bare number).
@@ -292,3 +293,20 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **What was wrong:** The text was hardcoded in the runner. `E3-20261103T221004658482Z` has `labels_reviewed: true` and `label_source: scenarios`, and its `notes[0]` ends "Dev labels are unreviewed". The flag is right and the sentence is wrong. The record is left unedited, as records are. The part of the sentence about the judge stands: the judge is one local model, and no person has reviewed a judge sample.
 - **Chosen:** Notes and analyses now take the sentence from `records.label_text`, which reads the same flag and source that `write_run` records. The E2 analysis, E3's finding and selection note, and the cascade selection text were changed. No `docs` or run record was edited by hand.
 - **Evidence:** the fix commit on `task/T4.2`; `results/error-analysis-e2.md`, whose label line is generated from the flag.
+
+## 37. McNemar was missing on answered/abstained outcomes; the finding now needs it, and the records were rebuilt
+- **Date / task:** 2026-11-03, T4.2 (verifier attempt 1)
+- **Who:** The verifier found it; the coordinator ordered the fix.
+- **What was wrong:** `eval/series.py` had no per-case outcome for `answer_when_answerable` and `abstain_when_insufficient`, so every card comparison in E2 and E3 saved `mcnemar_p` as null, and the E3 finding called a small difference "better" from the interval alone. `answer_when_answerable` counts cards that did not abstain; it does not measure whether the answer was right.
+- **Chosen:** Both are now paired yes/no series (overall and per category), so the exact test is computed and `check_run` recomputes it. The finding says better or worse only if the interval excludes zero and McNemar agrees, and otherwise says no clear difference with the discordant counts. It calls the metric an answer rate, says the abstention side rests on 16 cases, and says the zero injected claims in suggestions is vacuous. `experiments/rebuild_records.py` rewrites only derived fields from the saved rows with no model call, checks the predictions are byte-identical, and writes a new record that supersedes the old one with this reason.
+- **Same gap, not fixed here:** `false_alert_rate` is also a per-case yes/no outcome on the negative cases and its comparisons save null. Adding it would change E4's current records, which the cascade selection and `rescore` name by id, so it is left to the coordinator.
+- **Reported, not applied:** The team repeats a finding inside one card; the repeats are counted and grounded_rate without them is shown in the record. `docs/TESTING.md` has no rule for dropping repeats, so the metric is unchanged.
+- **Evidence:** the rebuilt records, each with `config.rebuilt` and `supersedes`.
+
+## 38. The instruction guard's patterns were narrowed to orders aimed at the assistant
+- **Date / task:** 2026-11-03, T4.2 (verifier attempt 1)
+- **Who:** The coordinator.
+- **What was wrong:** The first patterns flagged ordinary phrases ("ignore the instructions on the box", "tell the assistant manager I am late"), so the false-drop rate on look-alikes was far higher than the record said.
+- **Chosen:** Narrower patterns, checked turn by turn: they flag exactly the same dev turns as the first ones (all 16 injecting turns, none of the others), so no existing record is affected. The look-alike phrases are reported in three sets: seen, used while narrowing, and fresh phrases measured once and never tuned against. Only the fresh set is a fair rate.
+- **Known cost:** One fresh ordinary phrase still flags ("forget the above numbers"), because "ignore the above" is itself an injection in dev. It is left as measured.
+- **Would change if:** a held-out injection set shows a worse catch rate.
