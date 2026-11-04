@@ -826,6 +826,18 @@ def catch_far(outcomes: dict[str, dict[str, Outcome]], system: str, cases: list[
             "far": (sum(alerts(outcomes[i]["base"], system) for i in neg), len(neg))}
 
 
+def precision_note(tables: dict[str, dict[str, dict[str, tuple[int, int]]]]) -> str:
+    """The calculated-precision note, and for every system and source whose false-alert count is zero, that count:
+    a precision of 1.0 there is the arithmetic of a zero count, not a measured precision."""
+    zero = [f"{sy} on {src}: 0 of {n} non-contradiction cases raised an alert"
+            for sy, by in tables.items() for src, t in by.items() if t["far"][0] == 0 and (n := t["far"][1])]
+    if not zero:
+        return select_cascade.PRECISION_NOTE
+    return (f"{select_cascade.PRECISION_NOTE}. Zero observed false alerts: " + "; ".join(zero) + ". Where the false-alert "
+            "count is zero the calculated precision is the arithmetic of a zero count, not a measured precision, and does "
+            "not show the checker never raises a false alert")
+
+
 def mode_stats(by_source: dict[str, tuple[list[Case3], dict[str, dict[str, Outcome]]]]) -> dict[str, float]:
     """For the trained model alone: mean over the sources of alert accuracy, and of speaker plus injection flip rate."""
     acc, flip = [], []
@@ -960,8 +972,8 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
         "alert_precision": {sy: {src: {f"{p:.0%}": select_cascade.alert_precision(
             rate(tables[sy][src]["catch"]) or 0.0, rate(tables[sy][src]["far"]) or 0.0, p)
             for p in select_cascade.BASE_RATES} for src in CONSISTENCY_SOURCES} for sy in CHECKERS},
-        "alert_precision_note": select_cascade.PRECISION_NOTE,
-        "provenance": provenance, "hand_read_file": hand_read.as_posix() if hand_read else None,
+        "alert_precision_note": precision_note(tables),
+        "provenance": provenance, "hand_read_file": hand_read.relative_to(root).as_posix() if hand_read else None,
         "inference_input": "low-confidence speakers pass as unknown and every string is escaped before the trained model sees it",
         "selection_data": "dev (selection data, not held out)",
         "claude_calls": 0, "started_at": started,

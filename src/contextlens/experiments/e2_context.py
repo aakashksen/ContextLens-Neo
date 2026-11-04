@@ -33,6 +33,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from contextlens.agents.graph import AGENTS
 from contextlens.agents.single import (
     FullTranscriptAssistant,
     RecentTurnsAssistant,
@@ -94,7 +95,8 @@ BROKEN_MAX = 0.10  # share of cases whose model or store call failed outright
 TIMEOUT_MAX = 0.25  # share of cases that ran out of time
 INVALID_MAX = 0.50  # share of cases whose output was not valid twice
 STREAK_LOCAL, STREAK_CLOUD = 5, 3  # consecutive failed cases that end a system at once
-BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:")
+BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:", "failed:")
+AGENT_PREFIXES = tuple(f"{a}: " for a in AGENTS)  # the team writes "memory: llm error: ...", "assistance: failed: ..."
 
 SAVED = {
     "grounded_rate", "unsupported_claim_rate", "abstain_when_insufficient", "answer_when_answerable",
@@ -325,11 +327,14 @@ def judge_rows(judge: Judge, preds: list[Prediction]) -> list[Prediction]:
 # ---------------------------------------------------------------- health
 
 def row_state(p: Prediction) -> str:
-    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok."""
+    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok.
+    A note may start with the team member that wrote it. One dead specialist is broken even if the others found something:
+    the call failed, and check_health's limit decides how many such cards a run may have."""
     if p.errored:
         return "broken"
     notes = p.card.missing if p.card else []
     for n in notes:
+        n = n.removeprefix(next((a for a in AGENT_PREFIXES if n.startswith(a)), ""))  # a specialist's failure is a failure
         if n.startswith(BROKEN_PREFIXES):
             return "invalid" if "schema validation" in n else "broken"
     return "timeout" if any("deadline reached" in n for n in notes) else "ok"

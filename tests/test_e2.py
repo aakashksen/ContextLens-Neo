@@ -928,3 +928,54 @@ def test_a_timeout_failure_reason_still_names_the_timeout() -> None:
     exc = LLMError("request to http://127.0.0.1:11434/api/chat failed: timed out")
     e2.build_memory(_scn("f3", "recall", ["a", "b"]), _Raises(exc), lambda cid, why: seen.append((cid, why)))  # type: ignore[arg-type]
     assert "timed out" in seen[0][1] and seen[0][1].startswith("LLMError:")
+
+
+# ---------------------------------------------------------------- a team's notes carry the specialist's name
+
+def _team_row(*notes: str, findings: bool = False) -> Prediction:
+    ev = EvidenceRef(turn_id="c:t0", quote="the plan is on friday", speaker="Maya", start_ms=0)
+    found = [Finding(agent="memory", kind="recall", statement="s", evidence=[ev], confidence=0.9)] if findings else []
+    status = "partial" if findings else "abstained"
+    return _row("t", Card(mode="recall", status=status, findings=found, missing=list(notes)))
+
+
+def test_a_failure_note_after_a_specialist_name_reads_like_one_without() -> None:
+    assert e2.row_state(_team_row("memory: llm error: request to x timed out", "consistency: llm error: request to x timed out",
+                                  "no verified findings")) == "broken"
+    for note in ("memory: llm error: connection refused", "consistency: tool failed: KeyError", "memory: guard failed: OSError",
+                 "assistance: failed: ValueError", "consistency: failed: RuntimeError", "store failed: OSError",
+                 "the store did not answer in time", "error: boom"):
+        assert e2.row_state(_team_row(note)) == "broken", note
+    assert e2.row_state(_team_row("memory: llm error: output failed schema validation twice: x")) == "invalid"
+    assert e2.row_state(_team_row("consistency: deadline reached")) == "timeout"
+    for note in ("memory: no finding passed the checks", "consistency: step limit reached", "no verified findings"):
+        assert e2.row_state(_team_row(note)) == "ok", note
+
+
+def test_one_dead_specialist_beside_verified_findings_is_still_a_failed_call() -> None:
+    row = _team_row("memory: llm error: request to x timed out", findings=True)
+    assert e2.row_state(row) == "broken"  # a model call failed outright; the 10% limit absorbs an isolated one
+    ok = _team_row("memory: no finding passed the checks", findings=True)
+    assert e2.check_health("team", [ok] * 19 + [row])["broken"] == 1
+    with pytest.raises(e2.RunBroken, match="failed outright"):
+        e2.check_health("team", [ok] * 7 + [row] * 3)
+
+
+def test_a_team_with_a_dead_server_ends_the_run_at_the_streak_and_saves_no_reusable_row(tmp_path: Path) -> None:
+    from contextlens.agents.graph import TeamAssistant
+    from contextlens.agents.tools import Tools
+
+    def dead_team(sc: Scenario) -> TeamAssistant:
+        store = e2.build_store(sc)
+        tools = Tools(store, Retriever(store, HashEmbedder()), MemoryStore(), sc.request.as_of_seq, sc.conversation.id)
+        llm = FakeLLM([])  # every call raises LLMError
+        return TeamAssistant({"memory": llm, "consistency": llm, "assistance": llm}, tools, "v1")
+
+    saved: list[Prediction] = []
+    with pytest.raises(e2.RunBroken, match="in a row failed outright"):
+        e2.run_system("team", _cases(), dead_team, 3, on_row=saved.append)
+    assert len(saved) == 3 and all(e2.row_state(p) == "broken" for p in saved)
+    path = tmp_path / "rows.jsonl"
+    path.write_text("\n".join(json.dumps({"commit": "c", "subset": "s", "winner": "team", "model": "m", "calls": 0,
+                                          "row": json.loads(p.model_dump_json())}) for p in saved), encoding="utf-8")
+    assert e2._saved_rows(path, "c", "s", "team", {p.scenario_id for p in saved}, "m")[0] == {}
