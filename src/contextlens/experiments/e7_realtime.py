@@ -34,6 +34,7 @@ Run (the person runs these; the real run needs a GPU turn, Ollama, the speech se
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 import warnings
@@ -621,7 +622,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_real(args: argparse.Namespace) -> int:
     """The real parts, as the live backend builds them. Unloads the Ollama models before returning, so the GPU
-    turn can be released."""
+    turn can be released. A full run needs the metrics port, since its record says the obs profile was on."""
+    if not args.only_meeting and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
+        print("set CONTEXTLENS_METRICS_PORT (see docs/run-everything.md, Metrics) so E7 runs with the obs profile on",
+              file=sys.stderr)
+        return 2
     from contextlens.api import production
     from contextlens.llm.client import unload_ollama
     from contextlens.speech.client import GrpcSpeech

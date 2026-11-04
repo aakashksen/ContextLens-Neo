@@ -513,3 +513,11 @@ def test_the_speech_address_defaults_to_the_gpu_service_and_is_recorded(repo: Pa
     with pytest.warns(RuntimeWarning, match="whisper ran on cpu"):
         cfg = json.loads(run(repo).read_text(encoding="utf-8"))["config"]
     assert cfg["speech_address"] == "127.0.0.1:50052" and cfg["devices"]["whisper"]["actual"] == "cpu"
+
+
+def test_a_full_run_refuses_to_start_without_the_metrics_port(monkeypatch, capsys) -> None:
+    """The record says the obs profile was on, so the metrics endpoint has to be served; the check comes first,
+    before any model loads. The one-meeting check needs no metrics."""
+    monkeypatch.delenv("CONTEXTLENS_METRICS_PORT", raising=False)
+    assert e7.main(["run", "--alone"]) == 2
+    assert "CONTEXTLENS_METRICS_PORT" in capsys.readouterr().err
