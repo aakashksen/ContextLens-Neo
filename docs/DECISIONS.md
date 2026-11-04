@@ -329,3 +329,9 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Would change if:** a held-out injection set shows a worse catch rate.
 
 Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 to 39 after the judge-check entry took 27. Committed records and run notes that cite a T4.2 entry by its old number (for example "see entry 37" for the McNemar fix) mean the entry that is now one higher.
+
+## 40. Judge for the final numbers, and selection recomputed under the cloud grader (2026-11-03, T9.1, written before seeing the recomputed numbers)
+- **Chosen, by the coordinator:** after the judge check (record JC-20261104T040402268688Z) found poor agreement, Sonnet is the judge for E8, with the local judge reported beside it on the same claims. Selection is recomputed under Sonnet by the same written score as E3, mean(grounded_rate, min(answer_when_answerable, abstain_when_insufficient)), on the same claims and cards, with Sonnet grading every claim of every card system of the current E3 cards record. Only grounded_rate changes. Sonnet doesn't grade systems it wrote. No new answers are generated. The outcome stands whichever system it favours; if it differs from `single`, it goes to the coordinator before anything else changes.
+- **Considered:** keeping the local judge with a caveat. It lost because disagreements lean one way, and the choice of system rests on this rate.
+- **Evidence:** JC-20261104T040402268688Z. Neither judge is ground truth; a blind reader's check of the disagreements is in hand, reported as an agent reader, not a person, unless a person reads them.
+- **Would change it:** a reader finding the cloud grader's rejections mostly wrong.
