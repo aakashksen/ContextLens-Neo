@@ -10,6 +10,9 @@ retrieval score could separate and the other 30. Nothing is run here without the
 
 Run (uses Ollama; the person starts it, on a committed tree):
   .venv/Scripts/python -m contextlens.experiments.team_attempt --run-conditions "<what else was running>"
+  .venv/Scripts/python -m contextlens.experiments.team_attempt --arm team_shipping_changed --run-conditions "<...>"   (entry 51)
+The finished run keeps results/partial/e3t-rows.jsonl: its rows are keyed by commit, subset, system and model, so only a rerun
+at the same commit reuses them.
 """
 
 import argparse
@@ -43,7 +46,9 @@ SOURCES = ("scenarios", "scenarios_extra")  # the old 148 dev cases, then the ne
 SYSTEMS = ("single", "team", "team_changed")  # entry 48's attempt; unchanged by the shipping arm
 SHIPPING = "team_shipping"
 RUN_SYSTEMS = (*SYSTEMS, SHIPPING)
-PAIRS = (("team", "single"), ("team_changed", "single"), ("team_changed", "team"), (SHIPPING, "single"), (SHIPPING, "team"))
+SHIPPING_CHANGED = "team_shipping_changed"  # entry 51; run alone by experiments/team_arm.py, never part of RUN_SYSTEMS
+PAIRS = (("team", "single"), ("team_changed", "single"), ("team_changed", "team"), (SHIPPING, "single"), (SHIPPING, "team"),
+         (SHIPPING_CHANGED, "single"), (SHIPPING_CHANGED, "team"), (SHIPPING_CHANGED, "team_changed"), (SHIPPING_CHANGED, SHIPPING))
 CHALLENGERS = ("team", "team_changed")
 DECISION_ENTRY = 40
 ATTEMPT = "team-merge-memory-gap-1"
@@ -70,9 +75,13 @@ _TWIN = re.compile(r"^(syn-xtra-.+)-(ins|ans)$")
 def make_assistant(system: str, sc: Scenario, writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
                    memory: MemoryStore) -> Assistant:
     """`team_changed` is E3's team build with the one switch on, so the three systems share tools, writer and deadline.
-    `team_shipping` is the plain team with a `PromptedChecker` on the writer, as production builds it."""
-    if system == SHIPPING:
-        return e3.make_card_assistant("team", sc, writer, embedder, retrieval_config, memory, checker=PromptedChecker(writer))
+    `team_shipping` is the plain team with a `PromptedChecker` on the writer, as production builds it.
+    `team_shipping_changed` is that build with the same switch on (entry 51)."""
+    if system in (SHIPPING, SHIPPING_CHANGED):
+        team = e3.make_card_assistant("team", sc, writer, embedder, retrieval_config, memory, checker=PromptedChecker(writer))
+        if system == SHIPPING_CHANGED:
+            team.memory_gap_abstains = True  # type: ignore[attr-defined]
+        return team
     if system != "team_changed":
         return e3.make_card_assistant(system, sc, writer, embedder, retrieval_config, memory)
     team = e3.make_card_assistant("team", sc, writer, embedder, retrieval_config, memory)
@@ -378,24 +387,26 @@ def _attempt(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
         paths[source] = write_run(EXPERIMENT, SPLIT, config, models, {"recall": PROMPT_VERSION}, metrics, intervals, attempts,
                                   rows[source], digest, comparisons=comparisons, scenario_source=source, root=root)
         say(f"wrote {paths[source].name}")
-    (root / PARTIAL_REL).unlink(missing_ok=True)  # the records hold the rows now
-    return paths
+    return paths  # the partial rows stay: they are keyed by commit, so a later commit never reuses them
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--run-conditions", required=True, help="what else was running while latency was measured")
+    ap.add_argument("--arm", choices=[SHIPPING_CHANGED],
+                    help="run only this arm (entry 51), beside the saved rows of the two E3T records; omit to run entry 48's four systems")
     args = ap.parse_args(argv)
     if not args.run_conditions.strip():
         ap.error("--run-conditions must say something")
+    from contextlens.experiments import team_arm
     from contextlens.llm.client import Embedder, OllamaClient
 
+    run, name = (team_arm.run_arm, team_arm.EXPERIMENT) if args.arm else (run_attempt, EXPERIMENT)
     try:
-        paths = run_attempt(writer=OllamaClient(e2.WRITER_MODEL), judge_llm=OllamaClient(e2.JUDGE_MODEL),
-                            embedder=Embedder(e2.EMBED_MODEL), ctl=OllamaCtl(),
-                            retrieval_config=e2.load_retrieval_config(ROOT / e2.CONFIG_REL), run_conditions=args.run_conditions)
+        paths = run(writer=OllamaClient(e2.WRITER_MODEL), judge_llm=OllamaClient(e2.JUDGE_MODEL), embedder=Embedder(e2.EMBED_MODEL),
+                    ctl=OllamaCtl(), retrieval_config=e2.load_retrieval_config(ROOT / e2.CONFIG_REL), run_conditions=args.run_conditions)
     except (RunBroken, OSError, ValueError, KeyError) as exc:
-        print(f"{EXPERIMENT} stopped, nothing more written: {exc}", file=sys.stderr)
+        print(f"{name} stopped, nothing more written: {exc}", file=sys.stderr)
         return 2
     print(json.dumps({k: v.as_posix() for k, v in paths.items()}, indent=1))
     return 0
