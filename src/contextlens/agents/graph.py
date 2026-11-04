@@ -24,7 +24,7 @@ from contextlens.agents.single import (
 from contextlens.agents.specialist import Outcome, run_specialist
 from contextlens.agents.tools import Tools
 from contextlens.llm.client import LLMClient, LLMResult
-from contextlens.replay.runner import Context
+from contextlens.replay.runner import Context, DroppedFinding
 from contextlens.schemas import ButtonRequest, Card, Turn
 
 AGENTS = ("memory", "consistency", "assistance")
@@ -44,6 +44,7 @@ class _Job:
     ms: dict[str, float] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     degraded: bool = False
+    memory_empty: bool = False  # the memory agent's first pass finished cleanly and found nothing
     card: Card | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -62,9 +63,10 @@ class TeamAssistant:
 
     def __init__(
         self, llm_by_agent: dict[str, LLMClient], tools: Tools, prompt_version: str,
-        deadline_s: float = 8.0, max_followups: int = 1,
+        deadline_s: float = 8.0, max_followups: int = 1, memory_gap_abstains: bool = False,
     ) -> None:  # fmt: skip
         self.llms, self.tools, self.deadline_s, self.max_followups = llm_by_agent, tools, deadline_s, max_followups
+        self.memory_gap_abstains = memory_gap_abstains
         has_checker = tools.checker is not None
         self._specs = {
             "memory": (memory_agent.KIND, memory_agent.system(prompt_version), memory_agent.TOOLS),
@@ -129,6 +131,8 @@ class TeamAssistant:
             out = Outcome(notes=[f"{name}: failed: {type(exc).__name__}"], degraded=True)
         for f in out.findings:
             job.evidence.add(f)
+        if name == "memory" and request is None and not out.findings and not out.notes and not out.degraded:
+            job.memory_empty = True
         with job.lock:
             job.notes += out.notes
             job.degraded = job.degraded or out.degraded
@@ -154,11 +158,18 @@ class TeamAssistant:
             finally:
                 followup_ms += (time.perf_counter() - f0) * 1000
 
-        if job.evidence.all():
+        # Entry 40: memory looked and found nothing, so findings from the other agent do not make an answer.
+        withheld = self.memory_gap_abstains and job.memory_empty and bool(job.evidence.all())
+        if job.evidence.all() and not withheld:
             mode, note = decide(llm, req, job.evidence.all, follow_up, job.end, mine, self.max_followups)
         findings = job.evidence.all()
         missing = [*job.notes, *([note] if note else [])]
-        if findings:
+        if withheld:
+            ctx.drops += [DroppedFinding(reason="memory_empty", statement=f.statement, turn_ids=[e.turn_id for e in f.evidence])
+                          for f in findings]
+            card = _abstained("memory found nothing relevant, so the other findings are withheld")
+            card = card.model_copy(update={"missing": [*missing, *card.missing]})
+        elif findings:
             status = "partial" if job.degraded or note else "answered"
             card = Card(mode=mode, status=status, findings=findings, missing=missing)
         else:
