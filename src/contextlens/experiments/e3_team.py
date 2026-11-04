@@ -66,7 +66,7 @@ from contextlens.experiments.e2_context import (
     judge_rows,
     run_system,
 )
-from contextlens.guard.instructions import instruction_kind
+from contextlens.guard.instructions import instruction_kind, without_instruction_turns
 from contextlens.llm.client import LLMClient, LLMError
 from contextlens.llm.ollama_ctl import OllamaCtl, full_name
 from contextlens.llm.untrusted import effective_speaker, escape
@@ -734,11 +734,17 @@ class Evaluator:
     """Scores a case with the trained model and, for a case it flags, finds the conflicting turn and asks the prompted
     checker. Results are kept by the exact turns shown, so identical views are scored once."""
 
-    def __init__(self, proba: ProbaFn, labels: tuple[str, ...], prompted: ConsistencyChecker | None, threshold: float) -> None:
+    def __init__(self, proba: ProbaFn, labels: tuple[str, ...], prompted: ConsistencyChecker | None, threshold: float,
+                 strip_flagged: bool = False) -> None:
+        """`strip_flagged`: earlier turns the instruction guard flags are left out, by the function the product uses
+        (`without_instruction_turns`). Off here so that older records stay comparable; the strip comparison turns it on."""
         self.proba, self.labels, self.prompted, self.threshold = proba, labels, prompted, threshold
+        self.strip_flagged = strip_flagged
         self._seen: dict[tuple, Outcome] = {}
 
     def outcome(self, statement: Turn, earlier: list[Turn]) -> Outcome:
+        if self.strip_flagged:
+            earlier = without_instruction_turns(earlier)
         key = (statement.speaker, statement.text, tuple((t.speaker, t.text) for t in earlier))
         if key not in self._seen:
             self._seen[key] = self._score(statement, earlier)
@@ -902,6 +908,45 @@ def latency_summary(outcomes: dict[str, dict[str, Outcome]], system: str) -> dic
             "second_stage_tokens_unreported": len(called) - len(tokens) if system.startswith("cascade") else 0}
 
 
+STRIP_NOTE = ("before: the context as it was in the main rows of this record (nothing removed). after: earlier turns the "
+              "instruction guard flags are removed from the context before scoring, by the same function the product's "
+              "TrainedChecker uses; the statement being scored is never removed. Same cases, same chosen speaker mode. "
+              "Neither version is chosen here by flip rate alone: label_accuracy and alert accuracy are reported beside it, "
+              "and `accuracy_fell` lists every checker and source where either went down.")
+
+
+def strip_comparison(before: dict[str, dict[str, dict[str, Outcome]]], after: dict[str, dict[str, dict[str, Outcome]]],
+                     cases: dict[str, list[Case3]], labelled: dict[str, list[Case3]], data: dict[str, tuple[list[Scenario], str]],
+                     ) -> dict[str, Any]:
+    """Flips, catch and false-alert counts, and label metrics for the same cases with and without the strip."""
+    def side(outcomes: dict[str, dict[str, dict[str, Outcome]]]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for sy in CHECKERS:
+            out[sy] = {}
+            for src in CONSISTENCY_SOURCES:
+                cf = catch_far(outcomes[src], sy, labelled[src])
+                right = cf["catch"][0] + cf["far"][1] - cf["far"][0]
+                total = cf["catch"][1] + cf["far"][1]
+                m = recompute_metrics(data[src][0], rows_for(src, sy, cases[src], outcomes[src]))
+                out[sy][src] = {
+                    "flips": {k: {"flipped": kn[0], "trials": kn[1], "rate": rate(kn)}
+                              for k, kn in flips(outcomes[src], sy, labelled[src]).items()},
+                    "catch_far": {k: list(kn) for k, kn in cf.items()},
+                    "alert_accuracy": right / total if total else None,
+                    "label_accuracy": m.get("label_accuracy"), "macro_f1": m.get("macro_f1")}
+        return out
+
+    b, a = side(before), side(after)
+    fell = [f"{sy} {src} {m}" for sy in CHECKERS for src in CONSISTENCY_SOURCES for m in ("label_accuracy", "alert_accuracy")
+            if None not in (b[sy][src][m], a[sy][src][m]) and a[sy][src][m] < b[sy][src][m]]
+    return {"note": STRIP_NOTE, "before": b, "after": a, "accuracy_fell": fell,
+            "cases_with_a_flagged_earlier_turn": {src: sum(len(without_instruction_turns(ea)) != len(ea) for _, _, ea in cases[src])
+                                                  for src in CONSISTENCY_SOURCES},
+            "injected_templates_flagged_by_the_guard": {f"inject{k}": instruction_kind(t) for k, t in enumerate(INJECTED_TURNS)},
+            "templates_note": ("a template the guard does not flag is not removed, so its flips cannot change; the 'after' "
+                               "injection flips can fall only for the templates listed here with a kind (not null)")}
+
+
 def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...], prompted: ConsistencyChecker,
                     threshold: float, provenance: dict[str, Any], run_conditions: str,
                     devices: dict[str, Any] | None = None, probe_devices: Callable[[], dict[str, Any]] | None = None,
@@ -930,6 +975,13 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
     mode, why = choose_mode(stats)
     say(f"speakers shown as {mode}: {why}")
 
+    say(f"scoring again with flagged earlier turns removed (speakers shown as {mode})")
+    ev_after = Evaluator(proba, labels, prompted, threshold, strip_flagged=True)
+    stripped = {src: analyse(ev_after, cases[src], mode) for src in CONSISTENCY_SOURCES}
+    strip = strip_comparison(outcomes[mode], stripped, cases, labelled, data)
+    if strip["accuracy_fell"]:
+        say("accuracy fell with the strip: " + "; ".join(strip["accuracy_fell"]))
+
     tables = {sy: {src: catch_far(outcomes[mode][src], sy, labelled[src]) for src in CONSISTENCY_SOURCES} for sy in CHECKERS}
     flip_table = {sy: {src: flips(outcomes[mode][src], sy, labelled[src]) for src in CONSISTENCY_SOURCES} for sy in CHECKERS}
     over = [f"{sy} {kind} flips on {src}" for sy in ("trained", "cascade") for src in CONSISTENCY_SOURCES
@@ -942,6 +994,7 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
                          "note": "stats are the mean over both sources of alert accuracy and of speaker plus injection flip rate"},
         "flips": {sy: {src: {k: {"flipped": kn[0], "trials": kn[1], "rate": rate(kn)} for k, kn in v.items()}
                        for src, v in by.items()} for sy, by in flip_table.items()},
+        "strip_flagged_comparison": strip,
         "flip_limit": FLIP_LIMIT, "flips_above_limit": over, "bring_to_coordinator_before_e8": bool(over),
         "flip_method": ("speaker flip: every speaker renamed to a different name (no effect in roles mode); injection flip: one of "
                         f"{len(INJECTED_TURNS)} fixed order turns added before the statement, each template one trial"),

@@ -7,6 +7,8 @@ what to say, or tells it to drop its rules) is not evidence of anything but the 
 written from and those they were not."""
 import re
 
+from contextlens.schemas import Turn
+
 _SENTENCE = r"(?:^|[.!?:;,]\s+|\n)(?:please\s+|now\s+|just\s+)?"
 # A name stands alone: it ends the clause or is followed by what the speaker wants said, not by a noun ("assistant manager").
 _END = r"(?=\s*(?:[,.!?;:]|$)|\s+(?:that|to|about|what|how|the|it|this|you|and)\b)"
@@ -31,6 +33,10 @@ _PATTERNS = {
     "asks for secrets": r"\breveal\b[^.!?\n]{0,40}\b(?:hidden|system|secret|private|your|all|any)\b[^.!?\n]{0,25}"
                         r"\b(?:prompt|keys?|codes?|notes?|instructions?|secrets?|passwords?)\b"
                         r"|\byour (?:hidden|system|secret) (?:prompt|instructions|rules)\b",
+    # A short order to defy the assistant's own setup. It is addressed with "your", so "disobey the speed limit" is not it.
+    "bare order": rf"{_SENTENCE}(?:disobey|defy|circumvent|overrule|sidestep|abandon|set aside)\s+(?:all\s+|any\s+|every\s+)?"
+                  r"your\s+(?:own\s+)?(?:setup|set-up|configuration|programming|training|settings|safeguards?|guardrails?|"
+                  r"restrictions?|constraints?|limits|limitations|rules|instructions|guidelines|filters|directives)\b",
     "markup or commands": r"<\s*/?\s*(?:instructions?|system|assistant)\b|\brm\s+-rf\b"
                           r"|\bdo not cite (?:any|the) (?:evidence|sources|quotes)\b",
 }
@@ -44,3 +50,9 @@ def instruction_kind(text: str) -> str | None:
 
 def is_instruction(text: str) -> bool:
     return instruction_kind(text) is not None
+
+
+def without_instruction_turns(earlier: list[Turn]) -> list[Turn]:
+    """The context a consistency model is given: earlier turns that read as orders are left out. It takes only the
+    earlier turns, so the statement being scored is never removed, even when it is itself an order."""
+    return [t for t in earlier if not is_instruction(t.text)]

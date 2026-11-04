@@ -394,7 +394,7 @@ def _score_systems(
         finally:
             _free()
 
-    score("trained", lambda: cm.TrainedChecker.from_checkpoint(ckpt, device=device))
+    score("trained", lambda: cm.TrainedChecker.from_checkpoint(ckpt, device=device, strip_instructions=False))
     score("tfidf", lambda: TfidfChecker().fit(train.pairs))
     score("zeroshot", make_zeroshot)
     score("prompted", make_prompted, warm=True)
