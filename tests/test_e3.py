@@ -769,6 +769,7 @@ def test_label_wording_follows_the_flag_and_the_source(monkeypatch, tmp_path):
 # ---- McNemar on the paired answered/abstained outcomes, the finding's wording, and the rebuild ----
 
 from contextlens.experiments import rebuild_records  # noqa: E402
+from contextlens.consistency import select_cascade  # noqa: E402
 
 
 def two_systems(answered_a, answered_b):
@@ -881,3 +882,59 @@ def test_rebuild_of_an_e2_record_gives_mcnemar_on_its_answer_comparisons(cards_r
     assert binary and all(c["mcnemar_p"] is not None for c in binary)
     assert {(c["a"], c["b"], c["metric"]) for c in new["comparisons"]} == {(c["a"], c["b"], c["metric"]) for c in old["comparisons"]}
     assert check("E2", root=cards_repo, min_n=len(_cases()), split="dev") == []
+
+
+# ---- phase 4 review fixes: D2 precision note, D5 repo-relative hand-read path ----
+
+def test_the_precision_note_says_when_it_rests_on_zero_false_alarms_and_gives_the_count():
+    tables = {"trained": {"scenarios": {"catch": (7, 17), "far": (0, 65)}, "decode": {"catch": (5, 10), "far": (1, 503)}},
+              "cascade": {"scenarios": {"catch": (7, 17), "far": (0, 65)}}}
+    note = e3.precision_note(tables)
+    assert note.startswith(select_cascade.PRECISION_NOTE)
+    assert "trained on scenarios: 0 of 65 non-contradiction cases raised an alert" in note
+    assert "cascade on scenarios: 0 of 65" in note
+    assert "arithmetic of a zero count" in note and "not a measured precision" in note
+    assert "decode" not in note.split(select_cascade.PRECISION_NOTE, 1)[1]
+
+
+def test_the_precision_note_is_the_plain_note_when_no_false_alarm_count_is_zero():
+    tables = {"trained": {"decode": {"catch": (5, 10), "far": (1, 503)}}}
+    assert e3.precision_note(tables) == select_cascade.PRECISION_NOTE
+
+
+def test_a_new_consistency_record_stores_the_hand_read_path_relative_to_the_repo(crepo):
+    hand = crepo / e3.HAND_READ_REL
+    hand.parent.mkdir(parents=True, exist_ok=True)
+    hand.write_text("x", encoding="utf-8")
+    paths = e3.run_consistency(root=crepo, proba=fake_proba, labels=cm.LABELS, prompted=SaysYes(), threshold=0.95,
+                               provenance={}, run_conditions="test", hand_read=hand, say=lambda t: None)
+    cfg = json.loads(paths["decode"].read_text(encoding="utf-8"))["config"]
+    assert cfg["hand_read_file"] == "results/local/false-alarms-trained.md"
+    assert "alert_precision_note" in cfg
+
+
+def test_rebuild_turns_an_absolute_hand_read_path_into_the_repo_relative_one(crepo):
+    paths = go(crepo)
+    path = paths["decode"]
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["config"]["hand_read_file"] = "C:/gone/_worktrees/ContextLensV2/T4.2/results/local/false-alarms-trained.md"
+    path.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
+    new = json.loads(rebuild_records.rebuild(crepo, rec["run_id"], say=lambda t: None).read_text(encoding="utf-8"))
+    assert new["config"]["hand_read_file"] == "results/local/false-alarms-trained.md"
+
+
+def test_rebuild_leaves_a_missing_hand_read_path_missing(crepo):
+    paths = go(crepo)
+    rec = json.loads(paths["decode"].read_text(encoding="utf-8"))
+    new = json.loads(rebuild_records.rebuild(crepo, rec["run_id"], say=lambda t: None).read_text(encoding="utf-8"))
+    assert new["config"]["hand_read_file"] is None
+
+
+def test_rebuild_adds_the_zero_count_warning_to_an_older_precision_note(crepo):
+    path = go(crepo)["decode"]
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["config"]["alert_precision_note"] = select_cascade.PRECISION_NOTE
+    rec["config"]["catch_far"]["trained"]["decode"]["far"] = [0, 12]
+    path.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
+    new = json.loads(rebuild_records.rebuild(crepo, rec["run_id"], say=lambda t: None).read_text(encoding="utf-8"))
+    assert "trained on decode: 0 of 12 non-contradiction cases raised an alert" in new["config"]["alert_precision_note"]

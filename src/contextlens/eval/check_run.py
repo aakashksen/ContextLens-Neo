@@ -214,6 +214,10 @@ def _header_problems(rec: dict[str, Any], root: Path, min_n: int) -> list[str]:
     problems += training_loss_problems(rec)
     if "label_source" in rec and rec["label_source"] != LABEL_SOURCE.get(rec["scenario_source"]):  # older records have none
         problems.append(f"label_source {rec['label_source']!r} is not the one for scenario source {rec['scenario_source']!r}")
+    config = rec["config"]
+    if isinstance(config, dict) and "labels_reviewed" in config and config["labels_reviewed"] != rec["labels_reviewed"]:
+        problems.append(f"config.labels_reviewed ({config['labels_reviewed']!r}) and labels_reviewed "
+                        f"({rec['labels_reviewed']!r}) disagree; the top-level flag is the one write_run sets")
     problems += _ancestor_problems(rec, root)
     if min_n and rec["n"] < min_n:
         problems.append(f"n={rec['n']} is below --min-n {min_n}")
