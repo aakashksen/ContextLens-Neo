@@ -10,6 +10,17 @@
 
 **Spec:** `docs/DESIGN.md`. Testing rules: `docs/TESTING.md`.
 
+## Final stretch, the person's direction (2026-11-04)
+This overrides older text in this plan where they differ. Background and evidence are in `docs/HANDOFF.md`. ContextLens starts only after SPROUT finishes, when the coordinator says go.
+- **Start.** Merge `prep/grade` (entry 51's result) and the other finished branches named in the handoff, and record the combined arm. Set up and check the Haiku judge. Then follow the order below.
+- **GPU order, one at a time.** T7.1 (E6), T6.2 (E5), T8.5 (E7), T9.1 (E8). The GPU never waits on a build: build the next job on the CPU while the current one runs.
+- **Alongside on the CPU.** During E6: T6.2's code and E7's code. During T6.2: T7.2, which needs only E6's chosen prompt. During E7: T9.1's trimmed code. During T9.1: T9.3's template and Haiku judging.
+- **Checks.** The independent verifier runs on T6.2, T8.5 and T9.1. T7.1, T7.2 and T9.3 use their acceptance commands (`"verifier": false` in `tasks.json`). No more phase reviews.
+- **Judges.** Haiku through `claude -p`, in parallel, is the judge. Sonnet is a second named figure on final numbers. No local-model judging. Check Haiku first against about 300 saved claims with both grades; if it's clearly worse than the local judge against Sonnet, tell the coordinator. Comparisons with old numbers regrade saved rows, so one judge covers both sides.
+- **Cancelled.** The trained injection classifier, its tests and the strip run. The word-pattern guard and citation rule stay, and the report states the measured 14 of 60 catch rate with flips measured so far. No bullet claims protection. Also cancelled: the E2 cloud rerun, whose known number-rule bug the report states.
+- **Before T9.1's arms are frozen.** Land the number-rule fix `c1e2fc5`, and replay it over the saved new-set and combined-arm rows. If that changes entry 51's result, tell the coordinator. Add `memory_gap_abstains` to `api/production.py` behind the product setting, so T9.1's primary arm is a system the product can build. The default stays as it is. Entry 49's stop rule is replaced by entry 51's result.
+- **User's steps.** Unity, the study and sign-off come at the end and aren't blockers for agent work. The product default is left unchanged and stays the person's decision.
+
 ## Global constraints
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
@@ -255,6 +266,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_cards_data.py -q`.
 
 ### T6.2: Experiment E5, fine-tuned vs prompted
+**The person's direction (2026-11-04):** start with a short timed probe of `HFClient` and training, and report the projected time to the coordinator before the full run. No tuning search. If tuning doesn't beat the prompted version, record that, and the bullet changes.
 **Files:** `src/contextlens/llm/hf.py`, `src/contextlens/experiments/e5_cards.py`, `tests/test_e5.py`.
 Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_path, adapter_path=None)` implementing `LLMClient`, since Ollama can't load a PEFT adapter. Train. On dev, using `HFClient` for both sides so the runtime is the same, compare the base model with the best prompt from E6 against the adapter: grounded rate, unsupported claims, schema-valid rate, abstention, latency. Save the adapter under `models/`, with its hash in the record. If it doesn't beat the prompted version, record that, and keep the prompted version in the product.
 **Tests:** tiny fixture writes a valid record; `test_adapter_hash_recorded`.
@@ -268,6 +280,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 ## Phase 7: Prompt engineering
 
 ### T7.1: Experiment E6, prompt comparison
+**The person's direction (2026-11-04), overrides older text below:** run 4 versions on `single`, as built: v1, v3, v4, v6. If the chosen version is v3, v4 or v6, run v1 and it on `team_shipping_changed`, once, with no rewriting and no tuning; otherwise the team stays on v1 and the record says why. Judging runs with Haiku after the GPU is released.
 **Files:** `src/contextlens/prompts/v2/`, `src/contextlens/prompts/v3/` and later versions, `src/contextlens/experiments/e6_prompts.py`, `tests/test_e6.py`.
 **Do:** Change one factor at a time on dev, with the model and cases fixed: few-shot examples, evidence format, abstention instructions, output format, length limits, role split. Report each against the baseline. Choose the best by the rules in `docs/TESTING.md`.
 **Tests:** `test_each_version_differs_by_a_declared_factor`; `test_record_lists_every_version`.
@@ -277,6 +290,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **Accept:** `{py} -m pytest tests/test_e6.py -q`; `{py} -m contextlens.eval.check_run E6 --min-n 100 --split dev`.
 
 ### T7.2: Prompt regression tests in CI
+**The person's direction (2026-11-04):** low priority, and runs alongside T6.2 or later. Until the project is published, the wording is "automated regression tests", not a claim that CI ran.
 **Files:** `tests/regression/`, `tests/regression/recorded/`, `.github/workflows/ci.yml`.
 **Do:** Save real responses from the chosen prompts on 30 cases covering every category, including injection and update. Tests replay them through parsing and the guard offline, and assert card status, label, and citations. A prompt change without re-recording must fail.
 **Tests:** `test_recordings_match_current_prompt_hash`; a parametrized case test.
@@ -318,6 +332,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Accept:** `{py} -m pytest tests/test_obs.py tests/test_vision.py -q`; `docker compose config -q`.
 
 ### T8.5: Experiment E7, real-time cost
+**The person's direction (2026-11-04), overrides older text below:** all 11 meetings and 33 questions at 4x speed for speech, speaker and quality numbers, plus one 10-minute real-time segment for latency, which is the only source of speech and speaker timings. Check first that speech keeps up at 4x; if it can't, use the shortest 5 meetings in real time, and tell the coordinator the 30-question rule needs changing. After fixing the top two bottlenecks, rerun only the real-time segment and the token count for before and after. Real pyannote and the production backend with Ollama still run here: this is the first real run of the whole live system.
 **Files:** `src/contextlens/experiments/e7_realtime.py`, `src/contextlens/eval/metrics.py`, `src/contextlens/eval/check_run.py`, `src/contextlens/eval/series.py`, `tests/test_e7.py`.
 **From phase review:** this task adds word error rate and diarization error to `metrics.py`, `check_run.py` and `series.py`, with row fields on `Prediction` for the speech and diarization output, so a saved `wer` or `der` recomputes from the predictions and `check_run` does not reject it.
 **Do:** Replay AMI audio through speech and diarization, then run the same questions as on the clean transcript. Report word error rate, diarization error, how much transcription and speaker errors change quality, button-to-card p50 and p95 by stage, and tokens per card. Optimize the top two bottlenecks, then rerun and report before and after.
@@ -359,6 +374,7 @@ See `docs/HUMAN-GATES.md`.
 ## Phase 9: Final results
 
 ### T9.1: Experiment E8, final test
+**The person's direction (2026-11-04), overrides older text below:** three systems in the one test run: `team_shipping_changed` as primary, `single`, and the team with the trained models. The simpler systems stay as dev results. On DECODE run only the trained detector and the simple baseline, after confirming what bullet 2's score needs. On QMSum and LongMemEval run search only, with no written answers. Haiku judges all claims; Sonnet is a second named figure on the same claims if usage allows, otherwise a random sample of at least 300, with disagreement reported. The test runs once.
 **Files:** `src/contextlens/experiments/e8_final.py`, `tests/test_e8.py`.
 **Do:** Freeze configurations chosen on dev. Commit them before touching test. Run once on the test split, in one run record that holds every system: recent turns, full transcript, retrieval, retrieval + memory, single agent, team, and team + trained models. Report separately for each public benchmark and our scenarios.
 **Tests:** `test_refuses_when_config_not_committed`; `test_refuses_second_test_run_without_override_note`.
@@ -382,6 +398,7 @@ See `docs/HUMAN-GATES.md`.
 **From phase review:** E3 measured the team without the `check_consistency` tool, while the design and `api/production.py` give the team `PromptedChecker`, and `CascadeChecker` is wired into the team nowhere (phase-4 D1). E8 measures the system that ships, and its record says which checker that is; E3's team figures are not presented as the shipping team. E3's abstention finding rests on 16 cases (D7): T9.1 and T9.3 state the count. The injection-in-suggestion count could not fail, and the respond rule reads the latest turn rather than the latest turn from another speaker (D8): the report says so and draws no claim from either.
 
 ### T9.3: Report, README, and bullets
+**The person's direction (2026-11-04):** gather every stat from the runs into the report. Doesn't wait for H3 or H4. Bullet 1's wording follows the results: the team's gain so far is in abstention, not in evidence under Sonnet, so don't claim improved grounded answers unless the test shows it. State the template-built new cases with agent-read labels, the guard's measured limits, and any gap between the selected and shipping systems.
 **Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
