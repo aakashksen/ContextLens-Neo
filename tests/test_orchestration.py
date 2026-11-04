@@ -668,9 +668,13 @@ class PlanMatchesState(unittest.TestCase):
         needs = json.loads((REPO / "orchestration" / "gpu_needs.json").read_text(encoding="utf-8"))
         agent_tasks = {t["id"] for t in self.tasks if t["owner"] == "agent"}
         exclusive = needs.pop("_exclusive", [])
+        non_task = set(needs.pop("_non_task", []))  # dev runs the coordinator approved that are not plan tasks
+        all_ids = {t["id"] for t in self.tasks}
+        self.assertFalse(non_task & all_ids, "a non-task holder may not reuse a task id")
+        self.assertTrue(non_task <= set(needs), non_task - set(needs))
         self.assertTrue(needs)
-        self.assertTrue(set(needs) <= agent_tasks, set(needs) - agent_tasks)
-        self.assertTrue(set(exclusive) <= agent_tasks)
+        self.assertTrue(set(needs) - non_task <= agent_tasks, set(needs) - non_task - agent_tasks)
+        self.assertTrue(set(exclusive) <= agent_tasks | non_task)
 
     def test_every_agent_declares_a_model(self):
         for path in (REPO / ".claude" / "agents").glob("*.md"):
