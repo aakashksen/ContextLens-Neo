@@ -1,7 +1,9 @@
 """One written attempt to fix how the team merges its specialists (docs/DECISIONS.md, entry 48). Dev only.
 
 Three systems on the same cases and settings: `single`, `team`, and `team_changed` (the team with `memory_gap_abstains`:
-a clean empty memory pass withholds the other agent's findings). Each of the two dev sources, the 148 old cases
+a clean empty memory pass withholds the other agent's findings). A fourth arm, `team_shipping` (docs/DECISIONS.md, entry 49),
+is the team built as production builds it, with a consistency checker; it is reported apart and cannot change entry 48's
+selection. Each of the two dev sources, the 148 old cases
 (`scenarios`) and the 108 new twins (`scenarios_extra`), gets its own record, because a record holds one source. Each
 record also carries the old set, the new set and both together, and the new set split into the 24 pairs a plain
 retrieval score could separate and the other 30. Nothing is run here without the person starting it.
@@ -20,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from contextlens.agents.consistency_check import PromptedChecker
 from contextlens.data.extra_cases import SHAPES, _shape_of
 from contextlens.eval import series
 from contextlens.eval.records import ROOT, head_commit, is_dirty, label_text, load_verified, write_run
@@ -37,7 +40,10 @@ from contextlens.schemas import Scenario
 EXPERIMENT = "E3T"  # its own name, so E3's records and checks are not mixed with these
 SPLIT = "dev"
 SOURCES = ("scenarios", "scenarios_extra")  # the old 148 dev cases, then the new 108
-SYSTEMS = ("single", "team", "team_changed")
+SYSTEMS = ("single", "team", "team_changed")  # entry 48's attempt; unchanged by the shipping arm
+SHIPPING = "team_shipping"
+RUN_SYSTEMS = (*SYSTEMS, SHIPPING)
+PAIRS = (("team", "single"), ("team_changed", "single"), ("team_changed", "team"), (SHIPPING, "single"), (SHIPPING, "team"))
 CHALLENGERS = ("team", "team_changed")
 DECISION_ENTRY = 40
 ATTEMPT = "team-merge-memory-gap-1"
@@ -45,6 +51,10 @@ HYPOTHESIS = ("How the team merges its specialists loses their 'not enough evide
               "do not support one, but any finding from the other specialist makes the card answered.")
 CHANGE = ("memory_gap_abstains: when the memory specialist's first pass finished cleanly with no finding, the card abstains and the "
           "other findings are withheld (saved in drops with reason memory_empty). Nothing else differs from `team`.")
+SHIPPING_DECISION_ENTRY = 49
+SHIPPING_DECLARED = ("The team built as production builds it (api/production.py `_TeamPerPress`): a PromptedChecker on the model that "
+                     "production uses for llms['consistency'], which also gives the consistency agent its checker prompt and tool. "
+                     "Added after phase-4 review D1. Reported apart from entry 48's verdict; it cannot change it.")
 SELECTION_RULE = e3.SELECTION_RULE
 SELECTION_APPLIED = ("single stays selected unless a challenger has a strictly higher score than single on the old set and on the new "
                      "set, and is not clearly worse than single on grounded_rate, answer_when_answerable or abstain_when_insufficient "
@@ -59,7 +69,10 @@ _TWIN = re.compile(r"^(syn-xtra-.+)-(ins|ans)$")
 
 def make_assistant(system: str, sc: Scenario, writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
                    memory: MemoryStore) -> Assistant:
-    """`team_changed` is E3's team build with the one switch on, so the three systems share tools, writer and deadline."""
+    """`team_changed` is E3's team build with the one switch on, so the three systems share tools, writer and deadline.
+    `team_shipping` is the plain team with a `PromptedChecker` on the writer, as production builds it."""
+    if system == SHIPPING:
+        return e3.make_card_assistant("team", sc, writer, embedder, retrieval_config, memory, checker=PromptedChecker(writer))
     if system != "team_changed":
         return e3.make_card_assistant(system, sc, writer, embedder, retrieval_config, memory)
     team = e3.make_card_assistant("team", sc, writer, embedder, retrieval_config, memory)
@@ -131,8 +144,7 @@ def twin_report(scs: list[Scenario], rows: dict[str, list[Prediction]]) -> dict[
     for name, keep in (("all", lambda k: True), ("weak_24", lambda k: pair_shape(k) in WEAK_SHAPES),
                        ("other_30", lambda k: pair_shape(k) not in WEAK_SHAPES)):
         part = {n: {k: v for k, v in o.items() if keep(k)} for n, o in full.items()}
-        cmp_ = [c for a, b in (("team", "single"), ("team_changed", "single"), ("team_changed", "team"))
-                if a in part and b in part and (c := twin_compare(part, a, b))]
+        cmp_ = [c for a, b in PAIRS if a in part and b in part and (c := twin_compare(part, a, b))]
         out[name] = {"by_system": {n: twin_table(o) for n, o in part.items()}, "comparisons": cmp_}
     out["by_shape"] = {sh: {n: twin_table({k: v for k, v in o.items() if pair_shape(k) == sh}) for n, o in full.items()}
                        for sh in SHAPES}
@@ -144,8 +156,7 @@ def twin_report(scs: list[Scenario], rows: dict[str, list[Prediction]]) -> dict[
 def set_report(scs: list[Scenario], rows: dict[str, list[Prediction]], labels: str) -> dict[str, Any]:
     """Metrics, intervals and comparisons of the three systems on `scs`, McNemar counts for each pair, and a finding."""
     metrics, intervals, comparisons = e3.card_stats(scs, rows)
-    pairs = (("team", "single"), ("team_changed", "single"), ("team_changed", "team"))
-    paired = {f"{a}_vs_{b}": e3.paired_counts(scs, rows, (a, b)) for a, b in pairs if a in rows and b in rows}
+    paired = {f"{a}_vs_{b}": e3.paired_counts(scs, rows, (a, b)) for a, b in PAIRS if a in rows and b in rows}
     insufficient = sum(s.gold_label == "insufficient" for s in scs)
     return {"cases": len(scs), "insufficient_cases": insufficient, "answerable_cases": len(scs) - insufficient,
             "metrics": metrics, "intervals": intervals, "comparisons": comparisons, "paired_binary": paired,
@@ -170,11 +181,11 @@ def finding(comparisons: list[dict[str, Any]], paired: dict[str, Any], insuffici
             f"{labels}")
 
 
-def select(sets: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def select(sets: dict[str, dict[str, Any]], challengers: tuple[str, ...] = CHALLENGERS) -> dict[str, Any]:
     """The written rule (entry 48): `single` unless a challenger beats its score on the old set and on the new set and is
     not clearly worse on grounded_rate, answer_when_answerable or abstain_when_insufficient on both together."""
     qualified: dict[str, dict[str, Any]] = {}
-    for ch in CHALLENGERS:
+    for ch in challengers:
         score = {k: sets[k]["scores"].get(ch) for k in SETS}
         base = {k: sets[k]["scores"].get("single") for k in SETS}
         if any(score[k] is None or base[k] is None for k in SETS):
@@ -186,17 +197,21 @@ def select(sets: dict[str, dict[str, Any]]) -> dict[str, Any]:
                  and pair_verdict(c["diff"], *c["ci"], c["mcnemar_p"], c["metric"] in e3.BINARY_METRICS) == "worse"]
         qualified[ch] = {"qualifies": beats and not worse, "beats_single_on_old_and_new": beats,
                          "clearly_worse_on": worse, "score": score}
-    winners = [c for c in CHALLENGERS if qualified[c]["qualifies"]]
+    winners = [c for c in challengers if qualified[c]["qualifies"]]
     chosen = max(winners, key=lambda c: sets["both"]["scores"][c]) if winners else "single"
     return {"rule": SELECTION_RULE, "applied": SELECTION_APPLIED, "selected": chosen, "single_score": {k: sets[k]["scores"].get("single") for k in SETS},
             "challengers": qualified,
             "note": "`single` stays selected unless the rule says otherwise; no set alone decides it. " + ANSWER_RATE_NOTE + "."}
 
 
-def all_reports(by_source: dict[str, tuple[list[Scenario], dict[str, list[Prediction]]]], labels: dict[str, str]) -> dict[str, Any]:
-    """Everything derived from rows: the old set, the new set, both together, the two slices of the new set, the twins."""
+def all_reports(by_source: dict[str, tuple[list[Scenario], dict[str, list[Prediction]]]], labels: dict[str, str],
+                systems: tuple[str, ...] = SYSTEMS, challengers: tuple[str, ...] = CHALLENGERS) -> dict[str, Any]:
+    """Everything derived from rows of `systems`: the old set, the new set, both together, the two slices of the new set,
+    the twins. The default is entry 48's three systems, so the shipping arm's rows never enter its numbers."""
     old_s, old_r = by_source["scenarios"]
     new_s, new_r = by_source["scenarios_extra"]
+    old_r = {n: old_r[n] for n in systems}
+    new_r = {n: new_r[n] for n in systems}
     both_s = old_s + new_s
     both_r = {n: old_r[n] + new_r[n] for n in old_r}
     weak = [s for s in new_s if (k := pair_key(s.id)) and pair_shape(k[0]) in WEAK_SHAPES]
@@ -205,7 +220,27 @@ def all_reports(by_source: dict[str, tuple[list[Scenario], dict[str, list[Predic
     sets = {"old": set_report(old_s, old_r, labels["scenarios"]), "new": set_report(new_s, new_r, labels["scenarios_extra"]),
             "both": set_report(both_s, both_r, text)}
     slices = {"new_weak_24": set_report(weak, new_r, labels["scenarios_extra"]), "new_other_30": set_report(other, new_r, labels["scenarios_extra"])}
-    return {"sets": sets, "slices": slices, "twins": twin_report(new_s, new_r), "selection": select(sets)}
+    return {"sets": sets, "slices": slices, "twins": twin_report(new_s, new_r), "selection": select(sets, challengers)}
+
+
+def shipping_report(by_source: dict[str, tuple[list[Scenario], dict[str, list[Prediction]]]], labels: dict[str, str],
+                    entry48_selected: str) -> dict[str, Any]:
+    """The shipping arm beside the other three, apart from entry 48's verdict. The stop signal only states two facts:
+    whether `team_shipping` beats `single` on dev under the written rule, and whether adding it would change which
+    system that rule selects. Nothing acts on it."""
+    full = all_reports(by_source, labels, RUN_SYSTEMS, (*CHALLENGERS, SHIPPING))
+    alone = select(full["sets"], (SHIPPING,))["challengers"][SHIPPING]
+    with_it = full["selection"]["selected"]
+    scores = {k: {n: v["scores"].get(n) for n in RUN_SYSTEMS} for k, v in {**full["sets"], **full["slices"]}.items()}
+    return {"declared": SHIPPING_DECLARED, "decision_entry": SHIPPING_DECISION_ENTRY, "systems": list(RUN_SYSTEMS),
+            "scores": scores, "sets": full["sets"], "slices": full["slices"], "twins": full["twins"],
+            "selection_with_it": full["selection"],
+            "stop_signal": {"team_shipping_beats_single_on_dev": alone["qualifies"],
+                            "detail": {k: v for k, v in alone.items() if k != "qualifies"},
+                            "selected_by_entry_48": entry48_selected, "selected_with_team_shipping": with_it,
+                            "adding_it_would_change_the_selection": with_it != entry48_selected,
+                            "rule": "the written rule of entry 48, applied to `team_shipping` as the only challenger",
+                            "action": "none in code: T9.1 is held and goes to the coordinator if either is true"}}
 
 
 # ---------------------------------------------------------------- the run
@@ -217,7 +252,7 @@ def _saved(root: Path, commit: str, source: str, system: str, ids: set[str], mod
 def run_attempt(*, root: Path = ROOT, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
                 names: Models | None = None, retrieval_config: dict[str, Any], run_conditions: str,
                 say: Callable[[str], None] = print) -> dict[str, Path]:
-    """Run the three systems on both dev sources, judge, and write one record per source. Models are unloaded at the end."""
+    """Run the four arms on both dev sources, judge, and write one record per source. Models are unloaded at the end."""
     names = names or Models()
     mine = [(names.writer, False), (names.judge, False), (names.embedder, True)]
     try:
@@ -258,23 +293,25 @@ def _attempt(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
     rows: dict[str, dict[str, list[Prediction]]] = {}
     health: dict[str, dict[str, dict[str, Any]]] = {}
     memory_failed: dict[str, list[str]] = {}
+    memory_reasons: dict[str, list[dict[str, str]]] = {}
     for source in SOURCES:
         scenarios = loaded[source][0]
-        have = {n: _saved(root, commit, source, n, {s.id for s in scenarios}, names.writer) for n in SYSTEMS}
+        have = {n: _saved(root, commit, source, n, {s.id for s in scenarios}, names.writer) for n in RUN_SYSTEMS}
         if any(have.values()):
             say(f"{source}: reusing {sum(map(len, have.values()))} saved rows")
-        todo = [s for s in scenarios if any(s.id not in have[n] for n in SYSTEMS)]
+        todo = [s for s in scenarios if any(s.id not in have[n] for n in RUN_SYSTEMS)]
         say(f"{source}: building memory for {len(todo)} cases")
         memories: dict[str, MemoryStore] = {}
-        memory_failed[source] = []
+        memory_failed[source], memory_reasons[source] = [], []
         for sc in todo:
-            memories[sc.id], cost = e2.build_memory(sc, writer)
+            memories[sc.id], cost = e2.build_memory(
+                sc, writer, lambda cid, why, source=source: memory_reasons[source].append({"id": cid, "reason": why}))
             if cost is None:
                 memory_failed[source].append(sc.id)
         if len(memory_failed[source]) / len(scenarios) > e2.BROKEN_MAX:
             raise RunBroken(f"memory extraction failed on {len(memory_failed[source])} of {len(scenarios)} {source} cases")
         rows[source], health[source] = {}, {}
-        for name in SYSTEMS:
+        for name in RUN_SYSTEMS:
             say(f"{source}: running {name}")
 
             def save(row: Prediction, source: str = source, name: str = name) -> None:
@@ -301,7 +338,9 @@ def _attempt(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
               "calls": judge.calls, "share_supported": judge.yes / judge.calls}
 
     labels = {s: label_text(root, s) for s in SOURCES}
-    derived = all_reports({s: (loaded[s][0], rows[s]) for s in SOURCES}, labels)
+    by_source = {s: (loaded[s][0], rows[s]) for s in SOURCES}
+    derived = all_reports(by_source, labels)
+    shipping = shipping_report(by_source, labels, derived["selection"]["selected"])
     models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
     paths: dict[str, Path] = {}
     for source in SOURCES:
@@ -312,22 +351,30 @@ def _attempt(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
             "experiment": EXPERIMENT, "part": "cards", "attempt": ATTEMPT, "hypothesis": HYPOTHESIS, "change": CHANGE,
             "decision_entry": DECISION_ENTRY, "source": source, "sources_run": list(SOURCES), "run_conditions": run_conditions,
             "devices": {**devices, "note": "from the Ollama process list right after each model loaded; unknown means it did not say"},
-            "systems": list(SYSTEMS), "deadline_s": DEADLINE_S, "judge": judged,
+            "systems": list(RUN_SYSTEMS), "entry_48_systems": list(SYSTEMS), "deadline_s": DEADLINE_S, "judge": judged,
             "selection_rule": SELECTION_RULE, "selection": derived["selection"], "selection_applied": SELECTION_APPLIED,
             "sets": derived["sets"], "slices": derived["slices"], "twins": derived["twins"],
-            "same_for_all": "one local writer, the same retrieval config, the same cases and deadline; the three systems share one "
-                            "Tools build with no consistency checker",
+            "same_for_all": "one local writer, the same retrieval config, the same cases and deadline; single, team and team_changed "
+                            "share one Tools build with no consistency checker; team_shipping adds a PromptedChecker on the same writer",
+            "team_shipping": {**shipping, "consistency_checker": {
+                "class": "PromptedChecker", "model": names.writer,
+                "production_source": "contextlens.api.production.local_llms()['consistency'], the one OllamaClient(MODEL)",
+                "also_changes": "the consistency agent's prompt and tool list (agents/graph.py, has_checker)"}},
             "retrieval": {k: retrieval_config.get(k) for k in ("winner", "mode", "k", "rerank", "chunk_turns", "run_ids")},
             "row_report": report, "health": health[source], "cold_start_s": cold,
             "drops": {n: e3.drop_report(scenarios, p) for n, p in rows[source].items()},
-            "memory_build": {"cases": len(scenarios), "failed": len(memory_failed[source]), "failed_ids": memory_failed[source]},
+            "memory_build": {"cases": len(scenarios), "failed": len(memory_failed[source]), "failed_ids": memory_failed[source],
+                             "failed_reasons": memory_reasons[source]},
             "prompt_note": f"prompts are unchanged, label {PROMPT_VERSION}",
             "notes": [derived["sets"]["both"]["finding"], e3.conditions_note(run_conditions), e3.deadline_sentence(report),
                       ANSWER_RATE_NOTE, "grounded_rate comes from one local judge; no person has reviewed a sample.",
-                      f"Selected by the written rule: {derived['selection']['selected']}."],
+                      f"Selected by the written rule: {derived['selection']['selected']}.",
+                      "team_shipping (entry 49) is reported apart under config.team_shipping and is not part of that verdict; "
+                      f"stop signal: {json.dumps(shipping['stop_signal']['team_shipping_beats_single_on_dev'])} (beats single), "
+                      f"{json.dumps(shipping['stop_signal']['adding_it_would_change_the_selection'])} (would change the selection)."],
             "claude_calls": 0, "started_at": started,
         }
-        attempts = [{"setting": n, "kind": "card system", "ok": True, "error": None, "health": health[source][n]} for n in SYSTEMS]
+        attempts = [{"setting": n, "kind": "card system", "ok": True, "error": None, "health": health[source][n]} for n in RUN_SYSTEMS]
         paths[source] = write_run(EXPERIMENT, SPLIT, config, models, {"recall": PROMPT_VERSION}, metrics, intervals, attempts,
                                   rows[source], digest, comparisons=comparisons, scenario_source=source, root=root)
         say(f"wrote {paths[source].name}")

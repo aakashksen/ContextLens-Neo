@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from contextlens.agents.consistency_check import PromptedChecker
 from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.single import SingleAgent
 from contextlens.data.extra_cases import SHAPES
@@ -15,6 +16,7 @@ from contextlens.eval import series
 from contextlens.eval.check_run import check
 from contextlens.experiments import team_attempt as ta
 from contextlens.experiments.e2_context import RunBroken
+from contextlens.llm.client import LLMError
 from contextlens.llm.ollama_ctl import OllamaCtl
 from contextlens.memory.extract import MemoryStore
 from contextlens.replay.runner import Prediction
@@ -96,11 +98,29 @@ def test_the_changed_team_is_the_team_with_the_one_switch_on_and_the_other_two_a
     assert changed.deadline_s == team.deadline_s == 8.0 and ta.DEADLINE_S == 8.0
 
 
+def test_only_the_shipping_arm_has_a_consistency_checker_and_the_others_are_as_entry_48_ran_them():
+    from contextlens.api import production
+    from contextlens.experiments import e2_context as e2
+
+    args = (EXTRA[0], Scripted(), HashEmbedder(), RETRIEVAL, MemoryStore())
+    built = {n: ta.make_assistant(n, *args) for n in ta.RUN_SYSTEMS}
+    assert ta.SYSTEMS == ("single", "team", "team_changed") and ta.RUN_SYSTEMS == (*ta.SYSTEMS, "team_shipping")
+    assert all(built[n].tools.checker is None for n in ta.SYSTEMS)
+    ship = built["team_shipping"]
+    assert isinstance(ship, TeamAssistant) and isinstance(ship.tools.checker, PromptedChecker)
+    assert ship.memory_gap_abstains is False and ship.deadline_s == built["team"].deadline_s == 8.0
+    assert ship._specs["consistency"][1:] != built["team"]._specs["consistency"][1:]  # the checker changes prompt and tools
+    assert production.MODEL == e2.WRITER_MODEL  # production's llms["consistency"] is this model
+
+
 # ---- a whole run on the real dev files, with scripted models ----
 
 
 class Writer(AgentScripted):
-    """The memory agent finds nothing on the insufficient twins; the consistency agent always writes a finding."""
+    """The memory agent finds nothing on the insufficient twins; the consistency agent always writes a finding.
+    Memory extraction fails for `fail_memory_for` (a case id)."""
+
+    fail_memory_for: str | None = None
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -111,6 +131,8 @@ class Writer(AgentScripted):
         return super()._raw(messages, schema, max_tokens, temperature, timeout_s)
 
     def reply(self, name, user):
+        if name == "_Out" and self.fail_memory_for and f"{self.fail_memory_for}:" in user:
+            raise LLMError("request to the model server failed")
         if name == "_Step" and "memory agent" in self.local.system and "-ins:" in user:
             return {"tool": "final", "findings": []}
         return super().reply(name, user)
@@ -140,10 +162,10 @@ def test_a_run_writes_one_valid_record_per_source_with_the_three_systems(repo):
     assert {s: r["n"] for s, r in recs.items()} == {"scenarios": 148, "scenarios_extra": 108}
     for source, rec in recs.items():
         assert rec["scenario_source"] == source and rec["split"] == "dev" and rec["supersedes"] == []
-        assert set(rec["predictions"]) == set(ta.SYSTEMS)
+        assert set(rec["predictions"]) == set(ta.RUN_SYSTEMS)
         cfg = rec["config"]
         assert (cfg["attempt"], cfg["decision_entry"], cfg["deadline_s"]) == (ta.ATTEMPT, 40, 8.0) and cfg["hypothesis"]
-        assert set(cfg["row_report"]) == set(ta.SYSTEMS) and "findings_dropped_by_reason" in cfg["row_report"]["team_changed"]
+        assert set(cfg["row_report"]) == set(ta.RUN_SYSTEMS) and "findings_dropped_by_reason" in cfg["row_report"]["team_changed"]
         assert "cards_cut_by_the_deadline" in cfg["row_report"]["single"] and "cards_with_llm_timeout" in cfg["row_report"]["team"]
         assert set(cfg["sets"]) == {"old", "new", "both"} and set(cfg["slices"]) == {"new_weak_24", "new_other_30"}
         assert (cfg["slices"]["new_weak_24"]["cases"], cfg["slices"]["new_other_30"]["cases"]) == (48, 60)
@@ -167,6 +189,52 @@ def test_a_run_writes_one_valid_record_per_source_with_the_three_systems(repo):
     assert not any(p.card.status == "abstained" for p in ans["team_changed"])
     assert all(p.card.status != "abstained" for p in ins["team"])  # the unchanged team is outvoted by the consistency finding
     assert rec["config"]["row_report"]["team_changed"]["findings_dropped_by_reason"].get("memory_empty") == 54
+    assert not any(d.reason == "memory_empty" for d in sum((p.drops for p in rows["team_shipping"]), []))
+
+
+def test_the_shipping_arm_is_reported_apart_and_leaves_entry_48s_numbers_as_they_were(repo):
+    paths = go(repo)
+    recs = {s: json.loads(p.read_text(encoding="utf-8")) for s, p in paths.items()}
+    for rec in recs.values():
+        cfg = rec["config"]
+        assert cfg["entry_48_systems"] == list(ta.SYSTEMS) and cfg["systems"] == list(ta.RUN_SYSTEMS)
+        assert all(set(cfg["sets"][k]["scores"]) == set(ta.SYSTEMS) for k in ta.SETS)  # entry 48's block has no shipping arm
+        assert set(cfg["selection"]["challengers"]) == set(ta.CHALLENGERS)
+        ship = cfg["team_shipping"]
+        assert ship["decision_entry"] == 49 and ship["consistency_checker"]["class"] == "PromptedChecker"
+        assert ship["consistency_checker"]["model"] == NAMES.writer
+        assert set(ship["sets"]) == set(ta.SETS) and set(ship["slices"]) == {"new_weak_24", "new_other_30"}
+        assert set(ship["scores"]) == {*ta.SETS, *ta.SLICES} and all(set(v) == set(ta.RUN_SYSTEMS) for v in ship["scores"].values())
+        assert (ship["slices"]["new_weak_24"]["cases"], ship["slices"]["new_other_30"]["cases"]) == (48, 60)
+        sig = ship["stop_signal"]
+        assert isinstance(sig["team_shipping_beats_single_on_dev"], bool)
+        assert sig["adding_it_would_change_the_selection"] == (sig["selected_with_team_shipping"] != sig["selected_by_entry_48"])
+        assert sig["selected_by_entry_48"] == cfg["selection"]["selected"]
+        pairs = {(c["a"], c["b"]) for c in rec["comparisons"]}
+        assert ("team_shipping", "single") in pairs and ("team_shipping", "team") in pairs
+    twins = recs["scenarios_extra"]["config"]["team_shipping"]["twins"]
+    assert twins["weak_24"]["by_system"]["team_shipping"]["pairs"] == 24 and twins["other_30"]["by_system"]["team_shipping"]["pairs"] == 30
+    assert any((c["a"], c["b"]) == ("team_shipping", "single") for c in twins["all"]["comparisons"])
+    # entry 48's blocks equal what the three systems alone give
+    by_source = {}
+    for source, rec in recs.items():
+        scs = load_scenarios("dev", REAL / "datasets" / source)
+        by_source[source] = (scs, {n: [Prediction.model_validate_json(x) for x in (repo / p).read_text(encoding="utf-8").splitlines()]
+                                   for n, p in rec["predictions"].items()})
+    again = ta.all_reports(by_source, {s: "" for s in by_source})
+    cfg = recs["scenarios_extra"]["config"]
+    assert again["selection"]["selected"] == cfg["selection"]["selected"]
+    assert {k: v["scores"] for k, v in again["sets"].items()} == {k: v["scores"] for k, v in cfg["sets"].items()}
+
+
+def test_a_failed_memory_build_is_listed_with_its_reason_and_no_text(repo):
+    class Failing(Writer):
+        fail_memory_for = EXTRA[0].id
+
+    cfg = json.loads(go(repo, Failing())["scenarios_extra"].read_text(encoding="utf-8"))["config"]
+    build = cfg["memory_build"]
+    assert build["failed_ids"] == [EXTRA[0].id] and [r["id"] for r in build["failed_reasons"]] == [EXTRA[0].id]
+    assert build["failed_reasons"][0]["reason"].startswith("LLMError: request to")
 
 
 def test_a_dirty_tree_or_a_missing_run_condition_stops_before_any_model_call(repo):
@@ -182,14 +250,15 @@ def test_a_dirty_tree_or_a_missing_run_condition_stops_before_any_model_call(rep
 
 
 def test_an_interrupted_run_resumes_at_the_same_commit_without_redoing_saved_rows(repo):
+    # 1400 calls: past single, team and team_changed on the old cases, partway through team_shipping
     with pytest.raises(RunBroken):
-        go(repo, Writer(die_after=900))
+        go(repo, Writer(die_after=1400))
     saved = [json.loads(x) for x in (repo / ta.PARTIAL_REL).read_text(encoding="utf-8").splitlines()]
     assert saved and not (repo / "results/runs").exists()
     per_case: dict[str, int] = {}
     for e in saved:
         per_case[e["row"]["scenario_id"]] = per_case.get(e["row"]["scenario_id"], 0) + 1
-    finished = [sid for sid, n in per_case.items() if n == len(ta.SYSTEMS)]
+    finished = [sid for sid, n in per_case.items() if n == len(ta.RUN_SYSTEMS)]
     assert finished
     writer = Writer()
     paths = go(repo, writer)
