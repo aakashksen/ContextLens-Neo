@@ -416,7 +416,14 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T17:15:37+00:00"
+      "started_at": "2026-11-03T17:15:37+00:00",
+      "verified": {
+        "commit": "6fed87b620465705dfde4139a25307c8954bb2c6",
+        "passed": true,
+        "at": "2026-11-04T01:52:30+00:00"
+      },
+      "attempts": 1,
+      "reason": "E3 cards record has mcnemar_p null on every comparison though the plan asks for McNemar, and its finding says the team beats single on answering from 4 discordant cases (exact p=0.125); that metric counts non-abstention, not correctness"
     },
     {
       "id": "T5.1",
@@ -708,8 +715,12 @@
         "{py} -m pytest tests/test_e7.py -q",
         "{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev"
       ],
-      "status": "blocked",
-      "reason": "AMI mirror refuses audio intermittently without saying why: final paced check read 10 of 11 sizes, TS3012d refused after 3 tries; registration unconfirmed. Files needed: ES2003a ES2010d ES2011d ES2013c ES2013d ES2016a TS3006b TS3007a TS3008c TS3010c TS3012d .Mix-Headset.wav. Nothing downloaded."
+      "status": "in_progress",
+      "reason": "AMI mirror refuses audio intermittently without saying why: final paced check read 10 of 11 sizes, TS3012d refused after 3 tries; registration unconfirmed. Files needed: ES2003a ES2010d ES2011d ES2013c ES2013d ES2016a TS3006b TS3007a TS3008c TS3010c TS3012d .Mix-Headset.wav. Nothing downloaded.",
+      "attempts": 0,
+      "note": "The person chose the Hugging Face copy edinburghcstr/ami (public, ungated, CC BY 4.0, license and access checked on its API); the AMI mirror refused.",
+      "worktree": "<local path>",
+      "started_at": "2026-11-03T17:44:44+00:00"
     },
     {
       "id": "H3",
