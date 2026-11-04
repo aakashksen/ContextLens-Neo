@@ -285,13 +285,14 @@ def test_the_number_rule_check_names_dropped_cases_and_unsupported_findings_that
         _row("a", Card(mode="recall", status="abstained", findings=[], missing=[dropped])),
         _row("n", Card(mode="recall", status="abstained", findings=[], missing=[dropped])),
         Prediction(scenario_id="p", card=Card(mode="recall", status="answered",
-                                              findings=[finding("they want 40 copies"), finding("the second one"), finding("fine")]),
-                   claim_supported=[False, False, False]),
+                                              findings=[finding("they want 40 copies"), finding("the second one"), finding("a couple of them"), finding("fine")]),
+                   claim_supported=[False, False, False, False]),
     ]
     got = e2.number_rule_check([answerable, insufficient, plain], rows)
     assert got["dropped"] == ["a", "n"] and got["answerable_lost"] == ["a"]
-    assert [x["statement"] for x in got["passed_but_unsupported_with_number"]] == ["they want 40 copies"]
-    assert [x["statement"] for x in got["passed_but_unsupported_with_limit_word"]] == ["the second one"]
+    # changed with the number rule (T7.1): "second" is now read as the number 2, and "couple" is a limit word
+    assert [x["statement"] for x in got["passed_but_unsupported_with_number"]] == ["they want 40 copies", "the second one"]
+    assert [x["statement"] for x in got["passed_but_unsupported_with_limit_word"]] == ["a couple of them"]
 
 
 # ---------------------------------------------------------------- a broken system must not be recorded

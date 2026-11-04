@@ -110,9 +110,7 @@ RUBRIC_VERSION = "e2-v1"
 ERROR_ANALYSIS_REL = Path("results/error-analysis-e2.md")
 CONFIG_REL = Path("configs/retrieval.json")
 NUMBER_NOTE = "a number in it is not in the cited quotes"
-LIMIT_WORDS = re.compile(
-    r"\b(one|half|dozen|couple|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d+(?:st|nd|rd|th))\b",
-    re.I)
+LIMIT_WORDS = re.compile(r"\b(one|couple|pair|once|twice|quarter)\b", re.I)  # still not read as numbers
 REASON = "rerun of E2 after the earlier run failed or was replaced"
 
 
@@ -509,7 +507,7 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
     dropped: cases where it dropped a finding or a suggestion. answerable_lost: of those, cards that ended abstained
     on a case that has an answer. passed_but_unsupported_*: findings the judge found unsupported although the rule let
     them through, with a number in the statement or with a word the rule does not read as a number."""
-    from contextlens.agents.single import _runs
+    from contextlens.agents.single import _values
 
     by_id = {s.id: s for s in scenarios}
     dropped, lost, with_number, with_limit_word = [], [], [], []
@@ -524,7 +522,7 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
         for f, ok in zip(card.findings, p.claim_supported or [], strict=False):
             if ok:
                 continue
-            if _runs(f.statement):
+            if _values(f.statement):
                 with_number.append({"id": s.id, "statement": f.statement})
             elif LIMIT_WORDS.search(f.statement):
                 with_limit_word.append({"id": s.id, "statement": f.statement})
@@ -546,9 +544,11 @@ CARRY_LINE = (
     "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
     "cases (see the answer rates below). That choice was made on dev results, not by the rule.")
 NUMBER_RULE_LIMITS = (
-    "Known limits of the rule: a lone one, half, dozen and ordinals are not number tokens, and punctuation does not break "
-    "a run of number tokens (`_runs` in `agents/single.py`). `docs/interview-notes.md` does not exist yet, so no "
-    "interview-based limits are recorded.")
+    "Known limits of the rule: it compares numbers by value (`_values` in `agents/single.py`), so a number word and its "
+    "digits agree, and half, dozen and ordinals are read (entry 40 of `docs/DECISIONS.md`). What still fails closed: a lone one, "
+    "couple, pair, once, twice and quarter are not numbers; `one and a half` is not 1.5; spoken years, `2.5k` and `15:00` "
+    "are not matched with other spellings. Records made before the fix ran on the old rule. `docs/interview-notes.md` does "
+    "not exist yet, so no interview-based limits are recorded.")
 NOT_MEASURED = [
     "Whether each dropped finding was true: the counts below are of cases carrying the `missing` note. Rows written after "
     "the short-id fix also save each dropped finding's text and reason in `drops`; older rows have none, so their counts "

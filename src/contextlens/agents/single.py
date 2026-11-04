@@ -1,6 +1,7 @@
 import functools
 import json
 import re
+from fractions import Fraction
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -165,25 +166,79 @@ _NUMBER_WORDS = frozenset(
     "nineteen ninety one seven seventeen seventy six sixteen sixty ten thirteen thirty thousand three "
     "twelve twenty two zero".split()
 )
-_TOKEN = re.compile(r"\d+(?:\.\d+)?|[a-z]+")
+_UNITS = dict(zip("zero one two three four five six seven eight nine".split(), range(10)))
+_TEENS = dict(zip("ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(), range(10, 20)))
+_TENS = dict(zip("twenty thirty forty fifty sixty seventy eighty ninety".split(), range(20, 100, 10)))
+_ORDINALS = {
+    **dict(zip("first second third fourth fifth sixth seventh eighth ninth".split(), range(1, 10))),
+    **dict(zip("tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth".split(), range(10, 20))),
+    **dict(zip("twentieth thirtieth fortieth fiftieth sixtieth seventieth eightieth ninetieth".split(), range(20, 100, 10))),
+}
+_SMALL = {**_UNITS, **_TEENS, **_TENS, **_ORDINALS}
+_BIG = {"hundred": 100, "dozen": 12, "thousand": 1000, "million": 10**6, "billion": 10**9}
+_TOKEN = re.compile(r"(\d+(?:\.\d+)?)(?:st|nd|rd|th)?(?![a-z])|(\d+(?:\.\d+)?)|([a-z]+)")
 
 
-def _runs(text: str) -> set[tuple[str, ...]]:
-    """Maximal runs of consecutive number tokens, lowercase. No values are computed.
+def _kind(v: int) -> str:
+    return "unit" if v < 10 else "teen" if v < 20 else "tens"
 
-    Tokens are digit groups (`2.5` is one token) and words; the comma in `1,000` is removed first, `$`, `-` and
-    other marks split. So `$9` is (9), `1,000` is (1000), `2.5` is (2.5), `3pm` is (3), `twenty-five` is
-    (twenty, five), and `a hundred` is (hundred). A lone `one` is a pronoun and is not a run."""
-    runs: set[tuple[str, ...]] = set()
-    run: list[str] = []
-    for tok in [*_TOKEN.findall(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower())), ""]:
-        if tok[:1].isdigit() or tok in _NUMBER_WORDS:
-            run.append(tok)
+
+def _spoken(words: list[str]) -> set[Fraction]:
+    """Values of a run of number words: `twenty five` is 25, `two thousand five hundred` is 2500, `one two` is 1 and 2."""
+    out: set[Fraction] = set()
+    total = cur = chunk = 0
+    kind: str | None = None
+    have = False
+    for w in words:
+        if w == "and":
             continue
-        if run and run != ["one"]:
-            runs.add(tuple(run))
-        run = []
-    return runs
+        if w in _BIG:
+            if _BIG[w] <= 100:
+                cur += (chunk or 1) * _BIG[w]
+            else:
+                total, cur = total + ((cur + chunk) or 1) * _BIG[w], 0
+            chunk, kind, have = 0, None, True
+            continue
+        v = _SMALL[w]
+        k = _kind(v)
+        if kind is not None and not (k == "unit" and kind == "tens"):  # it cannot continue the number: start another
+            out.add(Fraction(total + cur + chunk))
+            total = cur = chunk = 0
+            kind = None
+        kind = "full" if kind == "tens" else k
+        chunk += v
+        have = True
+    if have:
+        out.add(Fraction(total + cur + chunk))
+    return out
+
+
+def _values(text: str) -> set[Fraction]:
+    """The numbers in `text`, by value: `2`, `two`, `2nd` and `second` give 2, `1,000` and `one thousand` give 1000,
+    `half` is 1/2 and `a dozen` is 12. A lone `one` is a pronoun and is not a number. Units, `%` and `$` are ignored."""
+    toks = [m.group(1) or m.group(2) or m.group(3) for m in _TOKEN.finditer(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower()))]
+    out: set[Fraction] = set()
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if t[0].isdigit():
+            v = Fraction(t)
+            if i + 1 < len(toks) and toks[i + 1] in _BIG:
+                v *= _BIG[toks[i + 1]]
+                i += 1
+            out.add(v)
+        elif t == "half":
+            out.add(Fraction(1, 2))
+        elif t in _SMALL or t in _BIG:
+            j = i
+            while j + 1 < len(toks) and (toks[j + 1] in _SMALL or toks[j + 1] in _BIG or (
+                    toks[j + 1] == "and" and toks[j] in _BIG and j + 2 < len(toks) and toks[j + 2] in _SMALL)):
+                j += 1
+            if toks[i : j + 1] != ["one"]:
+                out |= _spoken(toks[i : j + 1])
+            i = j
+        i += 1
+    return out
 
 
 _REF_ID = r"[\w.-]*:t\d+"  # a turn id as the scenarios write it, `<conversation>:t<n>`
@@ -201,9 +256,9 @@ def without_turn_refs(text: str, turn_ids: Sequence[str] = ()) -> str:
 
 
 def _runs_in(text: str, quotes: list[str], turn_ids: Sequence[str] = ()) -> bool:
-    """Every number run in `text` (turn references aside) is, as the same whole run, in the quotes. `500` against
-    `five hundred` is not matched: failing closed is the safe direction."""
-    return _runs(without_turn_refs(text, turn_ids)) <= _runs(" ".join(quotes))
+    """Every number in `text` (turn references aside) is, by value, a number in one of the quotes. Each quote is read
+    on its own, so `five` ending one and `hundred` starting the next do not make 500."""
+    return _values(without_turn_refs(text, turn_ids)) <= set().union(*(_values(q) for q in quotes))
 
 
 def _numbers_supported(f: Finding) -> bool:
