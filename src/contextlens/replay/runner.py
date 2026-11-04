@@ -3,7 +3,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Protocol, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from contextlens.memory.store import InMemoryTranscriptStore, TranscriptStore
 from contextlens.schemas import ButtonRequest, Card, ConsistencyLabel, Scenario
@@ -41,6 +41,14 @@ class Prediction(BaseModel):
     label: ConsistencyLabel | None = None  # a bare consistency verdict, for rows that may hold no text
     probability: float | None = Field(default=None, ge=0, le=1)  # the model's probability for the label it gave
     drops: list[DroppedFinding] = Field(default_factory=list)  # findings the checks removed, with their text
+
+    @model_serializer(mode="wrap")
+    def _keep_cloud_supported_only_if_set(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Rows saved before the field existed have no such key; writing one would change their bytes."""
+        data = handler(self)
+        if "cloud_supported" not in self.model_fields_set and data.get("cloud_supported") is None:
+            del data["cloud_supported"]
+        return data
 
     @model_validator(mode="after")
     def _has_output(self) -> Self:

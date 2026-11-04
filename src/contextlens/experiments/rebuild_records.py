@@ -110,6 +110,12 @@ def rebuild(root: Path, run_id: str, reason: str = REASON, renames: dict[str, st
         if old["experiment"] == e3.EXPERIMENT:  # the consistency part
             config["selection_data"] = "dev (selection data, not held out)"
             config["label_note"] = label_text(root, old["scenario_source"])
+            tables = {sy: {src: {k: (kn[0], kn[1]) for k, kn in t.items()} for src, t in by.items()}
+                      for sy, by in config["catch_far"].items()}
+            config["alert_precision_note"] = e3.precision_note(tables)
+            hand = config.get("hand_read_file")
+            if isinstance(hand, str) and hand.endswith("/" + e3.HAND_READ_REL.as_posix()):
+                config["hand_read_file"] = e3.HAND_READ_REL.as_posix()  # it named a worktree that no longer exists
     for name, saved in old["metrics"].items():  # derived values that are not being corrected must come out the same
         for m, v in saved.items():
             if not _same_value(metrics[name].get(m), v):

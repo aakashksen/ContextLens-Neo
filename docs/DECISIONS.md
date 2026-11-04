@@ -269,6 +269,17 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Older records:** records built with the 10 s limit list 2 of 148 failed memory cases in their config; those 2 were this timeout, and their memory-strategy rows were scored with empty notes for those cases.
 - **Would change if:** the writer model or its speed changes (the constant follows the measured rate), or a build still times out at 60 s, which the reason now shows.
 
+## 29c. Phase 4 review fixes: one labels flag, rows that rebuild, repo-relative paths, a plain precision note
+- **Date / task:** 2026-11-04, coordinator-ordered fix on `fix/phase4` (review: `orchestration/verdicts/phase-4.md`, D2 to D6)
+- **Who:** The coordinator ordered it; the implementer chose the form.
+- **D3, which flag is right:** the top-level `labels_reviewed` is. `records.labels_reviewed` sets it from the label source (`publisher` counts as reviewed by the person's rule of 2026-11-03; our scenarios need H2 done), and the claims gate reads it. The copy in `config` was a hardcoded `False` from before commit 1a75819, carried forward by each rebuild. `write_run` now leaves any `labels_reviewed` key out of `config`, and `check_run` fails a record whose config copy differs from the top-level flag. The gate itself is unchanged. Two saved records disagree and so fail the new check until rebuilt: `E3-20261104T013101638012Z` (DECODE) and `E3-20261104T012006860469Z` (scenarios). No claim cites either; `results/claims.json` is empty.
+- **D4:** `Prediction` now writes `cloud_supported` only if it was set, so rows saved before the field existed write back to the same bytes and a row that carries it (null or not) keeps it. No value is invented. All E3 records and the later E2 records pass `rebuild_records._rows` again; the E1, the first three E2 and the E4 records fail it for other reasons and were not touched.
+- **D5:** new records store `hand_read_file` relative to the repo. Rebuild turns an old absolute path ending in the hand-read file's name into the same relative path.
+- **D2:** `alert_precision_note` names every system and source whose false-alert count is zero, gives the count (for example 0 of 65), and says the precision there is the arithmetic of a zero count. Rebuild rewrites the note from the saved counts. No interval was added.
+- **D6:** `TeamAssistant._assist` catches any exception from the planning step and keeps the verified findings as a partial card, and from finishing the card and abstains, both naming only the exception type, as the specialists do.
+- **Considered:** Hand-editing the three records: rejected, a record is never edited. Writing `cloud_supported: null` into old rows' hashes: rejected, it changes saved bytes. Keeping the config copy in sync instead of dropping it: rejected, two copies can drift again.
+- **Would change if:** a claim is ever drawn from a rebuilt record and its notes need more than the type of an error.
+
 ## 30. E3's selection score uses the lower abstention side
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator.
