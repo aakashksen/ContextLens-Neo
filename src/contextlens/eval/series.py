@@ -47,9 +47,9 @@ def schema_valid(raw: str) -> bool:
     return True
 
 
-def grounded_per_card(rows: Rows) -> list[list[bool]] | None:
-    """Per row, one flag per finding. None when a card with findings lacks a judgement for each."""
-    if not all(p.claim_supported is not None and len(p.claim_supported) == len(p.card.findings)
+def grounded_per_card(rows: Rows, field: str = "claim_supported") -> list[list[bool]] | None:
+    """Per row, one flag per finding, by the judgement in `field`. None when a card with findings lacks one for each."""
+    if not all(getattr(p, field) is not None and len(getattr(p, field)) == len(p.card.findings)
                for _, p in rows if p.card is not None and p.card.findings):
         return None
     out: list[list[bool]] = []
@@ -57,7 +57,7 @@ def grounded_per_card(rows: Rows) -> list[list[bool]] | None:
         if p.card is None:
             out.append([])
             continue
-        judged = {id(f): j for f, j in zip(p.card.findings, p.claim_supported or [], strict=False)}
+        judged = {id(f): j for f, j in zip(p.card.findings, getattr(p, field) or [], strict=False)}
         turn_seq = {t.id: t.seq for t in s.conversation.turns}
         out.append(M.grounded_flags([p.card], turn_seq, s.request.as_of_seq, lambda f, judged=judged: judged[id(f)]))
     return out
@@ -228,6 +228,29 @@ def _judged_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
             "unsupported_claim_rate": M.unsupported_claim_rate(flags)}
 
 
+JUDGE_CHECK = ("cloud_grounded_rate", "grounded_gap", "judge_agreement", "judge_kappa",
+               "gemma_yes_cloud_no", "gemma_no_cloud_yes")
+
+
+def _judge_check_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
+    """The local judge's (`claim_supported`) and the cloud grader's (`cloud_supported`) verdicts on the same claims.
+    Omitted unless every card with findings holds both. The gap is the local grounded rate minus the cloud's."""
+    if not want(*JUDGE_CHECK):
+        return {}
+    local, cloud = grounded_per_card(rows), grounded_per_card(rows, "cloud_supported")
+    claims = [(a, b) for _, p in rows if p.card is not None
+              for a, b in zip(p.claim_supported or [], p.cloud_supported or [], strict=False)]
+    if local is None or cloud is None or not claims:
+        return {}
+    g_rate = sum(x for fl in local for x in fl) / len(claims)
+    c_rate = sum(x for fl in cloud for x in fl) / len(claims)
+    return {"cloud_grounded_rate": c_rate, "grounded_gap": g_rate - c_rate,
+            "judge_agreement": sum(a == b for a, b in claims) / len(claims),
+            "judge_kappa": M.cohen_kappa([a for a, _ in claims], [b for _, b in claims]),
+            "gemma_yes_cloud_no": sum(a and not b for a, b in claims) / len(claims),
+            "gemma_no_cloud_yes": sum(b and not a for a, b in claims) / len(claims)}
+
+
 def _raw_and_retrieval_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> Metrics:
     out: Metrics = {}
     raws = _complete([p.raw_output is not None for _, p in rows]) if want("schema_valid_rate") else False
@@ -269,6 +292,7 @@ def base_metrics(rows: list[tuple[Scenario, Prediction]], ks: Iterable[int], onl
 
     ks = tuple(ks)
     out: Metrics = {}
-    for section in (_label_metrics, _card_metrics, _judged_metrics, _raw_and_retrieval_metrics, _latency_metrics):
+    for section in (_label_metrics, _card_metrics, _judged_metrics, _judge_check_metrics, _raw_and_retrieval_metrics,
+                    _latency_metrics):
         out.update(section(rows, ks, want))
     return out

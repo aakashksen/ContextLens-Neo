@@ -146,3 +146,16 @@ def speaker_accuracy(pred_speakers: Sequence[str], gold_speakers: Sequence[str])
     if not gold_speakers:
         return None
     return sum(p == g for p, g in zip(pred_speakers, gold_speakers, strict=True)) / len(gold_speakers)
+
+
+def cohen_kappa(a: Sequence[bool], b: Sequence[bool]) -> float | None:
+    """Agreement of two yes/no judges beyond chance. None when there are no pairs or chance agreement is
+    certain (both judges answered the same one way throughout), where kappa is undefined."""
+    _same_length(a, b)
+    n = len(a)
+    if n == 0:
+        return None
+    po = sum(x == y for x, y in zip(a, b, strict=True)) / n
+    pa, pb = sum(a) / n, sum(b) / n
+    pe = pa * pb + (1 - pa) * (1 - pb)
+    return None if pe == 1 else (po - pe) / (1 - pe)
