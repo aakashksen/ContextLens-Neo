@@ -28,6 +28,7 @@ from typing import Any
 from contextlens.agents.consistency_check import ConsistencyChecker, PromptedChecker
 from contextlens.consistency import model as cm
 from contextlens.consistency import train as ct
+from contextlens.device import resolve_device
 from contextlens.consistency.baselines import ZERO_SHOT_MODEL, TfidfChecker, ZeroShotChecker
 from contextlens.consistency.data import assert_trainable, build_pairs
 from contextlens.data import train_scenarios as ts
@@ -417,7 +418,7 @@ def _intervals_and_comparisons(
     return intervals, comparisons
 
 
-def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str = "cpu",
+def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str = cm.BASE_MODEL, device: str | None = None,
            grid=GRID, make_zeroshot: Callable[[], ConsistencyChecker], make_prompted: Callable[[], ConsistencyChecker],
            prompted_model: str = PROMPTED_MODEL, say=_say, num_workers: int = 0,
            supersedes: list[dict[str, str]] | None = None) -> dict[str, Any]:
@@ -427,6 +428,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
     records (run_id and reason); each new record lists the ones of its own scenario source, and the earlier files stay
     on disk."""
     raw_root = raw_root or root / RAW_DIR
+    device = device or resolve_device(cm.NEEDS_MB)
     if not committed_unchanged({"git_commit": head_commit(root)}, root, SCENARIO_SOURCES["decode"][0].as_posix()):
         raise RuntimeError("the decode manifest must be committed before the run (run with --prepare)")
     started = datetime.now(timezone.utc).isoformat()
@@ -446,7 +448,15 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
         say(f"WARNING: {lowered} ran at a lower batch size than {BATCH_SIZE}, so the settings are not trained alike")
 
     ckpt = root / CHECKPOINTS / winner["setting"]
-    systems, failed = _score_systems(scenarios, train, ckpt, device, make_zeroshot, make_prompted, say)
+    zeroshot: list[ConsistencyChecker] = []
+
+    def zeroshot_made() -> ConsistencyChecker:
+        zeroshot.append(make_zeroshot())
+        return zeroshot[-1]
+
+    systems, failed = _score_systems(scenarios, train, ckpt, device, zeroshot_made, make_prompted, say)
+    devices = {"trained": device, "tfidf": "cpu (scikit-learn)", "prompted": "Ollama, not probed here",
+               "zeroshot": getattr(zeroshot[-1], "device", "unknown") if zeroshot else "not run"}
     if "trained" not in systems:
         raise RuntimeError(f"the winning model could not be scored: {failed['trained']}")
 
@@ -473,7 +483,7 @@ def run_e4(*, root: Path = ROOT, raw_root: Path | None = None, base_model: str =
             "selection_data": SELECTION_NOTE,
             "style_note": STYLE_NOTE, "train_set_review_note": TRAIN_SET_REVIEW_NOTE, "decode_note": DECODE_NOTE, "checkpoint_sha256": ckpt_hash,
             "scored_cases": sum(s.gold_label is not None for s in scs), "started_at": started,
-            "failed_systems": failed,
+            "failed_systems": failed, "devices": devices,
             **({"rerun_note": RERUN_NOTE} if supersedes else {}),
         }
         paths[src] = write_run(

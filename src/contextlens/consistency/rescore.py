@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from contextlens.consistency import model as cm
+from contextlens.device import resolve_device
 from contextlens.eval.records import ROOT, SCENARIO_SOURCES
 from contextlens.replay.runner import Prediction
 from contextlens.schemas import Scenario
@@ -104,14 +105,14 @@ def main() -> int:
     ap.add_argument("--data-root", type=Path, default=ROOT,
                     help="folder holding models/e4/ and datasets/raw/ (git-ignored, so not in a worktree)")
     ap.add_argument("--root", type=Path, default=ROOT, help="folder holding the committed manifests and results/runs/")
-    ap.add_argument("--device", default="cpu", help="cpu (default) or cuda")
+    ap.add_argument("--device", default=None, help="cpu or cuda; by default cuda when it has room, else cpu (CONTEXTLENS_DEVICE)")
     args = ap.parse_args()
     ckpt = args.data_root / CHECKPOINT_REL
     sha = verify_checkpoint(ckpt, [args.root / "results/runs" / f"{r}.json" for r in RECORDS.values()])
     print(f"checkpoint sha256 matches both records: {sha}")
     start = time.perf_counter()
     model, tokenizer, labels = cm.load_checkpoint(ckpt)
-    device = args.device
+    device = args.device or resolve_device(cm.NEEDS_MB)
     model.to(device)
     for source, run_id in RECORDS.items():
         manifest_rel, dir_rel = SCENARIO_SOURCES[source]

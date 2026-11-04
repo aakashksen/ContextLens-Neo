@@ -1,9 +1,11 @@
 from collections.abc import Callable
 
 from contextlens.data.loaders import Pair
+from contextlens.device import loaded_device, resolve_device
 from contextlens.schemas import ConsistencyLabel, Turn
 
 ZERO_SHOT_MODEL = "cross-encoder/nli-deberta-v3-xsmall"  # Apache-2.0, see docs/datasets.md
+ZERO_SHOT_NEEDS_MB = 600  # a budget, not a measurement
 _FOUR_LABELS = ("consistent", "update", "contradiction", "insufficient")
 
 
@@ -61,12 +63,14 @@ class ZeroShotChecker:
         self.model_name = model_name
         self.threshold = threshold
         self._scorer = scorer or self._load_scorer
+        self.device = "not loaded"  # where the model actually runs, once loaded
 
     def _load_scorer(self, pairs: list[tuple[str, str]]) -> list[list[float]]:
         from sentence_transformers import CrossEncoder
 
         if not hasattr(self, "_model"):
-            self._model = CrossEncoder(self.model_name)
+            self._model = CrossEncoder(self.model_name, device=resolve_device(ZERO_SHOT_NEEDS_MB))
+            self.device = loaded_device(self._model)
         return self._model.predict(pairs, apply_softmax=True).tolist()
 
     def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]:

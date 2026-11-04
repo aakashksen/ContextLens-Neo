@@ -68,6 +68,7 @@ from contextlens.experiments.e2_context import (
 )
 from contextlens.guard.instructions import instruction_kind
 from contextlens.llm.client import LLMClient, LLMError
+from contextlens.device import ollama_device, pick_device
 from contextlens.llm.ollama_ctl import OllamaCtl, full_name
 from contextlens.llm.untrusted import effective_speaker, escape
 from contextlens.memory.extract import MemoryStore
@@ -208,30 +209,6 @@ def deadline_sentence(report: dict[str, dict[str, Any]]) -> str:
 
 def conditions_note(run_conditions: str) -> str:
     return f"Latency and time were measured under these run conditions: {run_conditions}."
-
-
-def ollama_device(ctl: OllamaCtl, model: str) -> str:
-    """Where Ollama holds `model` right now: gpu, cpu, partial (split), or unknown when it does not say."""
-    try:
-        found = ctl._call("GET", "/api/ps", None, 10.0).get("models", [])
-    except Exception:
-        return "unknown"
-    for m in found:
-        if full_name(m.get("name", "")) == full_name(model):
-            size, vram = m.get("size"), m.get("size_vram")
-            if not size or vram is None:
-                return "unknown"
-            return "gpu" if vram >= size else "cpu" if vram == 0 else "partial"
-    return "unknown"
-
-
-def pick_device(wanted: str, cuda_available: bool, say: Callable[[str], None]) -> tuple[str, str | None]:
-    """(device used, fallback note). A request for cuda that cannot be met warns and runs on cpu."""
-    if wanted.startswith("cuda") and not cuda_available:
-        note = f"WARNING: {wanted} was requested but is not available; the trained model runs on CPU"
-        say(note)
-        return "cpu", note
-    return wanted, None
 
 
 # ---------------------------------------------------------------- reports on cards (pure, from saved rows)

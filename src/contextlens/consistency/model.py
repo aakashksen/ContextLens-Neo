@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.data.loaders import Pair
+from contextlens.device import resolve_device
 from contextlens.schemas import ConsistencyLabel, Scenario, Turn
 
 BASE_MODEL = "microsoft/deberta-v3-base"  # MIT, see docs/datasets.md
 LABELS: tuple[ConsistencyLabel, ...] = ("consistent", "update", "contradiction", "insufficient")
+NEEDS_MB = 2000  # inference budget, not a measurement
 MAX_LENGTH = 256
 CONTEXT_TURNS = 6
 LABEL_MAP_FILE = "label_map.json"
@@ -113,9 +115,9 @@ class TrainedChecker:
         self.model, self.tokenizer, self.labels, self.threshold = model, tokenizer, labels, threshold
 
     @classmethod
-    def from_checkpoint(cls, directory: Path, threshold: float = THRESHOLD, device: str = "cpu") -> "TrainedChecker":
+    def from_checkpoint(cls, directory: Path, threshold: float = THRESHOLD, device: str | None = None) -> "TrainedChecker":
         model, tokenizer, labels = load_checkpoint(directory)
-        return cls(model.to(device), tokenizer, labels, threshold)
+        return cls(model.to(device or resolve_device(NEEDS_MB)), tokenizer, labels, threshold)
 
     def probabilities(self, statement: Turn, earlier: list[Turn]) -> dict[ConsistencyLabel, float]:
         probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]

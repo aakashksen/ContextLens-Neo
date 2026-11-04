@@ -57,6 +57,7 @@ from contextlens.eval.records import (
 from contextlens.eval.row_report import before_after, row_report
 from contextlens.eval.series import base_name
 from contextlens.llm.client import CLAUDE_CALL_CAP, ClaudeCodeClient, LLMClient, LLMError, LLMResult
+from contextlens.device import ollama_device
 from contextlens.llm.ollama_ctl import OllamaCtl, full_name
 from contextlens.llm.untrusted import escape
 from contextlens.memory.extract import MemoryExtractor, MemoryStore
@@ -1039,6 +1040,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
             "(config.judge_review is absent), so they are not claims.",
         ],
         "injection": {n: injection_report(scenarios, p) for n, p in systems.items()},
+        "devices": {"embedder": ollama_device(ctl, names.embedder)},
         "claude_calls": 0, "started_at": started,
     }
     models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
@@ -1204,6 +1206,7 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
                         "note": "the run stops at the budget; the cap is the client's, as in docs/DESIGN.md"},
         "health": {f"{winner}_cloud": health}, "cold_start_s": {"judge_cloud": cold["judge_cloud"]},
         "injection": {n: injection_report(sub_scs, p) for n, p in systems.items()},
+        "devices": {"embedder": ollama_device(ctl, names.embedder)},
         "claude_calls": used, "started_at": local_config["started_at"],
     }
     if "memory_build" in result:
