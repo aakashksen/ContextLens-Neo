@@ -155,7 +155,10 @@ class TeamAssistant:
                 followup_ms += (time.perf_counter() - f0) * 1000
 
         if job.evidence.all():
-            mode, note = decide(llm, req, job.evidence.all, follow_up, job.end, mine, self.max_followups)
+            try:
+                mode, note = decide(llm, req, job.evidence.all, follow_up, job.end, mine, self.max_followups)
+            except Exception as exc:  # the verified findings are still good; only the error type is named
+                mode, note = "recall", f"assistance: failed: {type(exc).__name__}"
         findings = job.evidence.all()
         missing = [*job.notes, *([note] if note else [])]
         if findings:
@@ -168,7 +171,10 @@ class TeamAssistant:
         total.results = [r for n in AGENTS[:2] for r in job.runs[n].results] + mine.results
         total.abandoned = sum(r.abandoned for r in job.runs.values())
         spec_n = len(total.results) - len(mine.results)
-        card = _finish(card, ctx, req, job.start, total, llm, job.end, MARGIN_S)
+        try:
+            card = _finish(card, ctx, req, job.start, total, llm, job.end, MARGIN_S)
+        except Exception as exc:  # no checked card exists, so none is shown
+            card = _abstained(f"assistance: failed: {type(exc).__name__}")
         job.ms["assistance"] = (time.perf_counter() - t0) * 1000 - followup_ms
         job.card = card
         self._record(job, total, spec_n)

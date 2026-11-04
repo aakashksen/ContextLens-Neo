@@ -120,6 +120,24 @@ class _Serialized:
             return self._inner.spans(pcm)
 
 
+def _overlap(a0: int, a1: int, b0: int, b1: int) -> int:
+    return max(0, min(a1, b1) - max(a0, b0))
+
+
+def _match_known_names(abs_spans: list[tuple[int, int, str]], inside: list[Turn], known: set[str]) -> dict[str, str]:
+    """Each pipeline name mapped to the stable name already given to the turns it overlaps most."""
+    score: dict[tuple[str, str], int] = {}
+    for t in inside:
+        if t.speaker in known:
+            for a, b, who in abs_spans:
+                score[(who, t.speaker)] = score.get((who, t.speaker), 0) + _overlap(a, b, t.start_ms, t.end_ms)
+    stable: dict[str, str] = {}
+    for (who, name), n in sorted(score.items(), key=lambda kv: -kv[1]):
+        if n > 0 and who not in stable and name not in stable.values():
+            stable[who] = name
+    return stable
+
+
 class Diarizer:
     """One per conversation. Audio is kept in memory only, and only the most recent two minutes of it."""
 
@@ -131,7 +149,7 @@ class Diarizer:
         self.last_end_ms = 0
         self._mu = threading.Lock()
         self._audio = bytearray()
-        self._audio_start_ms = 0
+        self._dropped = 0  # bytes of this stream no longer held; counting bytes keeps the clock exact for any chunk size
         self._offset_ms = 0  # stream times restart at 0 on each new stream; turn times keep running
 
     def set_backend(self, backend: SpeakerBackend | WindowBackend) -> None:
@@ -142,23 +160,23 @@ class Diarizer:
     def new_stream(self) -> None:
         with self._mu:
             self._audio.clear()
-            self._audio_start_ms = 0
+            self._dropped = 0
         self._offset_ms = self.last_end_ms
 
     def feed(self, pcm: bytes) -> None:
         with self._mu:
             if self.backend is None:  # not loaded (yet): keep no audio, but keep the clock
-                self._audio_start_ms += len(pcm) // BYTES_PER_MS
+                self._dropped += len(pcm)
                 return
             self._audio += pcm
             extra = len(self._audio) - KEEP_MS * BYTES_PER_MS
             if extra > 0:
                 del self._audio[:extra]
-                self._audio_start_ms += extra // BYTES_PER_MS
+                self._dropped += extra
 
     def assign(self, segments: list[Segment]) -> list[Turn]:
         with self._mu:
-            audio, audio_start = bytes(self._audio), self._audio_start_ms
+            audio, audio_start = bytes(self._audio), self._dropped // BYTES_PER_MS
             backend, background = self.backend, self.background
         turns = []
         for seg in segments:
@@ -186,7 +204,7 @@ class Diarizer:
     def window(self) -> tuple[bytes, int]:
         """The retained audio and the turn-clock time (ms) at which it starts."""
         with self._mu:
-            return bytes(self._audio), self._audio_start_ms + self._offset_ms
+            return bytes(self._audio), self._dropped // BYTES_PER_MS + self._offset_ms
 
     def speaker_updates(
         self, spans: list[tuple[int, int, str]], window_start_ms: int, window_end_ms: int, turns: list[Turn]
@@ -199,26 +217,14 @@ class Diarizer:
         """
         abs_spans = [(a + window_start_ms, b + window_start_ms, who) for a, b, who in spans]
         inside = [t for t in turns if t.start_ms >= window_start_ms and t.end_ms <= window_end_ms]
-
-        def overlap(a0, a1, b0, b1):
-            return max(0, min(a1, b1) - max(a0, b0))
-
         known = {t.speaker for t in turns if t.speaker != "unknown" and t.speaker_confidence >= 0.5}
-        score: dict[tuple[str, str], int] = {}
-        for t in inside:
-            if t.speaker in known:
-                for a, b, who in abs_spans:
-                    score[(who, t.speaker)] = score.get((who, t.speaker), 0) + overlap(a, b, t.start_ms, t.end_ms)
-        stable: dict[str, str] = {}
-        for (who, name), n in sorted(score.items(), key=lambda kv: -kv[1]):
-            if n > 0 and who not in stable and name not in stable.values():
-                stable[who] = name
+        stable = _match_known_names(abs_spans, inside, known)
 
         updates = []
         for t in inside:
             share: dict[str, int] = {}
             for a, b, who in abs_spans:
-                share[who] = share.get(who, 0) + overlap(a, b, t.start_ms, t.end_ms)
+                share[who] = share.get(who, 0) + _overlap(a, b, t.start_ms, t.end_ms)
             who = max(share, key=share.get, default=None)
             if who is None or share[who] == 0:
                 continue

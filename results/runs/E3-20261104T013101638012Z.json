@@ -1,0 +1,637 @@
+{
+ "run_id": "E3-20261104T013101638012Z",
+ "experiment": "E3",
+ "git_commit": "fb943e85e0ecb2654bf0e20a82f8875db77ca6c8",
+ "dirty": false,
+ "dataset_hash": "409ac3772f7a2f5dc01ee7a95581e23874361284bc3614c244aaffc4a3bc58a1",
+ "split": "dev",
+ "scenario_source": "decode",
+ "config": {
+  "experiment": "E3",
+  "part": "consistency",
+  "run_conditions": "Not measured alone: code-cleanup test runs and other builders used the CPU at the same time, and another project may have shared the GPU.",
+  "devices": {
+   "trained_model": "cuda",
+   "embedder": "not used",
+   "writer": "not used",
+   "judge": "not used",
+   "prompted_checker": "gpu"
+  },
+  "notes": [
+   "Latency and time were measured under these run conditions: Not measured alone: code-cleanup test runs and other builders used the CPU at the same time, and another project may have shared the GPU.."
+  ],
+  "threshold": 0.95,
+  "systems": [
+   "trained",
+   "cascade",
+   "trained_same_speaker",
+   "cascade_same_speaker"
+  ],
+  "speaker_mode": {
+   "chosen": "roles",
+   "reason": "roles flip less and alert accuracy does not fall measurably",
+   "stats_trained_alone": {
+    "names": {
+     "accuracy": 0.8781341463414634,
+     "flips": 0.18062601626016261
+    },
+    "roles": {
+     "accuracy": 0.8761341463414634,
+     "flips": 0.16985772357723578
+    }
+   },
+   "measurable_drop": 0.02,
+   "note": "stats are the mean over both sources of alert accuracy and of speaker plus injection flip rate"
+  },
+  "flips": {
+   "trained": {
+    "scenarios": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 82,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 52,
+      "trials": 246,
+      "rate": 0.21138211382113822
+     }
+    },
+    "decode": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 1000,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 385,
+      "trials": 3000,
+      "rate": 0.12833333333333333
+     }
+    }
+   },
+   "cascade": {
+    "scenarios": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 82,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 39,
+      "trials": 246,
+      "rate": 0.15853658536585366
+     }
+    },
+    "decode": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 1000,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 451,
+      "trials": 3000,
+      "rate": 0.15033333333333335
+     }
+    }
+   },
+   "trained_same_speaker": {
+    "scenarios": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 82,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 41,
+      "trials": 246,
+      "rate": 0.16666666666666666
+     }
+    },
+    "decode": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 1000,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 318,
+      "trials": 3000,
+      "rate": 0.106
+     }
+    }
+   },
+   "cascade_same_speaker": {
+    "scenarios": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 82,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 32,
+      "trials": 246,
+      "rate": 0.13008130081300814
+     }
+    },
+    "decode": {
+     "speaker": {
+      "flipped": 0,
+      "trials": 1000,
+      "rate": 0.0
+     },
+     "injection": {
+      "flipped": 418,
+      "trials": 3000,
+      "rate": 0.13933333333333334
+     }
+    }
+   }
+  },
+  "flip_limit": 0.05,
+  "flips_above_limit": [
+   "trained injection flips on scenarios",
+   "trained injection flips on decode",
+   "cascade injection flips on scenarios",
+   "cascade injection flips on decode"
+  ],
+  "bring_to_coordinator_before_e8": true,
+  "flip_method": "speaker flip: every speaker renamed to a different name (no effect in roles mode); injection flip: one of 3 fixed order turns added before the statement, each template one trial",
+  "catch_far": {
+   "trained": {
+    "scenarios": {
+     "catch": [
+      7,
+      17
+     ],
+     "far": [
+      4,
+      65
+     ]
+    },
+    "decode": {
+     "catch": [
+      461,
+      497
+     ],
+     "far": [
+      41,
+      503
+     ]
+    }
+   },
+   "cascade": {
+    "scenarios": {
+     "catch": [
+      7,
+      17
+     ],
+     "far": [
+      4,
+      65
+     ]
+    },
+    "decode": {
+     "catch": [
+      298,
+      497
+     ],
+     "far": [
+      1,
+      503
+     ]
+    }
+   },
+   "trained_same_speaker": {
+    "scenarios": {
+     "catch": [
+      7,
+      17
+     ],
+     "far": [
+      0,
+      65
+     ]
+    },
+    "decode": {
+     "catch": [
+      437,
+      497
+     ],
+     "far": [
+      39,
+      503
+     ]
+    }
+   },
+   "cascade_same_speaker": {
+    "scenarios": {
+     "catch": [
+      7,
+      17
+     ],
+     "far": [
+      0,
+      65
+     ]
+    },
+    "decode": {
+     "catch": [
+      277,
+      497
+     ],
+     "far": [
+      1,
+      503
+     ]
+    }
+   }
+  },
+  "same_speaker_rule": {
+   "rule": "keep the same-speaker rule only if the mean false-alert rate over the sources falls and the mean catch rate falls by no more than MEASURABLE_DROP",
+   "verdict": {
+    "trained": {
+     "far_change": -0.0327573023398073,
+     "catch_change": -0.024144869215291687,
+     "keep": false
+    },
+    "cascade": {
+     "far_change": -0.03076923076923077,
+     "catch_change": -0.02112676056338031,
+     "keep": false
+    }
+   },
+   "how": "a flagged statement is scored against each of the last six earlier turns alone; if the turn it conflicts with most is another speaker's, the alert becomes a disagreement"
+  },
+  "wrong_speaker_false_alarms": {
+   "trained": {
+    "scenarios": {
+     "false_alerts": 4,
+     "on_another_speakers_turn": 4,
+     "on_wrong_speaker_trap_cases": 4
+    },
+    "decode": {
+     "false_alerts": 41,
+     "on_another_speakers_turn": 2,
+     "on_wrong_speaker_trap_cases": 0
+    }
+   },
+   "cascade": {
+    "scenarios": {
+     "false_alerts": 4,
+     "on_another_speakers_turn": 4,
+     "on_wrong_speaker_trap_cases": 4
+    },
+    "decode": {
+     "false_alerts": 1,
+     "on_another_speakers_turn": 0,
+     "on_wrong_speaker_trap_cases": 0
+    }
+   },
+   "trained_same_speaker": {
+    "scenarios": {
+     "false_alerts": 0,
+     "on_another_speakers_turn": 0,
+     "on_wrong_speaker_trap_cases": 0
+    },
+    "decode": {
+     "false_alerts": 39,
+     "on_another_speakers_turn": 0,
+     "on_wrong_speaker_trap_cases": 0
+    }
+   },
+   "cascade_same_speaker": {
+    "scenarios": {
+     "false_alerts": 0,
+     "on_another_speakers_turn": 0,
+     "on_wrong_speaker_trap_cases": 0
+    },
+    "decode": {
+     "false_alerts": 1,
+     "on_another_speakers_turn": 0,
+     "on_wrong_speaker_trap_cases": 0
+    }
+   }
+  },
+  "wrong_speaker_note": "DECODE speakers are A and B by position, not real people, so its counts say little",
+  "disagreements": {
+   "trained": {
+    "scenarios": 0,
+    "decode": 0
+   },
+   "cascade": {
+    "scenarios": 0,
+    "decode": 0
+   },
+   "trained_same_speaker": {
+    "scenarios": 4,
+    "decode": 26
+   },
+   "cascade_same_speaker": {
+    "scenarios": 4,
+    "decode": 21
+   }
+  },
+  "alert_precision": {
+   "trained": {
+    "scenarios": {
+     "5%": 0.26044647967945045,
+     "20%": 0.6258596973865199
+    },
+    "decode": {
+     "5%": 0.37458121044316584,
+     "20%": 0.7399159516386877
+    }
+   },
+   "cascade": {
+    "scenarios": {
+     "5%": 0.26044647967945045,
+     "20%": 0.6258596973865199
+    },
+    "decode": {
+     "5%": 0.9407356734468454,
+     "20%": 0.9869108913498638
+    }
+   },
+   "trained_same_speaker": {
+    "scenarios": {
+     "5%": 1.0,
+     "20%": 1.0
+    },
+    "decode": {
+     "5%": 0.37377229258206257,
+     "20%": 0.7392506297441003
+    }
+   },
+   "cascade_same_speaker": {
+    "scenarios": {
+     "5%": 1.0,
+     "20%": 1.0
+    },
+    "decode": {
+     "5%": 0.9365278879374084,
+     "20%": 0.9859325356109229
+    }
+   }
+  },
+  "alert_precision_note": "calculated, not measured: precision = c*p / (c*p + f*(1-p)) from the measured catch rate c and false-alert rate f at the selected point, for a stated share p of statements that really are contradictions",
+  "provenance": {
+   "checkpoint_sha256": "6f0cc95019bfc44a14adb8ccf13b52fdec05870392858b8e0fc7574cb2f4eba9",
+   "checkpoint": "lr3e-05_ep3",
+   "e4_record": "E4-20261103T102930546849Z",
+   "cascade_config": "configs/cascade.json",
+   "cascade_config_threshold_provisional": true
+  },
+  "hand_read_file": "<local path>",
+  "inference_input": "low-confidence speakers pass as unknown and every string is escaped before the trained model sees it",
+  "selection_data": "dev (selection data, not held out)",
+  "claude_calls": 0,
+  "labels_reviewed": false,
+  "started_at": "2026-11-03T18:54:49.676215+00:00",
+  "source": "decode",
+  "latency": {
+   "trained": {
+    "mean_ms": 42.36761090006621,
+    "p50_ms": 39.8393999930704,
+    "p95_ms": 68.84639999771025,
+    "second_stage_calls": 502,
+    "second_stage_tokens": 274581,
+    "second_stage_tokens_unreported": 0
+   },
+   "cascade": {
+    "mean_ms": 426.458650200002,
+    "p50_ms": 566.2062000046717,
+    "p95_ms": 938.3662999898661,
+    "second_stage_calls": 502,
+    "second_stage_tokens": 274581,
+    "second_stage_tokens_unreported": 0
+   },
+   "trained_same_speaker": {
+    "mean_ms": 74.64164700017136,
+    "p50_ms": 59.37080000876449,
+    "p95_ms": 152.9825999896275,
+    "second_stage_calls": 502,
+    "second_stage_tokens": 274581,
+    "second_stage_tokens_unreported": 0
+   },
+   "cascade_same_speaker": {
+    "mean_ms": 458.73268630010716,
+    "p50_ms": 595.1066999987233,
+    "p95_ms": 1009.7437999938847,
+    "second_stage_calls": 502,
+    "second_stage_tokens": 274581,
+    "second_stage_tokens_unreported": 0
+   }
+  },
+  "scored_cases": 1000,
+  "label_note": "Dev labels are reviewed (`labels_reviewed` is true; label source: publisher).",
+  "rebuilt": {
+   "from": "E3-20261103T201657902326Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ",
+   "model_calls": 0,
+   "prediction_hashes_sha256": {
+    "trained": "a5c685b5651af1d97027c45dd38415fd8c087c026fbe628485c96a5d0929a34c",
+    "cascade": "c6a203930cb81af73cca435b4cb44ac1fa495b701c4c6d2bb4b1fd6bf196f8a1",
+    "trained_same_speaker": "a713dadc9785120ac405a557223f422afd9f93dadf9a094d20a63b22938877a1",
+    "cascade_same_speaker": "61dba0762831c9b65bf5da5a883e20c5090a1447103bc64c86e9b109b8a1ccac"
+   },
+   "claude_calls_of_the_source_record": 0
+  }
+ },
+ "models": {
+  "trained": "fine-tuned checkpoint (config.provenance)",
+  "prompted": "qwen3.5:4b-q4_K_M"
+ },
+ "prompt_versions": {
+  "consistency": "v1"
+ },
+ "n": 1000,
+ "metrics": {
+  "trained": {
+   "false_alert_rate": 0.08151093439363817,
+   "f1[label=consistent]": 0.9230769230769231,
+   "f1[label=contradiction]": 0.9229229229229229,
+   "label_accuracy": 0.923,
+   "latency_p50_ms": 39.0,
+   "latency_p95_ms": 68.0
+  },
+  "cascade": {
+   "false_alert_rate": 0.0019880715705765406,
+   "f1[label=consistent]": 0.8338870431893688,
+   "f1[label=contradiction]": 0.7487437185929648,
+   "label_accuracy": 0.8,
+   "latency_p50_ms": 563.0,
+   "latency_p95_ms": 938.0
+  },
+  "trained_same_speaker": {
+   "false_alert_rate": 0.0775347912524851,
+   "f1[label=consistent]": 0.9036027263875365,
+   "f1[label=contradiction]": 0.8982528263103803,
+   "label_accuracy": 0.901,
+   "latency_p50_ms": 59.0,
+   "latency_p95_ms": 152.04999999999995
+  },
+  "cascade_same_speaker": {
+   "false_alert_rate": 0.0019880715705765406,
+   "f1[label=consistent]": 0.8195918367346938,
+   "f1[label=contradiction]": 0.7148387096774194,
+   "label_accuracy": 0.779,
+   "latency_p50_ms": 594.0,
+   "latency_p95_ms": 1009.0999999999999
+  }
+ },
+ "intervals": {
+  "trained": {
+   "label_accuracy": [
+    0.9059059059059059,
+    0.939
+   ],
+   "false_alert_rate": [
+    0.05835010060362173,
+    0.10612244897959183
+   ]
+  },
+  "cascade": {
+   "label_accuracy": [
+    0.7746759720837487,
+    0.8244747452727074
+   ],
+   "false_alert_rate": [
+    0.0,
+    0.006237006237006237
+   ]
+  },
+  "trained_same_speaker": {
+   "label_accuracy": [
+    0.882,
+    0.9188376753507014
+   ],
+   "false_alert_rate": [
+    0.054474708171206226,
+    0.10183299389002037
+   ]
+  },
+  "cascade_same_speaker": {
+   "label_accuracy": [
+    0.753,
+    0.8042168674698795
+   ],
+   "false_alert_rate": [
+    0.0,
+    0.006237006237006237
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "cascade",
+   "b": "trained",
+   "metric": "label_accuracy",
+   "diff": -0.123,
+   "ci": [
+    -0.15010067224281945,
+    -0.09599760239760252
+   ],
+   "mcnemar_p": 8.152870731215407e-19
+  },
+  {
+   "a": "cascade",
+   "b": "trained",
+   "metric": "false_alert_rate",
+   "diff": -0.07952286282306163,
+   "ci": [
+    -0.10408182232000607,
+    -0.05652938844285857
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "trained_same_speaker",
+   "b": "trained",
+   "metric": "label_accuracy",
+   "diff": -0.02200000000000002,
+   "ci": [
+    -0.03206412825651306,
+    -0.012072131280143143
+   ],
+   "mcnemar_p": 1.049041748046875e-05
+  },
+  {
+   "a": "trained_same_speaker",
+   "b": "trained",
+   "metric": "false_alert_rate",
+   "diff": -0.003976143141153077,
+   "ci": [
+    -0.010121970748371956,
+    0.0
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "cascade_same_speaker",
+   "b": "cascade",
+   "metric": "label_accuracy",
+   "diff": -0.02100000000000002,
+   "ci": [
+    -0.030090270812437314,
+    -0.01207243460764595
+   ],
+   "mcnemar_p": 9.5367431640625e-07
+  },
+  {
+   "a": "cascade_same_speaker",
+   "b": "cascade",
+   "metric": "false_alert_rate",
+   "diff": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "mcnemar_p": null
+  }
+ ],
+ "supersedes": [
+  {
+   "run_id": "E3-20261103T201657902326Z",
+   "reason": "rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ"
+  }
+ ],
+ "attempts": [
+  {
+   "setting": "trained",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "cascade",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "trained_same_speaker",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  },
+  {
+   "setting": "cascade_same_speaker",
+   "kind": "system",
+   "ok": true,
+   "error": null
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": true,
+ "label_source": "publisher",
+ "predictions": {
+  "trained": "results/runs/E3-20261104T013101638012Z.trained.predictions.jsonl",
+  "cascade": "results/runs/E3-20261104T013101638012Z.cascade.predictions.jsonl",
+  "trained_same_speaker": "results/runs/E3-20261104T013101638012Z.trained_same_speaker.predictions.jsonl",
+  "cascade_same_speaker": "results/runs/E3-20261104T013101638012Z.cascade_same_speaker.predictions.jsonl"
+ },
+ "started_at": "2026-11-03T18:54:49.676215+00:00",
+ "finished_at": "2026-11-04T01:31:01.638012+00:00"
+}

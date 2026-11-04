@@ -3,7 +3,7 @@
 Four strategies on the dev split, all with the same local writer: the last few turns, the full transcript, retrieval
 (the winner of E1), and retrieval plus structured memory. A separate local model judges whether each finding is
 supported by its cited quotes. The best strategy by a rule fixed here (`pick_winner`) is then run again on the
-cloud model (`ClaudeCodeClient`) over a named subset of at most 100 dev cases, within a call budget. The test split is
+cloud model (`ClaudeCodeClient`) over a named subset: every case of the dev scenario file, within the client's call cap. The test split is
 never read, and nothing from QMSum or DECODE is loaded: only the committed scenario file (our synthetic cases and
 LongMemEval) is used, and the cloud step refuses any other source.
 
@@ -33,6 +33,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from contextlens.agents.graph import AGENTS
 from contextlens.agents.single import (
     FullTranscriptAssistant,
     RecentTurnsAssistant,
@@ -49,10 +50,12 @@ from contextlens.eval.records import (
     git,
     head_commit,
     is_dirty,
+    label_text,
     split_hash,
     write_atomic,
     write_run,
 )
+from contextlens.eval.row_report import before_after, row_report
 from contextlens.eval.series import base_name
 from contextlens.llm.client import CLAUDE_CALL_CAP, ClaudeCodeClient, LLMClient, LLMError, LLMResult
 from contextlens.llm.ollama_ctl import OllamaCtl, full_name
@@ -73,19 +76,16 @@ DEADLINE_S = 8.0
 WRITER_MODEL = "qwen3.5:4b-q4_K_M"  # docs/model-choice.md
 JUDGE_MODEL = "gemma4:e4b-it-qat"  # a different local model from the writer, per docs/TESTING.md
 EMBED_MODEL = "nomic-embed-text"
-CLOUD_MODEL = "haiku"
+CLOUD_MODEL = "sonnet"
 
 # The cloud comparison.
-SUBSET = "e2-cloud-100"
-SUBSET_N = 100
+SUBSET = "e2-cloud-all"  # every dev case whose text may go to a cloud model (the name keeps check_run's subset checks)
+OLD_SUBSET, OLD_SUBSET_N = "e2-cloud-100", 100  # the first cloud comparison's 100-case subset; its manifest stays for old records
 SUBSET_SEED = "e2-cloud-v1"
 SUBSETS_REL = Path("datasets/splits/subsets")
 PARTIAL_REL = Path("results/partial/e2-cloud-rows.jsonl")  # git-ignored; one line per paid cloud row
 TRIED_PROMPT_SYSTEM = "retrieval_memory"  # the one strategy that was run on all of dev under the mode-defining prompt
 TRIED_PROMPT_KIND = "new_prompt"  # config.kind of that record, as it was written; the prompt has since been reverted
-CLOUD_SOURCES = frozenset({"synthetic", "longmemeval"})  # conversation sources whose text may go to a cloud model
-LOCAL_ONLY_SOURCES = frozenset({"qmsum", "decode"})  # scenario sources approved for local use only
-CLOUD_CALL_BUDGET = 250  # most calls one stage may make, retries included; the run stops there; the cap is the client's
 CLOUD_DEADLINE_S = 60.0  # `claude -p` takes seconds to start, so the 8 s local deadline would time out every case
 CLOUD_CALL_TIMEOUT_S = 55.0
 CALLS_PER_CASE_WORST = 4  # first call and its schema retry, then the suggestion call and its retry
@@ -95,7 +95,8 @@ BROKEN_MAX = 0.10  # share of cases whose model or store call failed outright
 TIMEOUT_MAX = 0.25  # share of cases that ran out of time
 INVALID_MAX = 0.50  # share of cases whose output was not valid twice
 STREAK_LOCAL, STREAK_CLOUD = 5, 3  # consecutive failed cases that end a system at once
-BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:")
+BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:", "failed:")
+AGENT_PREFIXES = tuple(f"{a}: " for a in AGENTS)  # the team writes "memory: llm error: ...", "assistance: failed: ..."
 
 SAVED = {
     "grounded_rate", "unsupported_claim_rate", "abstain_when_insufficient", "answer_when_answerable",
@@ -141,22 +142,18 @@ class Cloud:
     touch: Callable[[], None] = lambda: None  # makes the files the client leaves behind, so the tree check sees them
 
 
-# ---------------------------------------------------------------- data the cloud may see
+# ---------------------------------------------------------------- the cases of the cloud set
 
-def assert_cloud_safe(scenarios: list[Scenario], scenario_source: str) -> None:
-    """Only benchmark text and synthetic scenarios may reach a cloud model. QMSum and DECODE are local only."""
-    if scenario_source != SCENARIO_SOURCE:
-        raise RunBroken(f"scenario source {scenario_source!r} may not go to a cloud model; only {SCENARIO_SOURCE!r} may")
-    bad = [s.id for s in scenarios
-           if s.conversation.source not in CLOUD_SOURCES or s.id.lower().startswith(tuple(LOCAL_ONLY_SOURCES))]
-    if bad:
-        raise RunBroken(f"{len(bad)} case(s) from a source that may not go to a cloud model: {bad[:3]}")
+def all_case_ids(scenarios: list[Scenario]) -> list[str]:
+    """Every case, in the order of `scenarios`. No source is held back from the cloud client. Prediction rows and records
+    of QMSum and DECODE cases stay ids-only whatever model answered (eval/check_run.py checks that)."""
+    return [s.id for s in scenarios]
 
 
-def choose_subset(scenarios: list[Scenario], n: int = SUBSET_N, seed: str = SUBSET_SEED) -> list[str]:
+def choose_subset(scenarios: list[Scenario], n: int, seed: str = SUBSET_SEED) -> list[str]:
     """n cases drawn from the cloud-safe ones, in proportion to each (category, origin) group (largest remainder),
     inside a group by a hash of the seed and the id. Listed in the order of `scenarios`."""
-    pool = [s for s in scenarios if s.conversation.source in CLOUD_SOURCES]
+    pool = list(scenarios)
     if len(pool) < n:
         raise ValueError(f"only {len(pool)} cloud-safe cases for a subset of {n}")
     groups: dict[tuple[str, str], list[Scenario]] = defaultdict(list)
@@ -175,13 +172,13 @@ def choose_subset(scenarios: list[Scenario], n: int = SUBSET_N, seed: str = SUBS
 
 
 def write_subset(root: Path = ROOT, name: str = SUBSET) -> Path:
-    """Write the cloud subset's manifest from the committed dev file. Commit it before the run."""
+    """Write the manifest of every cloud-safe dev case from the committed dev file. Commit it before the run."""
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
-    ids = choose_subset(scenarios)
+    ids = all_case_ids(scenarios)
     by_id = {s.id: s for s in scenarios}
     manifest = {
         "name": name, "split": SPLIT, "ids": ids,
-        "rule": f"{SUBSET_N} cloud-safe dev cases, proportional by (category, origin), hash order inside a group, seed {SUBSET_SEED}",
+        "rule": "every case of the dev scenario file; no sampling",
         "sources": dict(sorted(_count(by_id[i].conversation.source for i in ids).items())),
         "categories": dict(sorted(_count(by_id[i].category for i in ids).items())),
     }
@@ -332,11 +329,14 @@ def judge_rows(judge: Judge, preds: list[Prediction]) -> list[Prediction]:
 # ---------------------------------------------------------------- health
 
 def row_state(p: Prediction) -> str:
-    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok."""
+    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok.
+    A note may start with the team member that wrote it. One dead specialist is broken even if the others found something:
+    the call failed, and check_health's limit decides how many such cards a run may have."""
     if p.errored:
         return "broken"
     notes = p.card.missing if p.card else []
     for n in notes:
+        n = n.removeprefix(next((a for a in AGENT_PREFIXES if n.startswith(a)), ""))  # a specialist's failure is a failure
         if n.startswith(BROKEN_PREFIXES):
             return "invalid" if "schema validation" in n else "broken"
     return "timeout" if any("deadline reached" in n for n in notes) else "ok"
@@ -401,15 +401,39 @@ def build_store(sc: Scenario) -> InMemoryTranscriptStore:
     return store
 
 
-def build_memory(sc: Scenario, llm: LLMClient) -> tuple[MemoryStore, dict[str, float] | None]:
-    """The notes a running system would have made from the turns so far, and what that cost. None when it failed."""
+_TRANSPORT_PREFIXES = ("request to ", "no retry: the caller stopped waiting")  # LLMError messages built without model text
+
+
+def _safe_reason(exc: Exception) -> str:
+    """The exception type, plus its message only for an LLMError that is a transport or timeout failure.
+
+    Every other LLMError message in llm/client.py can quote the model's reply (schema failures, unexpected replies)
+    and the other exception types may quote a field value, so those give the type and a fixed note only."""
+    name = type(exc).__name__
+    if isinstance(exc, LLMError):
+        msg = str(exc)
+        return f"{name}: {msg[:200]}" if msg.startswith(_TRANSPORT_PREFIXES) else f"{name}: invalid model reply"
+    return name
+
+
+def build_memory(
+    sc: Scenario, llm: LLMClient, on_failure: Callable[[str, str], None] | None = None,
+) -> tuple[MemoryStore, dict[str, float] | None]:
+    """The notes a running system would have made from the turns so far, and what that cost. None when it failed.
+
+    A failure is named on stderr and passed to `on_failure` as (case id, reason): the exception type and a
+    message only when it cannot hold model text (see `_safe_reason`), never the transcript."""
     store = MemoryStore()
     meter = Metered(llm)
     t0 = time.perf_counter()
     try:
         turns = build_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)
         store.add(MemoryExtractor(meter).update(turns, []))
-    except Exception:
+    except Exception as exc:
+        reason = _safe_reason(exc)
+        print(f"memory build failed for {sc.id}: {reason}", file=sys.stderr)
+        if on_failure is not None:
+            on_failure(sc.id, reason)
         return MemoryStore(), None
     return store, {"ms": (time.perf_counter() - t0) * 1000, "tokens": float(meter.tokens)}
 
@@ -526,7 +550,7 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
             dropped.append(s.id)
             if card.status == "abstained" and s.gold_label != "insufficient":
                 lost.append(s.id)
-        for f, ok in zip(card.findings, p.claim_supported or []):
+        for f, ok in zip(card.findings, p.claim_supported or [], strict=False):
             if ok:
                 continue
             if _runs(f.statement):
@@ -539,21 +563,25 @@ def number_rule_check(scenarios: list[Scenario], preds: list[Prediction]) -> dic
 
 
 STATED_LIMITS = [
-    "Dev labels are unreviewed (`labels_reviewed` is false), so every figure here is provisional.",
+    "{labels}",
     "Grounded rates rest on the local judge's unreviewed judgements; no person has checked a sample.",
     "recent, full and retrieval may see nearly the same turns in short dev conversations, so their differences are small.",
     "speaker_accuracy is high by construction: the citation guard rewrites the evidence speaker from the store.",
-    "E2's fixed rule picked `{winner}`. The coordinator decided afterward, having seen the dev results, to carry "
-    "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
-    "cases (see the answer rates below). That choice was made on dev results, not by the rule.",
+    "{winner_line}",
+    "{carry_line}",
 ]
+CARRY_LINE = (
+    "The coordinator decided afterward, having seen the dev results, to carry "
+    "`retrieval_memory` forward with `recent` as the baseline, because the rule's winner answers under half of answerable "
+    "cases (see the answer rates below). That choice was made on dev results, not by the rule.")
 NUMBER_RULE_LIMITS = (
     "Known limits of the rule: a lone one, half, dozen and ordinals are not number tokens, and punctuation does not break "
     "a run of number tokens (`_runs` in `agents/single.py`). `docs/interview-notes.md` does not exist yet, so no "
     "interview-based limits are recorded.")
 NOT_MEASURED = [
-    "How many findings the number rule dropped, and whether each dropped finding was true: only the `missing` note on "
-    "the card is saved, so the counts below are of cases carrying that note, and the dropped text is not in the rows.",
+    "Whether each dropped finding was true: the counts below are of cases carrying the `missing` note. Rows written after "
+    "the short-id fix also save each dropped finding's text and reason in `drops`; older rows have none, so their counts "
+    "are of the note only.",
     "Whether an injected claim reached a suggestion: the count is a word-overlap proxy, and the flagged suggestions are "
     "listed for a person to read.",
 ]
@@ -562,16 +590,31 @@ NOT_MEASURED = [
 def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
                    winner: str, metrics: dict[str, dict[str, Any]] | None = None, records: list[str] | None = None,
                    cloud_done: bool = False, old_prompt: list[str] | None = None,
-                   respond: tuple[str, list[Prediction], dict[str, Any]] | None = None) -> str:
-    """`old_prompt` names the systems that ran on the prompt the code has now (None: leave the suggestion section
+                   respond: tuple[str, list[Prediction], dict[str, Any]] | None = None, labels_text: str | None = None,
+                   earlier: dict[str, list[Prediction]] | None = None, earlier_lines: list[str] | None = None,
+                   earlier_winner: str | None = None) -> str:
+    """`labels_text` is the sentence about the labels, from the records' flag (`records.label_text`); without it the
+    analysis says the status was not given. `earlier` holds the rows of superseded records (name -> rows), `earlier_lines`
+    names them and says why, and `earlier_winner` is the strategy the superseded local record's rule picked: what this
+    text says about the old winner, the carry-forward and the mode counts is then said of those records, not these.
+    `old_prompt` names the systems that ran on the prompt the code has now (None: leave the suggestion section
     out); `respond` is (run id, rows, metrics) of the one record that ran on the reverted mode-defining prompt."""
     by_id = {s.id: s for s in scenarios}
     lines = ["# E2 error analysis: context strategies on dev", "",
              "Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. Only scenario text is quoted.",
              "", f"Records: {', '.join(records) if records else 'this run'}. "
-             + ("" if cloud_done else "There is no cloud record yet; the cloud part is added when the cloud stage writes it."),
-             "", "## What this rests on", ""]
-    lines += [f"- {x.format(winner=winner)}" for x in STATED_LIMITS]
+             + ("" if cloud_done else "There is no cloud record yet; the cloud part is added when the cloud stage writes it.")]
+    if earlier:
+        lines += ["", "## Records and what they replace", ""] + [f"- {x}" for x in earlier_lines or []]
+        winner_line = (f"E2's fixed rule picks `{winner}` on the records above. The statements below about `{earlier_winner}`, "
+                       "about carrying `retrieval_memory` forward, and the respond-mode counts were true of the superseded "
+                       "records and are not statements about the current ones.")
+        carry_line = f"Of the superseded record: the fixed rule picked `{earlier_winner}`. " + CARRY_LINE
+    else:
+        winner_line = f"E2's fixed rule picked `{winner}`."
+        carry_line = CARRY_LINE
+    lines += ["", "## What this rests on", ""]
+    lines += [f"- {x.format(labels=labels_text or 'Dev label status was not given to this analysis.', winner_line=winner_line, carry_line=carry_line)}" for x in STATED_LIMITS]
     lines += ["", "## Not measured from the saved rows", ""] + [f"- {x}" for x in NOT_MEASURED]
     lines += ["", "## Answer rate on answerable cases", ""]
     for n, m in (metrics or {}).items():
@@ -602,9 +645,24 @@ def error_analysis(scenarios: list[Scenario], systems: dict[str, list[Prediction
         lines.append(f"- {name}: {r['cases']} cases, {r['with_suggestion']} with a suggestion, "
                      f"{r['injected_words_in_suggestion']} using words only the injected turn holds")
         lines += [f"    - {x['id']} {x['words']}: {x['suggestion']}" for x in r["flagged"]]
+    if systems and all(injection_report(scenarios, preds)["with_suggestion"] == 0 for preds in systems.values()):
+        lines.append("- Every count above is 0 because no injection case produced a suggestion: those cases carry a question, so "
+                     "the respond rule does not fire. The check could not fail, for these records as much as for any earlier ones, "
+                     "and 0 injected claims in suggestions is not evidence that none can get through.")
     lines += _injection_findings_section(scenarios, systems, respond)
     if old_prompt is not None:
-        lines += _suggestion_section(scenarios, systems, old_prompt, respond)
+        lines += _suggestion_section(scenarios, systems, old_prompt, respond, (earlier or {}).get(TRIED_PROMPT_SYSTEM))
+    if earlier:
+        lines += ["", "## Card modes on the current records", ""]
+        for name, preds in systems.items():
+            rep_ = mode_report(scenarios, preds)
+            rsp = rep_["categories"].get("respond_with_suggestion", {"n": 0, "modes": {}, "with_suggestion": 0})
+            lines.append(f"- {name}: respond mode on {rsp['modes'].get('respond', 0)} of {rsp['n']} respond_with_suggestion cards "
+                         f"({rsp['with_suggestion']} with a suggestion); recall cases moved to respond: "
+                         f"{rep_['recall_cases_to_respond']}; injection cases with a suggestion: {rep_['injection']['with_suggestion']}")
+        lines += ["", "## Card modes on the superseded records (the claims below were true of these, not of the current records)", ""]
+        old = _suggestion_section(scenarios, earlier, list(earlier), None)[2:]
+        lines += [x for x in old if not x.startswith(("- A prompt that defines", "- No record of the reverted"))]
     return "\n".join(lines) + "\n"
 
 
@@ -666,25 +724,32 @@ TRIED_PROMPT_METRICS = ("grounded_rate", "unsupported_claim_rate", "answer_when_
                    "tokens_per_card", "latency_p50_ms")
 
 
+def _old_prompt_lines(by_id: dict[str, Scenario], systems: dict[str, list[Prediction]], old_prompt: list[str]) -> list[str]:
+    lines: list[str] = []
+    lines.append("- The comparison records ran on the old prompt. A card gets a suggestion only when the model itself "
+                 "chooses mode respond, so on them the suggestion step was essentially not exercised:")
+    for name in old_prompt:
+        rows = systems.get(name, [])
+        inj = [p for p in rows if by_id[p.scenario_id].category == "prompt_injection"]
+        lines.append(
+            f"    - {name}: respond mode on {sum(bool(p.card and p.card.mode == 'respond') for p in rows)} of {len(rows)} "
+            f"cards, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in rows)}; on the {len(inj)} injection "
+            f"cases, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in inj)}")
+    lines.append("- So the \"0 injected\" counts in the suggestion-only section above are not evidence that injected "
+                 "claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.")
+    return lines
+
+
 def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Prediction]], old_prompt: list[str],
-                        respond: tuple[str, list[Prediction], dict[str, Any]] | None) -> list[str]:
+                        respond: tuple[str, list[Prediction], dict[str, Any]] | None,
+                        tried_against: list[Prediction] | None = None) -> list[str]:
     by_id = {s.id: s for s in scenarios}
     lines = ["", "## The suggestion step and the mode-defining prompt", "",
              "- A prompt that defines the card modes (recall, clarify, respond) was tried and reverted. The current code "
              "runs the old prompt, which lists `mode` without saying what its values mean. Further prompt work on modes "
              "is T7.1's; the instruction guard and the respond set in code are T4.2's."]
     if old_prompt:
-        lines.append("- The comparison records ran on the old prompt. A card gets a suggestion only when the model itself "
-                     "chooses mode respond, so on them the suggestion step was essentially not exercised:")
-        for name in old_prompt:
-            rows = systems.get(name, [])
-            inj = [p for p in rows if by_id[p.scenario_id].category == "prompt_injection"]
-            lines.append(
-                f"    - {name}: respond mode on {sum(bool(p.card and p.card.mode == 'respond') for p in rows)} of {len(rows)} "
-                f"cards, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in rows)}; on the {len(inj)} injection "
-                f"cases, a suggestion on {sum(bool(p.card and p.card.suggestion) for p in inj)}")
-        lines.append("- So the \"0 injected\" counts in the suggestion-only section above are not evidence that injected "
-                     "claims stay out of suggestions: the step that could carry one did not run, and the count could not fail.")
+        lines += _old_prompt_lines(by_id, systems, old_prompt)
     rm = systems.get(TRIED_PROMPT_SYSTEM)
     if rm:
         ins = [p for p in rm if by_id[p.scenario_id].gold_label == "insufficient"]
@@ -719,7 +784,7 @@ def _suggestion_section(scenarios: list[Scenario], systems: dict[str, list[Predi
     shown = [f"{m} {metrics[m]:.3f}" for m in TRIED_PROMPT_METRICS if metrics.get(m) is not None]
     lines.append("- Metrics on these cases (judged by the local model alone; undefined ones left out): " + ", ".join(shown))
     if rm:
-        cmp_ = same_case_comparison(scenarios, rm, rows)
+        cmp_ = same_case_comparison(scenarios, tried_against or rm, rows)
         lines.append(f"- {TRIED_PROMPT_SYSTEM}, old prompt vs the reverted prompt, on the same {cmp_['n']} cases (from the saved rows):")
         for m, v in cmp_["metrics"].items():
             lines.append(f"    - {m}: " + " -> ".join("not defined" if v[k] is None else f"{v[k]:.3f}" for k in ("old", "new")))
@@ -804,6 +869,22 @@ def _unload_models(ctl: OllamaCtl, mine: list[tuple[str, bool]], say: Callable[[
         say("WARNING: " + p)
 
 
+def _superseded_report(root: Path, entries: list[dict[str, str]], systems: dict[str, list[Prediction]]) -> dict[str, Any]:
+    """Per record this one replaces: the time and drop report of its rows before and after, per system, and the config
+    values that differ, so a rerun cannot change a setting unseen."""
+    out: dict[str, Any] = {}
+    for e in entries:
+        old = json.loads((root / RUNS_REL / f"{e['run_id']}.json").read_text(encoding="utf-8"))
+        old_rows = {n: [Prediction.model_validate_json(ln)
+                        for ln in (root / rel).read_text(encoding="utf-8").splitlines() if ln.strip()]
+                    for n, rel in old["predictions"].items()}
+        out[e["run_id"]] = {"by_system": {n: before_after(old_rows[n], systems[n], DEADLINE_S) for n in systems if n in old_rows},
+                            "old_models": old["models"], "old_deadline_s": old["config"].get("deadline_s"),
+                            "old_systems": old["config"].get("systems"), "old_retrieval": old["config"].get("retrieval"),
+                            "reason": e["reason"]}
+    return out
+
+
 def _assert_writable(root: Path, cloud: Cloud) -> None:
     """The cloud record must be writable before a paid call, so a stray file cannot cost the calls."""
     cloud.touch()
@@ -820,16 +901,15 @@ def _load_subset(root: Path, cloud: Cloud, subset: str, scenarios: list[Scenario
     sub_scs = [s for s in scenarios if s.id in set(sub_ids)]
     if len(sub_scs) != len(sub_ids) or not sub_scs:
         raise RunBroken("the subset names cases that are not in dev")
-    assert_cloud_safe(sub_scs, SCENARIO_SOURCE)
     if cloud.budget < len(sub_scs):
         raise RunBroken(f"the call budget {cloud.budget} is below one call per case ({len(sub_scs)})")
     return sub_scs
 
 
-def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
-         retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str, supersedes: list[dict[str, str]] | None,
-         gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
-    started = datetime.now(timezone.utc).isoformat()
+def _load_dev(
+    root: Path, retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str
+) -> tuple[list[Scenario], list[Scenario], str]:
+    """The dev scenarios, the cloud subset's scenarios (empty without a cloud step) and the dev file's hash."""
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the records cannot be written")
     if retrieval_config.get("rerank") or retrieval_config.get("chunk_turns", 1) != 1:
@@ -844,13 +924,14 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     if cloud is not None:
         sub_scs = _load_subset(root, cloud, subset, scenarios)
         _assert_writable(root, cloud)
+    return scenarios, sub_scs, digest
 
-    missing = [m for m in (names.writer, names.judge, names.embedder) if full_name(m) not in ctl.installed()]
-    if missing:
-        raise RunBroken(f"models not installed in Ollama: {missing}")
 
-    cold: dict[str, float] = {}
-    gpu: dict[str, int | None] = {}
+def _check_models(
+    ctl: OllamaCtl, names: Models, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
+    gpu_mb: Callable[[], int | None], say: Callable[[str], None], cold: dict[str, float], gpu: dict[str, int | None],
+) -> None:
+    """Check the judge and then the writer and the embedder, filling in `cold` and `gpu`."""
     judge = Judge(judge_llm)
     say("checking the judge")
     cold["judge_check"] = ctl.load(names.judge)
@@ -871,16 +952,27 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     cold["first_calls"] = time.perf_counter() - t0
     gpu["writer_and_embedder_loaded"] = gpu_mb()
 
+
+def _generate_all(
+    scenarios: list[Scenario], writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
+    say: Callable[[str], None], memory_failures: list[dict[str, str]] | None = None,
+) -> tuple[dict[str, list[Prediction]], dict[str, dict[str, Any]], dict[str, MemoryStore], int, list[dict[str, float]]]:
+    """Every local strategy's rows, its health, and the memories built for the memory strategy."""
     systems: dict[str, list[Prediction]] = {}
     health: dict[str, dict[str, Any]] = {}
     memories: dict[str, MemoryStore] = {}
     memory_cost: list[dict[str, float]] = []
     memory_failed = 0
+
+    def note_failure(case_id: str, reason: str) -> None:
+        if memory_failures is not None:
+            memory_failures.append({"id": case_id, "reason": reason})
+
     for name in SYSTEMS:
         say(f"running {name}")
         if name == "retrieval_memory":
             for sc in scenarios:
-                memories[sc.id], cost = build_memory(sc, writer)
+                memories[sc.id], cost = build_memory(sc, writer, note_failure)
                 if cost is None:
                     memory_failed += 1
                 else:
@@ -892,6 +984,26 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
             lambda sc, name=name: make_assistant(name, sc, writer, embedder, retrieval_config, memories.get(sc.id, MemoryStore()), DEADLINE_S),
             STREAK_LOCAL, say=say)
         health[name] = check_health(name, systems[name])
+    return systems, health, memories, memory_failed, memory_cost
+
+
+def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: Models,
+         retrieval_config: dict[str, Any], cloud: Cloud | None, subset: str, supersedes: list[dict[str, str]] | None,
+         gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+    started = datetime.now(timezone.utc).isoformat()
+    scenarios, sub_scs, digest = _load_dev(root, retrieval_config, cloud, subset)
+
+    missing = [m for m in (names.writer, names.judge, names.embedder) if full_name(m) not in ctl.installed()]
+    if missing:
+        raise RunBroken(f"models not installed in Ollama: {missing}")
+
+    cold: dict[str, float] = {}
+    gpu: dict[str, int | None] = {}
+    _check_models(ctl, names, writer, judge_llm, embedder, gpu_mb, say, cold, gpu)
+
+    memory_failures: list[dict[str, str]] = []
+    systems, health, memories, memory_failed, memory_cost = _generate_all(
+        scenarios, writer, embedder, retrieval_config, say, memory_failures)
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
 
@@ -919,6 +1031,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
         "gpu_memory_note": "nvidia-smi memory.used for the whole GPU, so it includes other processes; the writer is "
                            "unloaded before the judge is loaded",
         "memory_build": {"cases": len(scenarios), "failed": memory_failed,
+                         "failed_reasons": memory_failures,
                          "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "mean_tokens": sum(c["tokens"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "note": "built before the press, outside the card's latency and tokens"},
@@ -931,10 +1044,12 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
             "(config.judge_review is absent), so they are not claims.",
         ],
         "injection": {n: injection_report(scenarios, p) for n, p in systems.items()},
-        "claude_calls": 0, "labels_reviewed": False, "started_at": started,
+        "claude_calls": 0, "started_at": started,
     }
     models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
     own_local, own_cloud = _split_supersedes(supersedes, root)
+    config["row_report"] = {n: row_report(p, DEADLINE_S) for n, p in systems.items()}
+    config["superseded"] = _superseded_report(root, own_local, systems)
     attempts = [{"setting": n, "kind": "local strategy", "ok": True, "error": None, "health": health[n]} for n in SYSTEMS]
     local_path = write_run("E2", SPLIT, config, models, {"recall": PROMPT_VERSION}, metrics, intervals, attempts, systems,
                            digest, comparisons=comparisons, scenario_source=SCENARIO_SOURCE, root=root, supersedes=own_local)
@@ -960,15 +1075,18 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
 def _write_analysis(root: Path, scenarios: list[Scenario], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
                     winner: str, metrics: dict[str, dict[str, Any]], records: list[str], cloud_done: bool,
                     old_prompt: list[str] | None = None,
-                    respond: tuple[str, list[Prediction], dict[str, Any]] | None = None) -> Path:
+                    respond: tuple[str, list[Prediction], dict[str, Any]] | None = None, **earlier: Any) -> Path:
     out = root / ERROR_ANALYSIS_REL
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(out, error_analysis(scenarios, systems, health, winner, metrics, records, cloud_done, list(systems) if old_prompt is None else old_prompt, respond))
+    if old_prompt is None:
+        old_prompt = [] if earlier.get("earlier") else list(systems)  # with superseded records, the old-prompt claims are theirs
+    write_atomic(out, error_analysis(scenarios, systems, health, winner, metrics, records, cloud_done, old_prompt, respond,
+                                     labels_text=label_text(root, SCENARIO_SOURCE), **earlier))
     return out
 
 
 def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = None,
-                  tried_prompt_run: str | None = None) -> Path:
+                  tried_prompt_run: str | None = None, superseded: list[str] | None = None) -> Path:
     """Write the error analysis from the saved predictions of committed records, with no model call."""
     def load(run: str) -> dict[str, Any]:
         path = root / RUNS_REL / f"{run}.json"
@@ -1000,9 +1118,36 @@ def analysis_only(*, root: Path = ROOT, local_run: str, cloud_run: str | None = 
             raise RunBroken(f"{tried_prompt_run} is not the record of the mode-defining prompt")
         respond = (tried_prompt_run, rows(rec)[TRIED_PROMPT_SYSTEM], rec["metrics"][TRIED_PROMPT_SYSTEM])
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
+    extra: dict[str, Any] = {}
+    superseded = superseded or [e["run_id"] for rec in (local, *([cloud] if cloud_run else [])) for e in rec.get("supersedes", [])]
+    if superseded:
+        old: dict[str, dict[str, Any]] = {}
+        todo = list(superseded)
+        while todo:  # follow the chain: a rebuilt record supersedes the rerun, which superseded the first record
+            rid = todo.pop(0)
+            if rid not in old:
+                old[rid] = load(rid)
+                todo += [e["run_id"] for e in old[rid].get("supersedes", [])]
+        everyone = (local, *([cloud] if cloud_run else []), *old.values())
+        earliest = {r: rec for r, rec in old.items() if not rec.get("supersedes")}  # their rows are the ones the old claims are about
+        earlier_rows: dict[str, list[Prediction]] = {}
+        old_local = next((r for r, rec in sorted(earliest.items()) if "subset" not in rec), None)
+        lines = []
+        for rid, rec in old.items():
+            new = next((x for x in everyone if any(e.get("run_id") == rid for e in x.get("supersedes", []))), None)
+            why = next((e["reason"] for e in new["supersedes"] if e.get("run_id") == rid), "no reason recorded") if new else "not listed by a new record"
+            models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
+            lines.append(f"{rid} (superseded{f' by {new['run_id']}' if new else ''}): {models}; {rec['n']} cases"
+                         f"{f', subset {rec['subset']}' if 'subset' in rec else ''}; reason: {why}")
+            if rid in earliest:
+                earlier_rows |= {(n if "subset" not in rec else f"{n} (superseded cloud)"): r for n, r in rows(rec).items()}
+        for rid, rec in ((local_run, local), *(((cloud_run, cloud),) if cloud_run else ())):
+            models = ", ".join(f"{k} {v}" for k, v in rec["models"].items() if k in ("writer", "cloud"))
+            lines.append(f"{rid} (current): {models}; {rec['n']} cases{f', subset {rec['subset']}' if 'subset' in rec else ''}")
+        extra = {"earlier": earlier_rows, "earlier_lines": lines, "earlier_winner": old[old_local]["config"]["winner"] if old_local else "recent"}
     return _write_analysis(root, scenarios, systems, health, local["config"]["winner"], metrics,
                            [local_run, *([cloud_run] if cloud_run else []), *([tried_prompt_run] if tried_prompt_run else [])],
-                           bool(cloud_run), None, respond)
+                           bool(cloud_run), None, respond, **extra)
 
 
 def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
@@ -1013,14 +1158,14 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
     ids = {s.id for s in sub_scs}
     start = cloud.used()
     commit = head_commit(root)
-    have, reused_calls = _saved_rows(root / PARTIAL_REL, commit, subset, winner, ids)
+    have, reused_calls = _saved_rows(root / PARTIAL_REL, commit, subset, winner, ids, names.cloud)
     if have:
         say(f"reusing {len(have)} saved cloud rows ({reused_calls} calls paid earlier)")
     last = [start]
 
     def save(row: Prediction) -> None:
         now = cloud.used()
-        entry = {"commit": commit, "subset": subset, "winner": winner, "calls": now - last[0],
+        entry = {"commit": commit, "subset": subset, "winner": winner, "model": names.cloud, "calls": now - last[0],
                  "row": json.loads(row.model_dump_json())}
         last[0] = now
         _append_durable(root / PARTIAL_REL, json.dumps(entry))
@@ -1064,8 +1209,10 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
                         "note": "the run stops at the budget; the cap is the client's, as in docs/DESIGN.md"},
         "health": {f"{winner}_cloud": health}, "cold_start_s": {"judge_cloud": cold["judge_cloud"]},
         "injection": {n: injection_report(sub_scs, p) for n, p in systems.items()},
-        "claude_calls": used, "labels_reviewed": False, "started_at": local_config["started_at"],
+        "claude_calls": used, "started_at": local_config["started_at"],
     }
+    if "memory_build" in result:
+        config["memory_build"] = result["memory_build"]
     attempts = [{"setting": f"{winner}_local", "kind": "local strategy, rows copied from the local record", "ok": True, "error": None},
                 {"setting": f"{winner}_cloud", "kind": "cloud", "ok": True, "error": None, "health": health}]
     models = {"writer": names.writer, "cloud": names.cloud, "judge": names.judge, "embedder": names.embedder}
@@ -1087,7 +1234,8 @@ def _append_durable(path: Path, line: str) -> None:
         os.fsync(fh.fileno())
 
 
-def _saved_rows(path: Path, commit: str, subset: str, winner: str, ids: set[str]) -> tuple[dict[str, Prediction], int]:
+def _saved_rows(path: Path, commit: str, subset: str, winner: str, ids: set[str],
+                model: str = CLOUD_MODEL) -> tuple[dict[str, Prediction], int]:
     """Rows paid for in an interrupted run at this commit, subset and strategy, and what they cost in calls.
     A row that failed outright is not reused."""
     have: dict[str, Prediction] = {}
@@ -1098,7 +1246,8 @@ def _saved_rows(path: Path, commit: str, subset: str, winner: str, ids: set[str]
         try:
             e = json.loads(line)
             row = Prediction.model_validate(e["row"])
-            ok = (e["commit"], e["subset"], e["winner"]) == (commit, subset, winner) and row.scenario_id in ids
+            ok = (e["commit"], e["subset"], e["winner"], e.get("model", "haiku")) == (commit, subset, winner, model)
+            ok = ok and row.scenario_id in ids
             ok = ok and row_state(row) != "broken" and row.scenario_id not in have
             if ok:
                 have[row.scenario_id] = row
@@ -1113,23 +1262,24 @@ def _saved_rows(path: Path, commit: str, subset: str, winner: str, ids: set[str]
 def run_e2_cloud_only(*, root: Path = ROOT, local_run: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any,
                       ctl: OllamaCtl, names: Models | None = None, retrieval_config: dict[str, Any], cloud: Cloud,
                       subset: str = SUBSET, gpu_mb: Callable[[], int | None] = gpu_used_mb,
-                      say: Callable[[str], None] = print) -> dict[str, Any]:
+                      say: Callable[[str], None] = print, supersedes: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """Run the winner of the committed local record `local_run` on the cloud model and write one cloud record whose
     config names that run. Ollama is used for the judge only, plus the embedder for a retrieval winner and the writer
     for the memory of retrieval_memory. Models are unloaded at the end whatever happens."""
     names = names or Models()
     mine = [(names.writer, False), (names.judge, False), (names.embedder, True)]
     try:
-        return _cloud_only(root, local_run, writer, judge_llm, embedder, ctl, names, retrieval_config, cloud, subset, gpu_mb, say)
+        return _cloud_only(root, local_run, writer, judge_llm, embedder, ctl, names, retrieval_config, cloud, subset, gpu_mb, say, supersedes or [])
     except LLMError as exc:
         raise RunBroken(f"a model server call failed: {exc}") from exc
     finally:
         _unload_models(ctl, mine, say)
 
 
-def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
-                names: Models, retrieval_config: dict[str, Any], cloud: Cloud, subset: str,
-                gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+def _check_local_record(
+    root: Path, local_run: str, retrieval_config: dict[str, Any]
+) -> tuple[str, dict[str, Any], dict[str, Any], str, str]:
+    """The committed local record the cloud stage builds on: its path, content, config, winner and dataset hash."""
     if is_dirty(root):
         raise RunBroken("the working tree has uncommitted changes; commit first, or the record cannot be written")
     rel = (RUNS_REL / f"{local_run}.json").as_posix()
@@ -1147,6 +1297,14 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
     digest = split_hash(SPLIT, root, SCENARIO_SOURCE)
     if digest != rec["dataset_hash"]:
         raise RunBroken("the dev scenario file is not the one the local record used")
+    return rel, rec, config, winner, digest
+
+
+def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
+                names: Models, retrieval_config: dict[str, Any], cloud: Cloud, subset: str,
+                gpu_mb: Callable[[], int | None], say: Callable[[str], None],
+                supersedes: list[dict[str, str]]) -> dict[str, Any]:
+    rel, rec, config, winner, digest = _check_local_record(root, local_run, retrieval_config)
     scenarios = load_scenarios(SPLIT, root / SCENARIO_SOURCES[SCENARIO_SOURCE][1])
     sub_scs = _load_subset(root, cloud, subset, scenarios)
     local_rows = [Prediction.model_validate_json(ln)
@@ -1173,78 +1331,107 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
     if winner == "retrieval_memory":
         cold["writer"] = ctl.load(names.writer)
         failed = 0
+        failures: list[dict[str, str]] = []
         for sc in sub_scs:
-            memories[sc.id], cost = build_memory(sc, writer)
+            memories[sc.id], cost = build_memory(sc, writer, lambda cid, why: failures.append({"id": cid, "reason": why}))
             failed += cost is None
+        result_memory = {"cases": len(sub_scs), "failed": failed, "failed_reasons": failures}
         ctl.unload(names.writer)
         if failed / len(sub_scs) > BROKEN_MAX:
             raise RunBroken(f"memory extraction failed on {failed} of {len(sub_scs)} cases")
     result: dict[str, Any] = {"winner": winner, "records": {}, "calls_used": 0, "analysis_systems": {}}
+    if winner == "retrieval_memory":
+        result["memory_build"] = result_memory
     local = {winner: local_rows}
     path = _cloud_step(root, cloud, names, judge_llm, embedder, ctl, retrieval_config, memories, sub_scs, local, winner,
-                       config, digest, subset, [], cold, gpu, gpu_mb, say, result, local_run)
+                       config, digest, subset, supersedes, cold, gpu, gpu_mb, say, result, local_run)
     result["records"]["cloud"] = path
     return result
 
 
 # ---------------------------------------------------------------- command line
 
-def main(argv: list[str] | None = None) -> int:
+def _parse_args(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--make-subset", action="store_true", help="write the cloud subset manifest, then stop")
     ap.add_argument("--tried-prompt-record", metavar="RUN_ID",
                     help="with --analysis-only, the record of the reverted mode-defining prompt to report")
     ap.add_argument("--supersedes", nargs="+", metavar="RUN_ID", default=[], help="earlier E2 records this run replaces")
+    ap.add_argument("--reason", default=REASON, help="the reason written for each record in --supersedes")
+    ap.add_argument("--cloud-model", default=CLOUD_MODEL, help="the cloud model for the cloud stage (haiku, sonnet)")
+    ap.add_argument("--local-only", action="store_true", help="run the four local strategies and write the local record; no cloud stage")
     ap.add_argument("--cloud-only", action="store_true", help="run only the cloud stage for a committed local record")
     ap.add_argument("--local-run", metavar="RUN_ID", help="the committed local E2 record whose winner the cloud stage runs")
     ap.add_argument("--analysis-only", action="store_true",
                     help="write results/error-analysis-e2.md from the saved rows of --local-run (and --cloud-run); no model call")
     ap.add_argument("--cloud-run", metavar="RUN_ID", help="with --analysis-only, the cloud E2 record made from --local-run")
     args = ap.parse_args(argv)
+    return ap, args
+
+
+def _analysis_main(ap: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
+        ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --tried-prompt-record besides")
+    try:
+        print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, tried_prompt_run=args.tried_prompt_record))
+    except (RunBroken, OSError, ValueError, KeyError) as exc:
+        print(f"E2 analysis stopped: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap, args = _parse_args(argv)
     if args.analysis_only:
-        if not args.local_run or args.cloud_only or args.supersedes or args.make_subset:
-            ap.error("--analysis-only needs --local-run, and takes only --cloud-run and --tried-prompt-record besides")
-        try:
-            print(analysis_only(local_run=args.local_run, cloud_run=args.cloud_run, tried_prompt_run=args.tried_prompt_record))
-        except (RunBroken, OSError, ValueError, KeyError) as exc:
-            print(f"E2 analysis stopped: {exc}", file=sys.stderr)
-            return 2
-        return 0
+        return _analysis_main(ap, args)
     if args.cloud_run or args.tried_prompt_record:
         ap.error("--cloud-run and --tried-prompt-record go with --analysis-only")
-    if args.cloud_only != bool(args.local_run) or (args.cloud_only and args.supersedes):
-        ap.error("--cloud-only and --local-run go together, and take no --supersedes")
+    if args.cloud_only != bool(args.local_run):
+        ap.error("--cloud-only and --local-run go together")
+    if args.local_only and (args.cloud_only or args.cloud_model != CLOUD_MODEL):
+        ap.error("--local-only runs no cloud stage")
     if args.make_subset:
         print(write_subset())
         return 0
 
     from contextlens.llm.client import CLAUDE_CALLS_PATH, Embedder, OllamaClient, _load_calls, _locked, _save_calls
 
+    names = Models(cloud=args.cloud_model)
+    if args.local_only:
+        try:
+            result = run_e2(writer=OllamaClient(WRITER_MODEL), judge_llm=OllamaClient(JUDGE_MODEL), embedder=Embedder(EMBED_MODEL),
+                            ctl=OllamaCtl(), retrieval_config=load_retrieval_config(ROOT / CONFIG_REL), cloud=None,
+                            supersedes=[{"run_id": r, "reason": args.reason} for r in args.supersedes] or None)
+        except RunBroken as exc:
+            print(f"E2 stopped, nothing more written: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"winner": result["winner"], "records": {k: p.as_posix() for k, p in result["records"].items()}}, indent=1))
+        return 0
     if shutil.which("claude") is None:
         print("the claude command is not on PATH, so the cloud comparison cannot run", file=sys.stderr)
         return 3
     start = _load_calls(CLAUDE_CALLS_PATH)["count"]
-    budget = min(CLOUD_CALL_BUDGET, CLAUDE_CALL_CAP - start)
-    if budget < SUBSET_N:
-        print(f"{start} Claude calls are already counted; the cap of {CLAUDE_CALL_CAP} leaves {budget}, below the {SUBSET_N} "
-              "the comparison needs. Only the person can raise the cap.", file=sys.stderr)
+    budget = CLAUDE_CALL_CAP - start  # the client's cap is the only limit; _load_subset refuses fewer than one call per case
+    if budget < 1:
+        print(f"{start} Claude calls are already counted; the cap of {CLAUDE_CALL_CAP} leaves none. "
+              "Only the person can raise the cap.", file=sys.stderr)
         return 3
     def touch() -> None:  # the lock and counter files the client makes on its first call
         with _locked(CLAUDE_CALLS_PATH, 30.0):
             _save_calls(CLAUDE_CALLS_PATH, _load_calls(CLAUDE_CALLS_PATH))
 
-    cloud = Cloud(_LongClaude(CLOUD_MODEL, calls_path=CLAUDE_CALLS_PATH, cap=start + budget),
+    cloud = Cloud(_LongClaude(args.cloud_model, calls_path=CLAUDE_CALLS_PATH, cap=start + budget),
                   lambda: _load_calls(CLAUDE_CALLS_PATH)["count"], budget, touch=touch)
     try:
         if args.cloud_only:
             result = run_e2_cloud_only(
                 local_run=args.local_run, writer=OllamaClient(WRITER_MODEL), judge_llm=OllamaClient(JUDGE_MODEL),
                 embedder=Embedder(EMBED_MODEL), ctl=OllamaCtl(), retrieval_config=load_retrieval_config(ROOT / CONFIG_REL),
-                cloud=cloud)
+                cloud=cloud, names=names, supersedes=[{"run_id": r, "reason": args.reason} for r in args.supersedes] or None)
         else:
             result = run_e2(writer=OllamaClient(WRITER_MODEL), judge_llm=OllamaClient(JUDGE_MODEL), embedder=Embedder(EMBED_MODEL),
-                            ctl=OllamaCtl(), retrieval_config=load_retrieval_config(ROOT / CONFIG_REL), cloud=cloud,
-                            supersedes=[{"run_id": r, "reason": REASON} for r in args.supersedes] or None)
+                            ctl=OllamaCtl(), retrieval_config=load_retrieval_config(ROOT / CONFIG_REL), cloud=cloud, names=names,
+                            supersedes=[{"run_id": r, "reason": args.reason} for r in args.supersedes] or None)
     except RunBroken as exc:
         print(f"E2 stopped, nothing more written: {exc}", file=sys.stderr)
         return 2

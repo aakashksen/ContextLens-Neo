@@ -97,7 +97,7 @@ def predict_proba(model: Any, tokenizer: Any, examples: list[Example], batch_siz
     out: list[list[float]] = []
     with torch.no_grad():
         for i in range(0, len(examples), batch_size):
-            first, second = zip(*(render(e) for e in examples[i : i + batch_size]))
+            first, second = zip(*(render(e) for e in examples[i : i + batch_size]), strict=True)
             enc = tokenizer(list(first), list(second), truncation=True, max_length=MAX_LENGTH, padding=True,
                             return_tensors="pt").to(device)
             out += torch.softmax(model(**enc).logits.float(), dim=-1).tolist()
@@ -119,7 +119,7 @@ class TrainedChecker:
 
     def probabilities(self, statement: Turn, earlier: list[Turn]) -> dict[ConsistencyLabel, float]:
         probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]
-        return dict(zip(self.labels, probs))  # type: ignore[arg-type]
+        return dict(zip(self.labels, probs, strict=True))  # type: ignore[arg-type]
 
     def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]:
         probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]

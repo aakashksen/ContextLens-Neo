@@ -10,13 +10,13 @@ import json
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_run
+from contextlens.eval.records import load_verified, ROOT, SCENARIO_SOURCES, head_commit, write_run
 from contextlens.eval.series import base_name
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Prediction
@@ -100,6 +100,44 @@ def _search(retriever: Retriever, reranker: Any, kind: str, conv_id: str, query:
     return retriever.search(conv_id, query, last, k=K, mode=kind)  # type: ignore[arg-type]
 
 
+def _press(retriever: Retriever, reranker: Any, kind: str, sc: Scenario, members: Any, query: str, last: int,
+           name: str, failed: dict[str, str], say: Callable[[str], None]) -> Prediction | None:
+    """One timed press of one system on one scenario; None, with the error noted in `failed`, when it errored."""
+    start = time.perf_counter()
+    try:
+        ids = ranked_turns(_search(retriever, reranker, kind, sc.conversation.id, query, last), members) if last >= 0 else []
+    except RerankerFallback:
+        raise
+    except Exception as exc:
+        failed[name] = f"{type(exc).__name__}: {exc}"
+        say(f"system {name} failed: {failed[name]}")
+        return None
+    ms = int((time.perf_counter() - start) * 1000)
+    return Prediction(scenario_id=sc.id, ranked_turn_ids=ids, stage_latency_ms={"total": ms})
+
+
+def _score_chunk(group: list[Scenario], chunk: str, size: int, embedder: Any, reranker: Any,
+                 rows: dict[str, dict[str, Prediction]], failed: dict[str, str], say: Callable[[str], None]) -> None:
+    """Press every system on the scenarios of one conversation, with the transcript split in chunks of `size` turns."""
+    conv_id = group[0].conversation.id
+    store = InMemoryTranscriptStore()
+    units, members = chunks(group[0].conversation.turns, size)
+    for u in units:
+        store.add(u)
+    retriever = Retriever(store, embedder)
+    for sc in group:
+        query, last = query_for(sc)
+        if last >= 0:
+            retriever.search(conv_id, query, last, k=1, mode="dense")  # index the chunks outside the timing
+        for kind in KINDS:
+            name = f"{kind}_{chunk}"
+            if name in failed:
+                continue
+            pred = _press(retriever, reranker, kind, sc, members, query, last, name, failed, say)
+            if pred is not None:
+                rows[name][sc.id] = pred
+
+
 def evaluate(scenarios: list[Scenario], embedder: Any, reranker: Any, say=print) -> tuple[dict[str, list[Prediction]], dict[str, str]]:
     """Predictions for each system that finished every scenario, and the error of each that did not."""
     by_conv: dict[str, list[Scenario]] = defaultdict(list)
@@ -109,30 +147,7 @@ def evaluate(scenarios: list[Scenario], embedder: Any, reranker: Any, say=print)
     failed: dict[str, str] = {}
     for n, (conv_id, group) in enumerate(by_conv.items(), 1):
         for chunk, size in CHUNKS.items():
-            store = InMemoryTranscriptStore()
-            units, members = chunks(group[0].conversation.turns, size)
-            for u in units:
-                store.add(u)
-            retriever = Retriever(store, embedder)
-            for sc in group:
-                query, last = query_for(sc)
-                if last >= 0:
-                    retriever.search(conv_id, query, last, k=1, mode="dense")  # index the chunks outside the timing
-                for kind in KINDS:
-                    name = f"{kind}_{chunk}"
-                    if name in failed:
-                        continue
-                    start = time.perf_counter()
-                    try:
-                        ids = ranked_turns(_search(retriever, reranker, kind, conv_id, query, last), members) if last >= 0 else []
-                    except RerankerFallback:
-                        raise
-                    except Exception as exc:
-                        failed[name] = f"{type(exc).__name__}: {exc}"
-                        say(f"system {name} failed: {failed[name]}")
-                        continue
-                    ms = int((time.perf_counter() - start) * 1000)
-                    rows[name][sc.id] = Prediction(scenario_id=sc.id, ranked_turn_ids=ids, stage_latency_ms={"total": ms})
+            _score_chunk(group, chunk, size, embedder, reranker, rows, failed, say)
         if n % 10 == 0 or n == len(by_conv):
             say(f"  {n}/{len(by_conv)} conversations")
     order = [sc.id for sc in scenarios]
@@ -147,17 +162,6 @@ def pick_winner(scores: dict[str, dict[str, dict[str, float]]]) -> str:
         return sum(scores[src][name][metric] for src in scores) / len(scores)
 
     return min(sorted(systems, key=SYSTEMS.index), key=lambda n: (-mean(n, "recall@5"), -mean(n, "mrr")))
-
-
-def _load(source: str, root: Path) -> tuple[list[Scenario], str]:
-    """The dev scenarios of a source and the hash the record will carry; only dev is ever loaded."""
-    scenario_dir = SCENARIO_SOURCES[source][1]
-    manifest_rel = SCENARIO_SOURCES[source][0]
-    entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
-    digest = split_hash(SPLIT, root, source)
-    if digest != entry["hash"]:
-        raise RuntimeError(f"the {source} scenario file does not match its manifest")
-    return load_scenarios(SPLIT, root / scenario_dir), digest
 
 
 def _proof(reranker: Any) -> None:
@@ -180,7 +184,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
     _proof(reranker)
     done: dict[str, tuple[list[Scenario], str, dict[str, list[Prediction]], dict[str, str]]] = {}
     for source in SOURCES:
-        scenarios, digest = _load(source, root)
+        scenarios, digest = load_verified(source, SPLIT, root)
         say(f"{source}: {len(scenarios)} dev scenarios")
         preds, failed = evaluate(scenarios, embedder, reranker, say)
         done[source] = (scenarios, digest, preds, failed)
@@ -201,7 +205,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
             if other != winner and (c := recompute_comparison(scs, preds[winner], preds[other], "recall@5")):
                 comparisons.append({"a": winner, "b": other, **c})
         config = {"experiment": "E1", "k": K, "pool": POOL, "chunks": CHUNKS, "query_rule": QUERY_RULE,
-                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started, "labels_reviewed": False}
+                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started}
         paths[source] = write_run(
             "E1", SPLIT, config, {"embedder": embedder.model, "reranker": reranker.model_name}, {}, metrics[source],
             intervals, attempts, preds, digest, comparisons=comparisons, scenario_source=source, root=root)

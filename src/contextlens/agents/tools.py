@@ -1,4 +1,5 @@
 from contextlens.agents.consistency_check import ConsistencyChecker
+from contextlens.guard.citations import resolve_turn
 from contextlens.memory.extract import MemoryStore
 from contextlens.memory.store import TranscriptStore
 from contextlens.retrieval.hybrid import Retriever, ScoredTurn
@@ -28,10 +29,9 @@ class Tools:
         )
 
     def get_turns(self, turn_ids: list[str]) -> list[Turn]:
-        wanted = set(turn_ids)
-        return [
-            t for t in self.store.turns(self.conv_id, self.as_of_seq) if t.id in wanted
-        ]
+        known = {t.id: t for t in self.store.turns(self.conv_id, self.as_of_seq)}
+        wanted = {t.id for i in turn_ids if (t := resolve_turn(known, i)) is not None}
+        return [t for t in known.values() if t.id in wanted]
 
     def lookup_memory(
         self, subject: str, include_superseded: bool = False

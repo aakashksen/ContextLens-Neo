@@ -183,38 +183,11 @@ def _unloaded(wire: Wire) -> set[str]:
 
 # ---------------------------------------------------------------- what may go to the cloud
 
-def test_the_cloud_never_gets_qmsum_decode_or_an_unlisted_source() -> None:
-    ok = _scn("a", "recall", ["x"])
-    e2.assert_cloud_safe([ok, _scn("m", "recall", ["x"], source="longmemeval")], "scenarios")
-    for bad in (_scn("q", "recall", ["x"], source="qmsum"), _scn("d", "recall", ["x"], source="decode"),
-                _scn("e", "recall", ["x"], source="ami"), _scn("qmsum-test-0-q1", "recall", ["x"])):
-        with pytest.raises(e2.RunBroken):
-            e2.assert_cloud_safe([ok, bad], "scenarios")
-    for source in ("qmsum", "decode"):
-        with pytest.raises(e2.RunBroken):
-            e2.assert_cloud_safe([ok], source)
-
-
-def test_the_committed_subset_is_what_the_rule_gives_and_is_cloud_safe() -> None:
-    dev = load_scenarios("dev", REAL_ROOT / "datasets/scenarios")
-    manifest = json.loads((REAL_ROOT / e2.SUBSETS_REL / f"{e2.SUBSET}.json").read_text(encoding="utf-8"))
-    by_id = {s.id: s for s in dev}
-    assert manifest["split"] == "dev" and manifest["ids"] == e2.choose_subset(dev)
-    assert len(manifest["ids"]) == len(set(manifest["ids"])) == e2.SUBSET_N
-    e2.assert_cloud_safe([by_id[i] for i in manifest["ids"]], "scenarios")
-    assert {by_id[i].conversation.source for i in manifest["ids"]} <= e2.CLOUD_SOURCES
-    cats = {by_id[i].category for i in manifest["ids"]}
-    assert {"prompt_injection", "respond_with_suggestion", "insufficient_evidence"} <= cats
-
-
-def test_the_subset_rule_is_proportional_and_does_not_depend_on_order() -> None:
-    cases = _cases() + [_scn("q1", "recall", ["x"], source="qmsum")]
-    ids = e2.choose_subset(cases, n=6)
-    assert len(ids) == 6 and "q1" not in ids
-    assert {i[0] for i in ids} >= {"r", "n", "i", "s"}
-    assert e2.choose_subset(list(reversed(cases)), n=6) == [i for i in [s.id for s in reversed(cases)] if i in ids]
-    with pytest.raises(ValueError):
-        e2.choose_subset(_cases(), n=50)
+def test_the_cloud_set_takes_cases_of_every_source_and_has_no_refusal_check() -> None:
+    cases = [_scn("a", "recall", ["x"]), _scn("q", "recall", ["x"], source="qmsum"), _scn("d", "recall", ["x"], source="decode"),
+             _scn("qmsum-test-0-q1", "recall", ["x"])]
+    assert e2.all_case_ids(cases) == ["a", "q", "d", "qmsum-test-0-q1"]
+    assert not hasattr(e2, "assert_cloud_safe") and not hasattr(e2, "LOCAL_ONLY_SOURCES")
 
 
 # ---------------------------------------------------------------- rules and analysis
@@ -397,7 +370,7 @@ def test_a_missing_model_or_a_dirty_tree_stops_before_any_call(repo: Path) -> No
 
 # ---------------------------------------------------------------- the cloud comparison
 
-def test_the_cloud_is_never_called_for_a_subset_with_a_restricted_source(repo: Path) -> None:
+def test_a_subset_with_a_qmsum_case_is_accepted_by_the_cloud_stage(repo: Path) -> None:
     bad = _scn("q0", "recall", ["the venue is porto", "noted"], source="qmsum")
     path = repo / "datasets/scenarios/dev.jsonl"
     path.write_text(path.read_text(encoding="utf-8") + bad.model_dump_json() + "\n", encoding="utf-8")
@@ -407,9 +380,8 @@ def test_the_cloud_is_never_called_for_a_subset_with_a_restricted_source(repo: P
     _git(repo, "commit", "-q", "-m", "bad subset")
     writer = Scripted()
     llm, cloud = _cloud()
-    with pytest.raises(e2.RunBroken, match="may not go to a cloud model"):
-        _go(repo, writer=writer, cloud=cloud, subset="e2-bad")
-    assert llm.raw_calls == 0 and writer.raw_calls == 0 and _nothing_written(repo)
+    result, _ = _go(repo, writer=writer, cloud=cloud, subset="e2-bad")
+    assert llm.raw_calls > 0 and "cloud" in result["records"]
 
 
 def test_a_subset_that_was_not_committed_before_the_run_stops_it(repo: Path) -> None:
@@ -513,8 +485,8 @@ def test_the_command_refuses_to_start_without_claude_or_with_too_few_calls_left(
     monkeypatch.setattr(e2.shutil, "which", lambda name: None)
     assert e2.main([]) == 3  # no claude command
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    counter.write_text(json.dumps({"count": 950, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
-    assert e2.main([]) == 3  # 1000 - 950 = 50 calls left, below the 100 cases
+    counter.write_text(json.dumps({"count": 5000, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+    assert e2.main([]) == 3  # the cap leaves no call
 
 
 def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -530,10 +502,10 @@ def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path,
     counter = tmp_path / "claude_calls.json"
     monkeypatch.setattr(client, "CLAUDE_CALLS_PATH", counter)
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    for count in (0, 700, 900):
+    for count in (0, 4700, 4900):
         counter.write_text(json.dumps({"count": count, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
         assert e2.main([]) == 0
-    assert seen == [(250, 250), (250, 950), (100, 1000)]
+    assert seen == [(5000, 5000), (300, 5000), (100, 5000)]
     assert not hasattr(e2, "CLOUD_CALL_CAP")
 
 
@@ -917,3 +889,92 @@ def test_the_analysis_command_reads_the_tried_record_and_lists_the_old_ones(repo
     text = e2.analysis_only(root=repo, local_run=local, cloud_run=cloud, tried_prompt_run=new.stem).read_text(encoding="utf-8")
     assert new.stem in text and "Recall cases that went to respond" in text and "tried and reverted" in text
     assert "No record of the reverted prompt" not in text and "old prompt vs the reverted prompt, on the same" in text
+
+
+def test_a_failed_memory_build_is_named_on_stderr_and_to_the_callback(capsys) -> None:
+    sc = _scn("fail1", "recall", ["SECRET words here", "noted"])
+    seen: list[tuple[str, str]] = []
+    store, cost = e2.build_memory(sc, FakeLLM([]), lambda cid, why: seen.append((cid, why)))
+    assert cost is None and store.items("fail1", 99) == []
+    assert len(seen) == 1 and seen[0][0] == "fail1" and seen[0][1].startswith("LLMError:")
+    err = capsys.readouterr().err
+    assert "fail1" in err and "LLMError" in err and "SECRET" not in err
+    assert e2.build_memory(sc, FakeLLM([]))[1] is None  # the callback stays optional
+
+
+class _Raises:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def complete(self, *a, **k):  # type: ignore[no-untyped-def]
+        raise self.exc
+
+
+@pytest.mark.parametrize("exc", [
+    LLMError("output failed schema validation twice: input_value='SENTINEL-TRANSCRIPT-TEXT'"),
+    LLMError("unexpected reply: {'text': 'SENTINEL-TRANSCRIPT-TEXT'}"),
+    ValueError("SENTINEL-TRANSCRIPT-TEXT"),
+])
+def test_a_memory_failure_reason_never_carries_model_or_transcript_text(exc, capsys) -> None:
+    seen: list[tuple[str, str]] = []
+    e2.build_memory(_scn("f2", "recall", ["a", "b"]), _Raises(exc), lambda cid, why: seen.append((cid, why)))  # type: ignore[arg-type]
+    assert "SENTINEL" not in capsys.readouterr().err and "SENTINEL" not in seen[0][1]
+    assert seen[0][1].startswith(type(exc).__name__)
+
+
+def test_a_timeout_failure_reason_still_names_the_timeout() -> None:
+    seen: list[tuple[str, str]] = []
+    exc = LLMError("request to http://127.0.0.1:11434/api/chat failed: timed out")
+    e2.build_memory(_scn("f3", "recall", ["a", "b"]), _Raises(exc), lambda cid, why: seen.append((cid, why)))  # type: ignore[arg-type]
+    assert "timed out" in seen[0][1] and seen[0][1].startswith("LLMError:")
+
+
+# ---------------------------------------------------------------- a team's notes carry the specialist's name
+
+def _team_row(*notes: str, findings: bool = False) -> Prediction:
+    ev = EvidenceRef(turn_id="c:t0", quote="the plan is on friday", speaker="Maya", start_ms=0)
+    found = [Finding(agent="memory", kind="recall", statement="s", evidence=[ev], confidence=0.9)] if findings else []
+    status = "partial" if findings else "abstained"
+    return _row("t", Card(mode="recall", status=status, findings=found, missing=list(notes)))
+
+
+def test_a_failure_note_after_a_specialist_name_reads_like_one_without() -> None:
+    assert e2.row_state(_team_row("memory: llm error: request to x timed out", "consistency: llm error: request to x timed out",
+                                  "no verified findings")) == "broken"
+    for note in ("memory: llm error: connection refused", "consistency: tool failed: KeyError", "memory: guard failed: OSError",
+                 "assistance: failed: ValueError", "consistency: failed: RuntimeError", "store failed: OSError",
+                 "the store did not answer in time", "error: boom"):
+        assert e2.row_state(_team_row(note)) == "broken", note
+    assert e2.row_state(_team_row("memory: llm error: output failed schema validation twice: x")) == "invalid"
+    assert e2.row_state(_team_row("consistency: deadline reached")) == "timeout"
+    for note in ("memory: no finding passed the checks", "consistency: step limit reached", "no verified findings"):
+        assert e2.row_state(_team_row(note)) == "ok", note
+
+
+def test_one_dead_specialist_beside_verified_findings_is_still_a_failed_call() -> None:
+    row = _team_row("memory: llm error: request to x timed out", findings=True)
+    assert e2.row_state(row) == "broken"  # a model call failed outright; the 10% limit absorbs an isolated one
+    ok = _team_row("memory: no finding passed the checks", findings=True)
+    assert e2.check_health("team", [ok] * 19 + [row])["broken"] == 1
+    with pytest.raises(e2.RunBroken, match="failed outright"):
+        e2.check_health("team", [ok] * 7 + [row] * 3)
+
+
+def test_a_team_with_a_dead_server_ends_the_run_at_the_streak_and_saves_no_reusable_row(tmp_path: Path) -> None:
+    from contextlens.agents.graph import TeamAssistant
+    from contextlens.agents.tools import Tools
+
+    def dead_team(sc: Scenario) -> TeamAssistant:
+        store = e2.build_store(sc)
+        tools = Tools(store, Retriever(store, HashEmbedder()), MemoryStore(), sc.request.as_of_seq, sc.conversation.id)
+        llm = FakeLLM([])  # every call raises LLMError
+        return TeamAssistant({"memory": llm, "consistency": llm, "assistance": llm}, tools, "v1")
+
+    saved: list[Prediction] = []
+    with pytest.raises(e2.RunBroken, match="in a row failed outright"):
+        e2.run_system("team", _cases(), dead_team, 3, on_row=saved.append)
+    assert len(saved) == 3 and all(e2.row_state(p) == "broken" for p in saved)
+    path = tmp_path / "rows.jsonl"
+    path.write_text("\n".join(json.dumps({"commit": "c", "subset": "s", "winner": "team", "model": "m", "calls": 0,
+                                          "row": json.loads(p.model_dump_json())}) for p in saved), encoding="utf-8")
+    assert e2._saved_rows(path, "c", "s", "team", {p.scenario_id for p in saved}, "m")[0] == {}

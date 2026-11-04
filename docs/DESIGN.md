@@ -66,7 +66,7 @@ The project also exists to demonstrate specific skills for the resume (`docs/RES
 
 ## Limits
 - **Hardware:** RTX 4070 laptop GPU with 8 GB VRAM. Only one GPU job at a time. If a run can't fit, block the task; don't quietly shrink what the bullet says.
-- **Claude usage:** 1,000 Claude Code calls from the product across the whole project, on Haiku, counted in `results/claude_calls.json`. `ClaudeCodeClient` refuses past the cap, since these calls share the plan's limits with the agents building this. Only the person can raise it. No API keys are used. Renting a GPU requires their approval.
+- **Claude usage:** 5,000 Claude Code calls from the product across the whole project (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. `ClaudeCodeClient` refuses past the cap, since these calls share the plan's limits with the agents building this. Only the person can raise it. No API keys are used. Renting a GPU requires their approval.
 - **Data leaving the machine:** only benchmark text and synthetic scenarios may go to a cloud model. Live audio, transcripts, and study data stay local.
 
 ## Agents

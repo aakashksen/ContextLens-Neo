@@ -40,5 +40,5 @@ class Reranker:
         if self._model is None:
             return candidates[:k]
         scores = self._model.predict([(query, c.turn.text) for c in candidates])
-        ranked = sorted(zip(candidates, scores), key=lambda p: -float(p[1]))
+        ranked = sorted(zip(candidates, scores, strict=True), key=lambda p: -float(p[1]))
         return [c.model_copy(update={"score": float(s)}) for c, s in ranked[:k]]

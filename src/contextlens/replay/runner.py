@@ -3,10 +3,18 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Protocol, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from contextlens.memory.store import InMemoryTranscriptStore, TranscriptStore
 from contextlens.schemas import ButtonRequest, Card, ConsistencyLabel, Scenario
+
+
+class DroppedFinding(BaseModel):
+    """A finding a check removed from a card, kept so a wrongful drop can be counted afterwards."""
+
+    reason: str  # citation, instruction or number
+    statement: str
+    turn_ids: list[str]
 
 
 @dataclass
@@ -14,6 +22,7 @@ class Context:
     store: TranscriptStore
     as_of_seq: int
     stage_ms: dict[str, int] = field(default_factory=dict)  # an assistant adds its stage timings here
+    drops: list[DroppedFinding] = field(default_factory=list)  # an assistant adds the findings its checks dropped
 
 
 class Assistant(Protocol):
@@ -25,6 +34,7 @@ class Prediction(BaseModel):
     card: Card | None = None  # a retrieval-only row holds ranked turns instead of a card
     ranked_turn_ids: list[str] | None = None
     claim_supported: list[bool] | None = None  # rubric judgement per finding, in card order
+    cloud_supported: list[bool] | None = None  # the cloud grader's judgement per finding; set only by the judge check
     raw_output: str | None = None  # model text, kept so schema validity can be recomputed
     stage_latency_ms: dict[str, int] = Field(default_factory=dict)
     errored: bool = False  # the card is a runner-made error card whose mode is a placeholder
@@ -32,6 +42,16 @@ class Prediction(BaseModel):
     probability: float | None = Field(default=None, ge=0, le=1)  # the model's probability for the label it gave
     asr_text: str | None = None  # speech output for the audio up to as_of_seq, so word error rate recomputes
     speaker_spans: list[tuple[int, int, str]] | None = None  # (start_ms, end_ms, speaker) of the transcribed turns
+    drops: list[DroppedFinding] = Field(default_factory=list)  # findings the checks removed, with their text
+
+    @model_serializer(mode="wrap")
+    def _keep_cloud_supported_only_if_set(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """Rows saved before these fields existed have no such keys; writing them would change those rows' bytes."""
+        data = handler(self)
+        for key in ("cloud_supported", "asr_text", "speaker_spans"):
+            if key not in self.model_fields_set and data.get(key) is None:
+                del data[key]
+        return data
 
     @model_validator(mode="after")
     def _has_output(self) -> Self:
@@ -64,5 +84,6 @@ def replay(
         ms = int((time.perf_counter() - start) * 1000)
         out.append(Prediction(
             scenario_id=sc.id, card=card, stage_latency_ms={**ctx.stage_ms, "total": ms}, errored=errored,
+            drops=ctx.drops,
         ))
     return out

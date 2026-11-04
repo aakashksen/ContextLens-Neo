@@ -131,9 +131,11 @@ class GrpcSpeech:
         channel = grpc.aio.insecure_channel(self.addr)
         try:
             await asyncio.wait_for(channel.channel_ready(), self.connect_timeout_s)
-        except (TimeoutError, asyncio.TimeoutError):
+        except BaseException as exc:  # includes being cancelled: the channel must not be left open
             await channel.close()
-            raise SpeechUnavailable("the speech service did not answer in time") from None
+            if isinstance(exc, TimeoutError | asyncio.TimeoutError):
+                raise SpeechUnavailable("the speech service did not answer in time") from None
+            raise
         queue: asyncio.Queue = asyncio.Queue(MAX_BACKLOG_CHUNKS)
 
         async def chunks():

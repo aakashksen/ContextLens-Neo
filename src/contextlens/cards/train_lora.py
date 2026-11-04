@@ -1,13 +1,17 @@
 """QLoRA training for the card model. Nothing here runs at import; the real path loads a model only in `train`."""
+from __future__ import annotations
+
 import errno
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
-import torch
 
 from contextlens.cards.dataset import CARDS_DIR, Example, load_examples
+
+if TYPE_CHECKING:
+    import torch
 
 PRIMARY = "Qwen/Qwen3.5-4B"
 FALLBACK = "Qwen/Qwen3-4B"
@@ -26,12 +30,14 @@ def tokenize_example(tok: Any, ex: Example, max_len: int) -> dict[str, list[int]
 
 
 def collate(rows: list[dict[str, list[int]]], pad_id: int) -> dict[str, torch.Tensor]:
+    import torch
+
     n = max(len(r["input_ids"]) for r in rows)
     pad = [n - len(r["input_ids"]) for r in rows]
     return {
-        "input_ids": torch.tensor([r["input_ids"] + [pad_id] * k for r, k in zip(rows, pad)]),
-        "labels": torch.tensor([r["labels"] + [-100] * k for r, k in zip(rows, pad)]),
-        "attention_mask": torch.tensor([[1] * len(r["input_ids"]) + [0] * k for r, k in zip(rows, pad)]),
+        "input_ids": torch.tensor([r["input_ids"] + [pad_id] * k for r, k in zip(rows, pad, strict=True)]),
+        "labels": torch.tensor([r["labels"] + [-100] * k for r, k in zip(rows, pad, strict=True)]),
+        "attention_mask": torch.tensor([[1] * len(r["input_ids"]) + [0] * k for r, k in zip(rows, pad, strict=True)]),
     }
 
 
@@ -44,6 +50,8 @@ def attach_lora(model: Any, r: int = 16, alpha: int = 32, dropout: float = 0.05)
 
 def check_vram(limit_gb: float = VRAM_LIMIT_GB) -> float:
     """Peak GPU memory so far in GB; raises when over the limit. 0.0 without CUDA."""
+    import torch
+
     if not torch.cuda.is_available():
         return 0.0
     peak_gb = torch.cuda.max_memory_allocated() / 1024**3
@@ -66,6 +74,8 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
               lr: float = 2e-4, vram_limit_gb: float | None = None) -> list[float]:
     """Plain loop: AdamW over the LoRA parameters only. Returns the loss at each step. With `vram_limit_gb`, the
     peak memory is checked after every step, so a run over the limit stops at the first step."""
+    import torch
+
     rows = [r for e in examples if (r := tokenize_example(tok, e, max_len)) is not None]
     if not rows:
         raise ValueError("no example fits in max_len")
@@ -87,6 +97,7 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
 
 
 def _load_4bit(model_id: str) -> Any:
+    import torch
     from peft import prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
@@ -101,6 +112,8 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
     is_architecture_error), uses FALLBACK and records the exact error in train_meta.json; any other failure is
     raised. Exceeding the VRAM limit raises at the first step over it: the model class is not changed silently."""
     from transformers import AutoTokenizer
+
+    import torch
 
     base, reason = PRIMARY, None
     try:
