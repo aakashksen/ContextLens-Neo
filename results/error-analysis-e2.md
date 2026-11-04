@@ -2,14 +2,16 @@
 
 Cases are our synthetic scenarios and LongMemEval; no QMSum or DECODE text is used. Only scenario text is quoted.
 
-Records: E2-20261103T224548534556Z, E2-20261103T230638094732Z, E2-20261103T155026435232Z. 
+Records: E2-20261104T011721815005Z, E2-20261104T011906729928Z, E2-20261103T155026435232Z. 
 
 ## Records and what they replace
 
+- E2-20261103T224548534556Z (superseded by E2-20261104T011721815005Z): writer qwen3.5:4b-q4_K_M; 148 cases; reason: rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ
+- E2-20261103T230638094732Z (superseded by E2-20261104T011906729928Z): writer qwen3.5:4b-q4_K_M, cloud sonnet; 148 cases, subset e2-cloud-all; reason: rebuilt from the same saved rows with no model call: exact McNemar was missing on the paired answered/abstained outcomes (answer_when_answerable, abstain_when_insufficient), and the label wording in the notes did not follow labels_reviewed. Predictions are byte-identical; only derived fields differ
 - E2-20261103T124545651045Z (superseded by E2-20261103T224548534556Z): writer qwen3.5:4b-q4_K_M; 148 cases; reason: The citation guard dropped true findings that cited a short turn id such as t0; same cases, seeds and settings apart from the fix and an exclusive GPU.
 - E2-20261103T132846863600Z (superseded by E2-20261103T230638094732Z): writer qwen3.5:4b-q4_K_M, cloud haiku; 100 cases, subset e2-cloud-100; reason: The citation guard dropped true findings that cited a short turn id such as t0. Also moved to Sonnet and to all 148 dev cases by the person's rule on cloud comparisons; the 100-case limit and per-stage budget are gone.
-- E2-20261103T224548534556Z (current): writer qwen3.5:4b-q4_K_M; 148 cases
-- E2-20261103T230638094732Z (current): writer qwen3.5:4b-q4_K_M, cloud sonnet; 148 cases, subset e2-cloud-all
+- E2-20261104T011721815005Z (current): writer qwen3.5:4b-q4_K_M; 148 cases
+- E2-20261104T011906729928Z (current): writer qwen3.5:4b-q4_K_M, cloud sonnet; 148 cases, subset e2-cloud-all
 
 ## What this rests on
 
