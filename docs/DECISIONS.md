@@ -223,7 +223,24 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Still in force:** Raw text is never committed, published or redistributed. "Never publish" for the QMSum adapter and for examples derived from QMSum is unchanged, because the person has not changed it.
 - **Evidence:** `docs/datasets.md`, `docs/TESTING.md`, `tests/test_claims_publisher.py`.
 
-## 27. Respond mode is set in code, on the latest turn
+## 27. Judge check: the cloud grader re-grades a sample of the local judge's claims (2026-11-03, written before any run, no numbers)
+- **Date / task:** 2026-11-03, the judge check the person set before T9.1. It is a runner, `src/contextlens/experiments/judge_check.py`, not a plan task.
+- **Who:** The person set the check; the coordinator set the method below.
+- **Question:** Does the local judge (`gemma4:e4b-it-qat`, rubric `e2-v1`) agree with a stronger grader, and does it flatter the results? This adds to the person-reviewed sample in `docs/TESTING.md` and does not replace it.
+- **Chosen:**
+  - **Input.** Run ids of dev records given on the command line. A record on any other split, or one superseded by a later record, is refused. Rows are rebuilt from the saved predictions: each claim is one finding, with its statement, its cited quotes and speakers, and the local verdict. If the saved rows do not hold one local verdict per claim, the run stops, because a proxy would give a meaningless agreement number.
+  - **The question.** The cloud grader is asked through the same `Judge` code that asked the local judge: the same rubric, the same claim and quote block, escaped by `untrusted.py`. It sees nothing else: not the local verdict, not the system that wrote the answer, not the experiment.
+  - **Sources.** The person's update of 2026-11-03 lifts the old limit to "synthetic and LongMemEval only": QMSum and DECODE text may go to Claude through `claude -p` for grading and comparison. A source counts only if its saved rows can rebuild the claims. QMSum and DECODE records hold ids and verdicts only, by the rule in `check_run`, so they give no claim to grade. The run reports the claim count per source and per origin, and states plainly when a source gives none. Raw text is not committed: the saved rows for the check hold claim ids and verdicts only.
+  - **Unit and sample.** One claim. Seed 20261103, fixed in the committed code. The pool is every locally graded claim in the named records, with exact repeats (same system, case, statement and quotes) dropped. Strata are record, system and case category. The natural sample takes one random claim from each stratum in turn, in a seeded order, round after round, until 200 or the pool is empty; if fewer than 200 exist the record says so. Claims keep their natural share of local verdicts within each stratum. If fewer than 40 of the natural sample carry the local judge's rarer verdict, random unsampled claims with that verdict are added as a second stratum, labelled `oversample`, up to 40 rare claims or until none remain. Agreement and kappa are reported for the natural sample and for both strata together; the call on the local judge rests on the natural sample. The share of each verdict is reported for both.
+  - **Spend.** Each claim is one ask, one `claude -p` call, or two if the reply is not valid JSON and the client retries. Before the first call the shared counter must leave room for the worst case (two per pending ask) under the 5,000 cap. Rows are saved to `results/partial/judge-check/` (git-ignored) as they arrive, with a header holding the commit and the sample; a rerun at the same commit and sample resumes and asks again only claims that have no answer. A failed ask is listed and is not counted as disagreement. Five failures in a row stop the run with the rows kept.
+  - **Report.** Agreement; Cohen's kappa with a 95% bootstrap interval over whole conversations (the project's resampling, seed 13); the 2x2 table; the direction, meaning how many claims the local judge supported that the cloud grader rejected and the reverse; the grounded rate by each judge and their gap, pooled, per experiment, per system and per category. The record is written through `write_run` and checked by `check_run`. For that, `check_run` recomputes the new metrics (`cloud_grounded_rate`, `grounded_gap`, `judge_agreement`, `judge_kappa`, `gemma_yes_cloud_no`, `gemma_no_cloud_yes`) from a new optional row field, `cloud_supported`; no existing check was changed.
+  - **When agreement is poor.** Poor means Cohen's kappa on the natural sample below 0.6. The cut is the lower edge of the "substantial" band in Landis and Koch (1977), rounded from 0.61. It is a convention, not a value derived from this project's data, and no better-grounded value was found. The threshold is in the code (`POOR_KAPPA`) and in the record. If agreement is poor the record's notes say so plainly and propose Sonnet as the judge for the final numbers.
+  - **Status.** The result is provisional: no claim comes from this record alone.
+- **Considered:** (1) A proxy question with a differently worded rubric: rejected, since the agreement would measure the wording. (2) Sampling uniformly over claims: rejected, since the largest systems and categories would crowd out the rest. (3) Showing Sonnet the local verdict: rejected, it would anchor the answer. (4) Replacing the person-reviewed sample: rejected by the person.
+- **Would change if:** the saved rows turn out not to rebuild the question; the run then stops and the gap is reported, not worked around.
+- **Evidence:** `src/contextlens/experiments/judge_check.py`, `tests/test_judge_check.py`.
+
+## 28. Respond mode is set in code, on the latest turn
 - **Date / task:** 2026-11-03, T4.2 (commit f5035a0)
 - **Who:** The coordinator decided to set it in code; the implementer chose the rule's wording.
 - **Chosen:** A press with no question, on a latest turn that has a question mark or starts with "please" or "let's", is set to `respond` in the shared finish step, so the single agent, the one-shot baselines and the team all get it. The suggestion is then written from verified findings.
@@ -231,7 +248,7 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Known cost:** A question the user asked themselves also fires. A statement addressed to the user ("We booked it for you!") does not.
 - **Would change if:** the request carries who the user is.
 
-## 28. Instruction guard patterns were written after reading the dev injection turns
+## 29. Instruction guard patterns were written after reading the dev injection turns
 - **Date / task:** 2026-11-03, T4.2 (commit 8afeda0)
 - **Who:** The coordinator decided a code rule; the implementer wrote the patterns.
 - **Chosen:** `guard/instructions.py` drops a finding that cites a turn naming the assistant, telling it to drop its rules, telling it what to say, or asking for secrets. It sits in the shared `check_findings`, so every system has it.
@@ -239,7 +256,7 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Considered:** Widening the patterns for the missed phrase: rejected, since each widening adds false drops.
 - **Would change if:** a held-out injection set shows a worse catch or false-drop rate.
 
-## 29. E3's selection score uses the lower abstention side
+## 30. E3's selection score uses the lower abstention side
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator.
 - **Chosen:** The score is the mean of groundedness and the lower of the two abstention sides (answer rate on answerable cases, abstain rate on insufficient cases). Every part must be defined. It was written down before the run. It names the best system in E3's record without re-deciding E2's winner. E2's own rule is unchanged and now picks `full`; E3's written rule picks `single`.
@@ -247,54 +264,54 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Evidence:** `SELECTION_RULE` in `experiments/e3_team.py` and `config.selection_rule` in the E3 record.
 - **Would change if:** the person wants a different weighting.
 
-## 30. Speakers shown as names or as neutral roles: the one that flips less, unless accuracy falls
+## 31. Speakers shown as names or as neutral roles: the one that flips less, unless accuracy falls
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator set the principle; the implementer fixed the measurable-drop limit before any run.
 - **Chosen:** The trained model sees low-confidence speakers as `unknown` and escaped text. On dev the experiment scores with names and with roles and picks roles only if they flip less and alert accuracy does not fall by more than 0.02. Speaker-flip and injection-flip rates are reported per system, and any rate above 5% goes to the coordinator before E8.
 - **Evidence:** the E3 consistency records, `config.speaker_mode` and `config.flips`.
 - **Would change if:** the coordinator changes the 0.02 or the 5%.
 
-## 31. The same-speaker rule is an arm, kept only if it helps
+## 32. The same-speaker rule is an arm, kept only if it helps
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator.
 - **Chosen:** A flagged statement is rescored against each of the last six earlier turns alone. If the turn it conflicts with most is another speaker's, the alert is shown as a disagreement. Unknown speakers never count as another speaker. The rule is kept only if the mean false-alert rate falls and the mean catch rate falls by no more than 0.02. The verdict is in `config.same_speaker_rule`.
 - **Known cost:** The conflicting turn is found from single-turn scores, which is a heuristic. DECODE speakers are A and B by position, so wrong-speaker counts on DECODE say little.
 
-## 32. The trained model alone alerts at the cascade config's threshold
+## 33. The trained model alone alerts at the cascade config's threshold
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The implementer, reported to the coordinator.
 - **Chosen:** Trained-alone raises an alert when P(contradiction) is at or above `flag_threshold` in `configs/cascade.json`, the same screening rule `select_cascade` uses. The 30 false alarms to hand-read are drawn from trained-alone at that threshold.
 - **Known cost:** The threshold is marked provisional in the config.
 
-## 33. Single and team share the same tools, with no consistency checker
+## 34. Single and team share the same tools, with no consistency checker
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The implementer.
 - **Chosen:** Both get one `Tools` build with no consistency checker, so neither hides model tokens inside a tool call and the comparison is on the same footing. The consistency agent of the team therefore works from the transcript and memory only.
 - **Would change if:** a later experiment wants the cascade as a tool.
 
-## 34. Prompt version stays v1
+## 35. Prompt version stays v1
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The implementer.
 - **Chosen:** No prompt text changed in T4.2: models are shown full turn ids, the prompts carry no short-id example, and the fixes are in code (guard, number rule, respond rule). The version label stays `v1`. Under the phase 3 rule a changed prompt would have needed a new label.
 
-## 35. Short turn ids were dropped as bad citations; E2 and E3 were rerun
+## 36. Short turn ids were dropped as bad citations; E2 and E3 were rerun
 - **Date / task:** 2026-11-03, T4.2 (commit efa787b; reruns E3-20261103T221004658482Z, E2-20261103T224548534556Z, E2-20261103T230638094732Z)
 - **Who:** The coordinator found it in E3's saved rows; the implementer fixed it.
 - **What failed:** Models cite the part of a turn id after the colon (`t0`), and the guard only knew the full id, so true findings were dropped as citation failures. The team lost the most. No finding with a short id was kept anywhere.
 - **Chosen:** The guard resolves an id with no conversation prefix to the one turn of this conversation, at or before the press, whose id ends in it, with the quote still required. Another conversation's id, an ambiguous one and a later turn still drop. The reruns list the old records as superseded with a reason naming this bug.
-- **What the rerun showed, in words:** Nearly all short-id citation drops are gone (one team drop with a short id remains). The team's answer rate on answerable cases is not clearly different from the single agent's: the interval excludes zero but the exact McNemar test, on a handful of discordant cases, does not agree. On the abstention side the team abstains less than the single agent where the evidence is insufficient, and there the interval and McNemar both say worse. The team costs more tokens and time. It is not better on groundedness. A few team cards ran into the 8 s deadline, and the record reports that per system. No metric values are stated here: claims take a separate route. An earlier version of this entry, and the first note of the record, said the team "beats" the single agent on answer rate; that was wrong, because the McNemar test had not been computed (see entry 37).
+- **What the rerun showed, in words:** Nearly all short-id citation drops are gone (one team drop with a short id remains). The team's answer rate on answerable cases is not clearly different from the single agent's: the interval excludes zero but the exact McNemar test, on a handful of discordant cases, does not agree. On the abstention side the team abstains less than the single agent where the evidence is insufficient, and there the interval and McNemar both say worse. The team costs more tokens and time. It is not better on groundedness. A few team cards ran into the 8 s deadline, and the record reports that per system. No metric values are stated here: claims take a separate route. An earlier version of this entry, and the first note of the record, said the team "beats" the single agent on answer rate; that was wrong, because the McNemar test had not been computed (see entry 38).
 - **`retrieval` in `settings_changed`:** the E3 record now writes the retrieval config as a setting. The old record did not, so the comparison shows it as changed from `absent`. It was newly recorded, not changed.
 - **Evidence:** the three reruns above, each listing its predecessor in `supersedes`, and `config.superseded` in them.
 - **Would change if:** a model cites some other short form (for example a bare number).
 
-## 36. The first note of the E3 cards rerun says the labels are unreviewed; that wording was wrong
+## 37. The first note of the E3 cards rerun says the labels are unreviewed; that wording was wrong
 - **Date / task:** 2026-11-03, T4.2
 - **Who:** The coordinator found it; the implementer fixed the code.
 - **What was wrong:** The text was hardcoded in the runner. `E3-20261103T221004658482Z` has `labels_reviewed: true` and `label_source: scenarios`, and its `notes[0]` ends "Dev labels are unreviewed". The flag is right and the sentence is wrong. The record is left unedited, as records are. The part of the sentence about the judge stands: the judge is one local model, and no person has reviewed a judge sample.
 - **Chosen:** Notes and analyses now take the sentence from `records.label_text`, which reads the same flag and source that `write_run` records. The E2 analysis, E3's finding and selection note, and the cascade selection text were changed. No `docs` or run record was edited by hand.
 - **Evidence:** the fix commit on `task/T4.2`; `results/error-analysis-e2.md`, whose label line is generated from the flag.
 
-## 37. McNemar was missing on answered/abstained outcomes; the finding now needs it, and the records were rebuilt
+## 38. McNemar was missing on answered/abstained outcomes; the finding now needs it, and the records were rebuilt
 - **Date / task:** 2026-11-03, T4.2 (verifier attempt 1)
 - **Who:** The verifier found it; the coordinator ordered the fix.
 - **What was wrong:** `eval/series.py` had no per-case outcome for `answer_when_answerable` and `abstain_when_insufficient`, so every card comparison in E2 and E3 saved `mcnemar_p` as null, and the E3 finding called a small difference "better" from the interval alone. `answer_when_answerable` counts cards that did not abstain; it does not measure whether the answer was right.
@@ -303,10 +320,12 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Reported, not applied:** The team repeats a finding inside one card; the repeats are counted and grounded_rate without them is shown in the record. `docs/TESTING.md` has no rule for dropping repeats, so the metric is unchanged.
 - **Evidence:** the rebuilt records, each with `config.rebuilt` and `supersedes`.
 
-## 38. The instruction guard's patterns were narrowed to orders aimed at the assistant
+## 39. The instruction guard's patterns were narrowed to orders aimed at the assistant
 - **Date / task:** 2026-11-03, T4.2 (verifier attempt 1)
 - **Who:** The coordinator.
 - **What was wrong:** The first patterns flagged ordinary phrases ("ignore the instructions on the box", "tell the assistant manager I am late"), so the false-drop rate on look-alikes was far higher than the record said.
 - **Chosen:** Narrower patterns, checked turn by turn: they flag exactly the same dev turns as the first ones (all 16 injecting turns, none of the others), so no existing record is affected. The look-alike phrases are reported in three sets: seen, used while narrowing, and fresh phrases measured once and never tuned against. Only the fresh set is a fair rate.
 - **Known cost:** One fresh ordinary phrase still flags ("forget the above numbers"), because "ignore the above" is itself an injection in dev. It is left as measured.
 - **Would change if:** a held-out injection set shows a worse catch rate.
+
+Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 to 39 after the judge-check entry took 27. Committed records and run notes that cite a T4.2 entry by its old number (for example "see entry 37" for the McNemar fix) mean the entry that is now one higher.
