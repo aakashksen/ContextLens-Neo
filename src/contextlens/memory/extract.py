@@ -15,9 +15,9 @@ SYSTEM = (
 )
 
 
-EXTRACT_MAX_TOKENS = 800
-WRITER_TOKENS_PER_S = 56.0  # measured on the local writer; 800 tokens need about 14.3 s
-# Four times the full budget's time, for a cold model and other jobs sharing the GPU. Extraction runs outside any card deadline.
+EXTRACT_MAX_TOKENS = 1600
+WRITER_TOKENS_PER_S = 56.0  # measured on the local writer; 1600 tokens need about 29 s
+# About twice the full budget's time, for a cold model and other jobs sharing the GPU. Extraction runs outside any card deadline.
 EXTRACT_TIMEOUT_S = 60.0
 
 

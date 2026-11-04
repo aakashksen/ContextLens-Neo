@@ -289,6 +289,6 @@ class _TimeoutSpy(FakeLLM):
 def test_extraction_asks_for_a_timeout_that_fits_its_whole_token_budget():
     spy = _TimeoutSpy([{"items": []}])
     MemoryExtractor(spy).update([T1], [])
-    assert spy.max_tokens == 800
-    assert spy.timeouts[0] >= 800 / 56.0 * 2  # the measured writer speed is 56 tokens/s; at least twice the time it needs
+    assert spy.max_tokens == 1600
+    assert spy.timeouts[0] >= 1600 / 56.0 * 2  # the measured writer speed is 56 tokens/s; at least twice the time it needs
     assert spy.timeouts[0] != 10.0  # not the client default
