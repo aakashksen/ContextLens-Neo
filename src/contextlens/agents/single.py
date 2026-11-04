@@ -240,8 +240,11 @@ def _values(text: str, *, digits: bool = True, words: bool = True, loose: bool =
             while j + 1 < len(toks) and (toks[j + 1] in _SMALL or toks[j + 1] in _BIG or (
                     toks[j + 1] == "and" and toks[j] in _BIG and j + 2 < len(toks) and toks[j + 2] in _SMALL)):
                 j += 1
-            if toks[i : j + 1] != ["one"] and not (loose and j == i and t in _LOOSE):
-                out |= _spoken(toks[i : j + 1])
+            group = toks[i : j + 1]
+            if loose:  # first, second, third are everyday words unless they finish a number such as twenty-first
+                group = [w for k, w in enumerate(group) if w not in _LOOSE or (k and group[k - 1] in _TENS)]
+            if group and group != ["one"]:
+                out |= _spoken(group)
             i = j
         i += 1
     return out

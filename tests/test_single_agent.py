@@ -615,6 +615,9 @@ def _f(statement, quote):
     ("the 5th floor", "the 6th floor", False),
     ("she first said it", "nothing numeric", True),  # first, second and third alone are not read as numbers in a statement
     ("the second statement", "I agree", True),
+    ("his first one", "nothing numeric", True),  # first beside a pronoun one is still the adverb
+    ("the first two", "nothing numeric", False),  # but a real number next to it is checked
+    ("the second one", "the 2nd", True),
     ("the 1st option", "the first option", True),
     ("the 1st option", "the second option", False),
     ("the fourth floor", "the third floor", False),
