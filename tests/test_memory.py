@@ -271,3 +271,24 @@ def test_summary_never_stores_a_route_to_a_raw_delimiter():
     summary.update([turn(2, "y")])
     prompt = llm.calls[1][1]["content"]
     assert prompt.count("</transcript>") == 1  # only the real closing tag
+
+
+class _TimeoutSpy(FakeLLM):
+    """A FakeLLM that keeps the timeout each call asked for."""
+
+    def __init__(self, responses):
+        super().__init__(responses)
+        self.timeouts: list[float] = []
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s):
+        self.timeouts.append(timeout_s)
+        self.max_tokens = max_tokens
+        return super()._raw(messages, schema, max_tokens, temperature, timeout_s)
+
+
+def test_extraction_asks_for_a_timeout_that_fits_its_whole_token_budget():
+    spy = _TimeoutSpy([{"items": []}])
+    MemoryExtractor(spy).update([T1], [])
+    assert spy.max_tokens == 1600
+    assert spy.timeouts[0] >= 1600 / 56.0 * 2  # the measured writer speed is 56 tokens/s; at least twice the time it needs
+    assert spy.timeouts[0] != 10.0  # not the client default

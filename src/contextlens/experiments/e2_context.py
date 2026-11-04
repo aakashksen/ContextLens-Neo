@@ -33,6 +33,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from contextlens.agents.graph import AGENTS
 from contextlens.agents.single import (
     FullTranscriptAssistant,
     RecentTurnsAssistant,
@@ -94,7 +95,8 @@ BROKEN_MAX = 0.10  # share of cases whose model or store call failed outright
 TIMEOUT_MAX = 0.25  # share of cases that ran out of time
 INVALID_MAX = 0.50  # share of cases whose output was not valid twice
 STREAK_LOCAL, STREAK_CLOUD = 5, 3  # consecutive failed cases that end a system at once
-BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:")
+BROKEN_PREFIXES = ("llm error", "store failed", "tool failed", "guard failed", "the store did not answer", "error:", "failed:")
+AGENT_PREFIXES = tuple(f"{a}: " for a in AGENTS)  # the team writes "memory: llm error: ...", "assistance: failed: ..."
 
 SAVED = {
     "grounded_rate", "unsupported_claim_rate", "abstain_when_insufficient", "answer_when_answerable",
@@ -327,11 +329,14 @@ def judge_rows(judge: Judge, preds: list[Prediction]) -> list[Prediction]:
 # ---------------------------------------------------------------- health
 
 def row_state(p: Prediction) -> str:
-    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok."""
+    """broken: a model or store call failed outright; invalid: the output was not valid twice; timeout; ok.
+    A note may start with the team member that wrote it. One dead specialist is broken even if the others found something:
+    the call failed, and check_health's limit decides how many such cards a run may have."""
     if p.errored:
         return "broken"
     notes = p.card.missing if p.card else []
     for n in notes:
+        n = n.removeprefix(next((a for a in AGENT_PREFIXES if n.startswith(a)), ""))  # a specialist's failure is a failure
         if n.startswith(BROKEN_PREFIXES):
             return "invalid" if "schema validation" in n else "broken"
     return "timeout" if any("deadline reached" in n for n in notes) else "ok"
@@ -396,15 +401,39 @@ def build_store(sc: Scenario) -> InMemoryTranscriptStore:
     return store
 
 
-def build_memory(sc: Scenario, llm: LLMClient) -> tuple[MemoryStore, dict[str, float] | None]:
-    """The notes a running system would have made from the turns so far, and what that cost. None when it failed."""
+_TRANSPORT_PREFIXES = ("request to ", "no retry: the caller stopped waiting")  # LLMError messages built without model text
+
+
+def _safe_reason(exc: Exception) -> str:
+    """The exception type, plus its message only for an LLMError that is a transport or timeout failure.
+
+    Every other LLMError message in llm/client.py can quote the model's reply (schema failures, unexpected replies)
+    and the other exception types may quote a field value, so those give the type and a fixed note only."""
+    name = type(exc).__name__
+    if isinstance(exc, LLMError):
+        msg = str(exc)
+        return f"{name}: {msg[:200]}" if msg.startswith(_TRANSPORT_PREFIXES) else f"{name}: invalid model reply"
+    return name
+
+
+def build_memory(
+    sc: Scenario, llm: LLMClient, on_failure: Callable[[str, str], None] | None = None,
+) -> tuple[MemoryStore, dict[str, float] | None]:
+    """The notes a running system would have made from the turns so far, and what that cost. None when it failed.
+
+    A failure is named on stderr and passed to `on_failure` as (case id, reason): the exception type and a
+    message only when it cannot hold model text (see `_safe_reason`), never the transcript."""
     store = MemoryStore()
     meter = Metered(llm)
     t0 = time.perf_counter()
     try:
         turns = build_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)
         store.add(MemoryExtractor(meter).update(turns, []))
-    except Exception:
+    except Exception as exc:
+        reason = _safe_reason(exc)
+        print(f"memory build failed for {sc.id}: {reason}", file=sys.stderr)
+        if on_failure is not None:
+            on_failure(sc.id, reason)
         return MemoryStore(), None
     return store, {"ms": (time.perf_counter() - t0) * 1000, "tokens": float(meter.tokens)}
 
@@ -926,7 +955,7 @@ def _check_models(
 
 def _generate_all(
     scenarios: list[Scenario], writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
-    say: Callable[[str], None],
+    say: Callable[[str], None], memory_failures: list[dict[str, str]] | None = None,
 ) -> tuple[dict[str, list[Prediction]], dict[str, dict[str, Any]], dict[str, MemoryStore], int, list[dict[str, float]]]:
     """Every local strategy's rows, its health, and the memories built for the memory strategy."""
     systems: dict[str, list[Prediction]] = {}
@@ -934,11 +963,16 @@ def _generate_all(
     memories: dict[str, MemoryStore] = {}
     memory_cost: list[dict[str, float]] = []
     memory_failed = 0
+
+    def note_failure(case_id: str, reason: str) -> None:
+        if memory_failures is not None:
+            memory_failures.append({"id": case_id, "reason": reason})
+
     for name in SYSTEMS:
         say(f"running {name}")
         if name == "retrieval_memory":
             for sc in scenarios:
-                memories[sc.id], cost = build_memory(sc, writer)
+                memories[sc.id], cost = build_memory(sc, writer, note_failure)
                 if cost is None:
                     memory_failed += 1
                 else:
@@ -967,8 +1001,9 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     gpu: dict[str, int | None] = {}
     _check_models(ctl, names, writer, judge_llm, embedder, gpu_mb, say, cold, gpu)
 
+    memory_failures: list[dict[str, str]] = []
     systems, health, memories, memory_failed, memory_cost = _generate_all(
-        scenarios, writer, embedder, retrieval_config, say)
+        scenarios, writer, embedder, retrieval_config, say, memory_failures)
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
 
@@ -996,6 +1031,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
         "gpu_memory_note": "nvidia-smi memory.used for the whole GPU, so it includes other processes; the writer is "
                            "unloaded before the judge is loaded",
         "memory_build": {"cases": len(scenarios), "failed": memory_failed,
+                         "failed_reasons": memory_failures,
                          "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "mean_tokens": sum(c["tokens"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "note": "built before the press, outside the card's latency and tokens"},
@@ -1175,6 +1211,8 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
         "injection": {n: injection_report(sub_scs, p) for n, p in systems.items()},
         "claude_calls": used, "started_at": local_config["started_at"],
     }
+    if "memory_build" in result:
+        config["memory_build"] = result["memory_build"]
     attempts = [{"setting": f"{winner}_local", "kind": "local strategy, rows copied from the local record", "ok": True, "error": None},
                 {"setting": f"{winner}_cloud", "kind": "cloud", "ok": True, "error": None, "health": health}]
     models = {"writer": names.writer, "cloud": names.cloud, "judge": names.judge, "embedder": names.embedder}
@@ -1293,13 +1331,17 @@ def _cloud_only(root: Path, local_run: str, writer: LLMClient, judge_llm: LLMCli
     if winner == "retrieval_memory":
         cold["writer"] = ctl.load(names.writer)
         failed = 0
+        failures: list[dict[str, str]] = []
         for sc in sub_scs:
-            memories[sc.id], cost = build_memory(sc, writer)
+            memories[sc.id], cost = build_memory(sc, writer, lambda cid, why: failures.append({"id": cid, "reason": why}))
             failed += cost is None
+        result_memory = {"cases": len(sub_scs), "failed": failed, "failed_reasons": failures}
         ctl.unload(names.writer)
         if failed / len(sub_scs) > BROKEN_MAX:
             raise RunBroken(f"memory extraction failed on {failed} of {len(sub_scs)} cases")
     result: dict[str, Any] = {"winner": winner, "records": {}, "calls_used": 0, "analysis_systems": {}}
+    if winner == "retrieval_memory":
+        result["memory_build"] = result_memory
     local = {winner: local_rows}
     path = _cloud_step(root, cloud, names, judge_llm, embedder, ctl, retrieval_config, memories, sub_scs, local, winner,
                        config, digest, subset, supersedes, cold, gpu, gpu_mb, say, result, local_run)
