@@ -367,6 +367,7 @@ See `docs/HUMAN-GATES.md`.
 **From T4.2:** `false_alert_rate` is a paired yes/no outcome whose comparisons still save no McNemar, in E4's and E3's consistency records. E8's comparisons must have it, with the finding saying better or worse only when the interval and McNemar agree.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Decision (the coordinator), judges:** E8 reports both the cloud grader and the local judge on the same claims, with agreement stated; neither is called final by itself until a person's sample exists (`docs/DECISIONS.md` entry 40). If selection differs between judges on dev, the coordinator hears first.
+**Decision (the coordinator), two declared arms (`docs/DECISIONS.md` entry 49):** E8 measures both as separate declared arms in its one run: `single` as the pre-declared selected system, and the team as it ships, with the consistency checker (`team_shipping`). **Stop rule:** if `team_shipping` beats `single` on dev under the written score (`results/runs/E3T-*` `config.team_shipping.stop_signal`), or the arm changes which system is selected, T9.1 is held and goes to the coordinator.
 **Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test --all`.
 
 ### T9.2: User study kit
@@ -384,6 +385,7 @@ See `docs/HUMAN-GATES.md`.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Decision (the coordinator):** The report's limits state that statements restating a conflict are where both judges wobble.
+**Decision (the coordinator), selected and shipping system:** Any difference between the selected system and the shipping system is reported plainly, and no bullet may describe one system's numbers as if they were the other's.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off
