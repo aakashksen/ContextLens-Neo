@@ -12,7 +12,7 @@ from contextlens.llm.client import LLMResult
 from contextlens.llm.ollama_ctl import OllamaCtl
 from contextlens.prompts.registry import get_prompt
 from tests.test_e1 import HashEmbedder
-from tests.test_e2 import NAMES, RETRIEVAL, Scripted, Wire, _cases, _git
+from tests.test_e2 import NAMES, RETRIEVAL, Wire, _cases, _git
 
 
 def test_each_version_differs_by_a_declared_factor() -> None:
@@ -106,8 +106,17 @@ repo = t2.repo  # the same dev repository, built the same way
 CARD_CALLS = "You answer a question about an ongoing conversation"  # every version's system message starts with this
 
 
-def _cards(llm: Scripted) -> list[list[dict]]:
+def _cards(llm: t2.Scripted) -> list[list[dict]]:
     return [m for m in llm.calls if m[0]["content"].startswith(CARD_CALLS)]
+
+
+class Scripted(t2.Scripted):
+    """The E2 scripted model, also answering the single agent's step schema with a final card."""
+
+    def reply(self, name: str, user: str) -> dict:
+        if name == "_Step":
+            return {"tool": "final", "card": self.reply("Card", user)}
+        return super().reply(name, user)
 
 
 class PerVersion(Scripted):
@@ -123,15 +132,20 @@ class PerVersion(Scripted):
         return super()._raw(messages, schema, max_tokens, temperature, timeout_s)
 
 
+@pytest.fixture(params=e6.SYSTEMS)
+def system(request) -> str:
+    return request.param
+
+
 def _go(repo: Path, *, writer=None, judge=None, wire=None, **kw):
     return e6.run_e6(root=repo, writer=writer or Scripted(), judge_llm=judge or Scripted("test-judge:1"),
                      embedder=HashEmbedder(), ctl=OllamaCtl(request=wire or Wire()), names=NAMES,
                      retrieval_config=RETRIEVAL, gpu_mb=lambda: None, say=lambda text: None, **kw)
 
 
-def test_record_lists_every_version(repo: Path) -> None:
+def test_record_lists_every_version(repo: Path, system: str) -> None:
     writer = PerVersion()
-    result = _go(repo, writer=writer)
+    result = _go(repo, system=system, writer=writer)
     assert check("E6", root=repo, min_n=len(_cases()), split="dev") == []
     rec = json.loads(result["record"].read_text(encoding="utf-8"))
     versions = e6.declared_versions()
@@ -150,25 +164,25 @@ def test_record_lists_every_version(repo: Path) -> None:
     assert len(_cards(writer)) >= len(_cases()) * len(e6.VERSIONS)
 
 
-def test_every_version_text_is_what_the_model_is_sent(repo: Path) -> None:
+def test_every_version_text_is_what_the_model_is_sent(repo: Path, system: str) -> None:
     writer = Scripted()
-    _go(repo, writer=writer)
+    _go(repo, system=system, writer=writer)
     sent = {m[0]["content"] for m in _cards(writer)}
     for v in e6.declared_versions():
         assert any(s.startswith(v.text) for s in sent), v.version
     assert len(sent) == len(e6.VERSIONS)
 
 
-def test_a_version_the_model_cannot_answer_in_valid_json_is_an_attempt_not_a_stop(repo: Path) -> None:
+def test_a_version_the_model_cannot_answer_in_valid_json_is_an_attempt_not_a_stop(repo: Path, system: str) -> None:
     class Bad(Scripted):
         def _raw(self, messages, schema, max_tokens, temperature, timeout_s):
-            if schema is not None and schema.__name__ == "Card" and "Keep the card short" in messages[0]["content"]:
+            if schema is not None and schema.__name__ in ("Card", "_Step") and "Keep the card short" in messages[0]["content"]:
                 self.raw_calls += 1
                 self.calls.append(messages)
                 return LLMResult(text="not json", model=self.model)
             return super()._raw(messages, schema, max_tokens, temperature, timeout_s)
 
-    result = _go(repo, writer=Bad())
+    result = _go(repo, system=system, writer=Bad())
     rec = json.loads(result["record"].read_text(encoding="utf-8"))
     bad = next(a for a in rec["attempts"] if a["setting"] == "v6")
     assert bad["ok"] is False and bad["error"] and "v6" not in rec["predictions"]
@@ -176,24 +190,24 @@ def test_a_version_the_model_cannot_answer_in_valid_json_is_an_attempt_not_a_sto
     assert check("E6", root=repo, min_n=len(_cases()), split="dev") == []
 
 
-def test_a_broken_baseline_or_a_dead_writer_writes_nothing(repo: Path) -> None:
+def test_a_broken_baseline_or_a_dead_writer_writes_nothing(repo: Path, system: str) -> None:
     with pytest.raises(e6.e2.RunBroken):
-        _go(repo, writer=Scripted(die_after=5))
+        _go(repo, system=system, writer=Scripted(die_after=5))
     assert not (repo / "results/runs").exists() or not list((repo / "results/runs").glob("E6-*"))
 
 
-def test_a_missing_model_or_a_dirty_tree_stops_before_any_call(repo: Path) -> None:
+def test_a_missing_model_or_a_dirty_tree_stops_before_any_call(repo: Path, system: str) -> None:
     writer = Scripted()
     with pytest.raises(e6.e2.RunBroken, match="not installed"):
-        _go(repo, writer=writer, wire=Wire(installed=["test-writer:1"]))
+        _go(repo, system=system, writer=writer, wire=Wire(installed=["test-writer:1"]))
     (repo / "stray.txt").write_text("x", encoding="utf-8")
     with pytest.raises(e6.e2.RunBroken, match="uncommitted"):
-        _go(repo, writer=writer)
+        _go(repo, system=system, writer=writer)
     assert writer.raw_calls == 0
 
 
 def test_rows_are_saved_as_they_arrive_and_a_rerun_at_the_same_commit_reuses_them(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
+    repo: Path, system: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     real = e6.write_run
 
@@ -203,34 +217,79 @@ def test_rows_are_saved_as_they_arrive_and_a_rerun_at_the_same_commit_reuses_the
     monkeypatch.setattr(e6, "write_run", boom)
     first = Scripted()
     with pytest.raises(RuntimeError, match="disk full"):
-        _go(repo, writer=first)
+        _go(repo, system=system, writer=first)
     assert len((repo / e6.PARTIAL_REL).read_text(encoding="utf-8").splitlines()) == len(_cases()) * len(e6.VERSIONS)
     monkeypatch.setattr(e6, "write_run", real)
     again = Scripted()
-    result = _go(repo, writer=again)
+    result = _go(repo, system=system, writer=again)
     assert _cards(again) == []  # no card was paid for twice
     assert check("E6", root=repo, min_n=len(_cases()), split="dev") == []
     assert json.loads(result["record"].read_text(encoding="utf-8"))["n"] == len(_cases())
     assert not (repo / e6.PARTIAL_REL).exists()
 
 
-def test_rows_saved_at_another_commit_are_not_reused(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rows_saved_at_another_commit_are_not_reused(repo: Path, system: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(e6, "write_run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop")))
     with pytest.raises(RuntimeError):
-        _go(repo)
+        _go(repo, system=system)
     (repo / "note.txt").write_text("a new commit", encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "next")
     monkeypatch.undo()
     again = Scripted()
-    _go(repo, writer=again)
+    _go(repo, system=system, writer=again)
     assert len(_cards(again)) >= len(_cases()) * len(e6.VERSIONS)
 
 
-def test_call_counts_follow_the_loops() -> None:
-    c = e6.call_counts(148, 7)
-    assert c["writer_cards_min"] == 1036 and c["memory_extraction"] == 148
-    assert c["writer_cards_worst"] == 1036 * e6.CALLS_PER_CARD_WORST
+def test_call_counts_follow_the_loops_for_each_system() -> None:
+    from contextlens.agents.single import SingleAgent
+
+    assert e6.DEFAULT_SYSTEM == "single" and e6.SYSTEMS == ("single", "retrieval_memory")
+    rm = e6.call_counts(148, 7, "retrieval_memory")
+    one = e6.call_counts(148, 7)  # the default is the single agent
+    assert rm["writer_cards_min"] == one["writer_cards_min"] == 1036 and rm["memory_extraction"] == 148
+    assert rm["writer_cards_worst"] == 1036 * 4
+    steps = SingleAgent.__init__.__defaults__[0]  # max_steps
+    assert one["writer_cards_worst"] == 1036 * (2 * steps + 2) and one["writer_cards_worst"] > rm["writer_cards_worst"]
+
+
+def test_the_single_agent_builds_its_system_message_from_the_version_under_test(repo: Path) -> None:
+    from contextlens.agents.single import SingleAgent
+    from contextlens.agents.tools import Tools
+    from contextlens.memory.extract import MemoryStore
+    from contextlens.retrieval.hybrid import Retriever
+
+    sc = _cases()[0]
+    ret = Retriever(e6.e2.build_store(sc), HashEmbedder())
+    systems = {}
+    for v in e6.declared_versions():
+        agent = e6._build_assistant("single", v.version, sc, Scripted(), ret, MemoryStore(), RETRIEVAL)
+        assert isinstance(agent, SingleAgent) and isinstance(agent.tools, Tools)
+        assert agent.system.startswith(v.text + "\n\n")  # the registry text of that version, then the protocol
+        systems[v.version] = agent.system
+    assert len(set(systems.values())) == len(systems)
+
+
+def test_the_record_names_its_system_and_both_can_be_costed(repo: Path, system: str) -> None:
+    rec = json.loads(_go(repo, system=system)["record"].read_text(encoding="utf-8"))
+    assert rec["config"]["system"] == system
+    assert rec["config"]["calls"] == e6.call_counts(len(_cases()), len(e6.VERSIONS), system)
+    with pytest.raises(e6.e2.RunBroken, match="unknown system"):
+        _go(repo, system="team")
+
+
+def test_the_record_reports_abstention_from_drops_labels_from_the_flag_and_mcnemar_on_rates(repo: Path, system: str) -> None:
+    from contextlens.eval.records import label_text
+
+    rec = json.loads(_go(repo, system=system)["record"].read_text(encoding="utf-8"))
+    cfg = rec["config"]
+    assert cfg["labels"] == label_text(repo, "scenarios") and cfg["labels"] in cfg["notes"]
+    assert "Dev labels are unreviewed" not in json.dumps(cfg["notes"]) or "labels_reviewed` is false" in cfg["labels"]
+    for v in e6.VERSIONS:
+        a = cfg["abstention"][v]
+        assert {"abstained_by_the_model", "abstained_after_a_check_dropped_every_finding", "findings_dropped_by_reason"} <= set(a)
+    rates = [c for c in rec["comparisons"] if c["metric"] in ("answer_when_answerable", "abstain_when_insufficient")]
+    assert rates and all(c["mcnemar_p"] is not None for c in rates)
 
 
 def test_the_runner_never_reads_the_test_split() -> None:

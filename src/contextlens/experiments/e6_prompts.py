@@ -1,17 +1,20 @@
 """E6: which prompt choices move groundedness and abstention?
 
-One strategy (`retrieval_memory`, the one E2 carried forward), one writer model, the whole dev split, and the same
-cases for every prompt. The baseline is prompt version v1. Every other version changes exactly one factor of it, and
-says which in its `factor.json` (see `declared_versions`). Nothing else is varied: the memory notes are built once per
-case and shared by all versions, and the judge is the one E2 used.
+One system, one writer model, the whole dev split, and the same cases for every prompt. The system is a named setting:
+`single` (the default: E3's written rule selects it) or `retrieval_memory` (E2's choice, where the weak spots that
+motivated this experiment were seen); the record names it in `config.system`. The baseline is prompt version v1. Every
+other version changes exactly one factor of it, and says which in its `factor.json` (see `declared_versions`). Nothing
+else is varied: the memory notes are built once per case and shared by all versions, and the judge is the one E2 used.
+If the team attempt later changes which system E3 selects, only the chosen prompt and v1 are rerun on that system.
 
 The selection rule is `SELECTION_RULE`; it is fixed here, in a commit before any run. The test split is never read.
 
-Run: .venv/Scripts/python -m contextlens.experiments.e6_prompts
+Run: .venv/Scripts/python -m contextlens.experiments.e6_prompts [--system single|retrieval_memory]
 """
 
 import difflib
 import hashlib
+import inspect
 import json
 import sys
 import time
@@ -23,8 +26,11 @@ from typing import Any
 
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import recompute_comparison, recompute_intervals
-from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, is_dirty, split_hash, write_run
+from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, is_dirty, label_text, split_hash, write_run
+from contextlens.agents.single import SingleAgent
+from contextlens.agents.tools import Tools
 from contextlens.experiments import e2_context as e2
+from contextlens.experiments import e3_team as e3
 from contextlens.llm.client import LLMClient, LLMError
 from contextlens.llm.ollama_ctl import OllamaCtl, full_name
 from contextlens.memory.extract import MemoryStore
@@ -162,21 +168,27 @@ def pick_best(metrics: dict[str, dict[str, float | None]], comparisons: list[dic
 # ---------------------------------------------------------------- the run
 
 SPLIT = "dev"
-SYSTEM = e2.TRIED_PROMPT_SYSTEM  # retrieval_memory: the strategy E2 carried forward
+SYSTEMS = ("single", "retrieval_memory")  # what the prompt is tried on; the record names the one it ran on
+DEFAULT_SYSTEM = "single"  # E3's written rule selects it; `retrieval_memory` was E2's choice and stays selectable
 PARTIAL_REL = Path("results/partial/e6-rows.jsonl")  # git-ignored; one line per finished card
-CALLS_PER_CARD_WORST = 4  # the card and its schema retry, then the suggestion and its schema retry (respond mode only)
+CALLS_PER_CARD_WORST = {
+    "retrieval_memory": 4,  # the card and its schema retry, then the suggestion and its schema retry (respond mode only)
+    # one model call per step and a retry for each, then the suggestion and its retry
+    "single": 2 * inspect.signature(SingleAgent).parameters["max_steps"].default + 2,
+}
 
 
-def call_counts(n_cases: int, n_versions: int) -> dict[str, int]:
+def call_counts(n_cases: int, n_versions: int, system: str = DEFAULT_SYSTEM) -> dict[str, int]:
     """Model calls a run makes, from the loops in `_run`. The judge makes one call per finding in the cards, so that
-    count is known only after generation; E2's retrieval_memory cards held about 0.86 findings each."""
+    count is known only after generation. `single` takes at least one call per card and up to `CALLS_PER_CARD_WORST`;
+    the memory notes are built for both systems (the single agent reads them through a tool)."""
     cards = n_cases * n_versions
     return {
         "judge_canary": len(e2.CANARY),
         "writer_and_embedder_ping": 2,
         "memory_extraction": n_cases,
         "writer_cards_min": cards,
-        "writer_cards_worst": cards * CALLS_PER_CARD_WORST,
+        "writer_cards_worst": cards * CALLS_PER_CARD_WORST[system],
         "embedder_index": n_cases,  # one index per case, shared by every version
     }
 
@@ -185,8 +197,12 @@ def _digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _build_assistant(v: str, writer: LLMClient, retriever: Retriever, memory: MemoryStore,
-                     retrieval_config: dict[str, Any]) -> e2.RetrievalMemoryAssistant:
+def _build_assistant(system: str, v: str, sc: Scenario, writer: LLMClient, retriever: Retriever, memory: MemoryStore,
+                     retrieval_config: dict[str, Any]) -> Assistant:
+    """The assistant of `system` whose system message is built from prompt version `v` by the agent code as it is now."""
+    if system == "single":
+        tools = Tools(retriever.store, retriever, memory, sc.request.as_of_seq, sc.conversation.id)
+        return SingleAgent(writer, tools, v, deadline_s=e2.DEADLINE_S)
     return e2.RetrievalMemoryAssistant(writer, retriever, memory, v, config=retrieval_config, deadline_s=e2.DEADLINE_S)
 
 
@@ -236,7 +252,7 @@ def _health(version: str, rows: list[Prediction]) -> tuple[dict[str, Any], str |
     return counts, None
 
 
-def run_e6(*, root: Path = ROOT, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
+def run_e6(*, root: Path = ROOT, system: str = DEFAULT_SYSTEM, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
            names: e2.Models | None = None, retrieval_config: dict[str, Any],
            gpu_mb: Callable[[], int | None] = e2.gpu_used_mb, say: Callable[[str], None] = print) -> dict[str, Any]:
     """Run every prompt version on dev with the writer, judge the cards, write one record. The prompts and the agent
@@ -245,19 +261,21 @@ def run_e6(*, root: Path = ROOT, writer: LLMClient, judge_llm: LLMClient, embedd
     names = names or e2.Models()
     mine = [(names.writer, False), (names.judge, False), (names.embedder, True)]
     try:
-        return _run(root, writer, judge_llm, embedder, ctl, names, retrieval_config, gpu_mb, say)
+        return _run(root, system, writer, judge_llm, embedder, ctl, names, retrieval_config, gpu_mb, say)
     except LLMError as exc:
         raise e2.RunBroken(f"a model server call failed: {exc}") from exc
     finally:
         e2._unload_models(ctl, mine, say)
 
 
-def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: e2.Models,
+def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: e2.Models,
          retrieval_config: dict[str, Any], gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
     started = datetime.now(timezone.utc).isoformat()
+    if system not in SYSTEMS:
+        raise e2.RunBroken(f"unknown system {system!r}; expected one of {SYSTEMS}")
     if is_dirty(root):
         raise e2.RunBroken("the working tree has uncommitted changes; commit first, or the record cannot be written")
-    if retrieval_config.get("rerank") or retrieval_config.get("chunk_turns", 1) != 1:
+    if system == "retrieval_memory" and (retrieval_config.get("rerank") or retrieval_config.get("chunk_turns", 1) != 1):
         raise e2.RunBroken("the retrieval config needs a one-turn chunk and no reranker")
     try:
         versions = declared_versions()
@@ -277,7 +295,8 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     # What each version really sends: the registry text plus whatever the agent code adds now. Two versions that end
     # up with the same system message would be one version under two labels.
     probe = Retriever(InMemoryTranscriptStore(), embedder)
-    effective = {v.version: _digest(_build_assistant(v.version, writer, probe, MemoryStore(), retrieval_config).system)
+    effective = {v.version: _digest(_build_assistant(system, v.version, scenarios[0], writer, probe, MemoryStore(),
+                                                      retrieval_config).system)  # type: ignore[attr-defined]
                  for v in versions}
     if len(set(effective.values())) != len(effective):
         raise e2.RunBroken("two prompt versions send the same system message to the model")
@@ -330,7 +349,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
         def make(sc: Scenario, version: str = v.version) -> Assistant:
             if sc.id not in retrievers:
                 retrievers[sc.id] = _retriever(sc, embedder)
-            return _build_assistant(version, writer, retrievers[sc.id], memories[sc.id], retrieval_config)
+            return _build_assistant(system, version, sc, writer, retrievers[sc.id], memories[sc.id], retrieval_config)
 
         def keep(row: Prediction, version: str = v.version) -> None:
             line = json.dumps({"commit": commit, "version": version, "row": json.loads(row.model_dump_json())})
@@ -368,11 +387,12 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     say(f"selected: {choice['selected']}")
 
     config: dict[str, Any] = {
-        "experiment": "E6", "system": SYSTEM, "baseline": BASELINE, "factors": list(FACTORS),
+        "experiment": "E6", "system": system, "baseline": BASELINE, "factors": list(FACTORS),
         "versions": [{"version": v.version, "factor": v.factor, "summary": v.summary, "added": list(v.added),
                       "removed": list(v.removed), "text_sha256": v.text_sha256,
                       "system_message_sha256": effective[v.version]} for v in versions],
         "selection_rule": SELECTION_RULE, "selection_rule_sha256": _digest(SELECTION_RULE), "selection": choice,
+        "labels": label_text(root, e2.SCENARIO_SOURCE),
         "no_measurable_improvement": choice["selected"] == BASELINE,
         "mode_factor": "not a factor: T4.2 sets respond mode in code; T3.3's mode-defining prompt was reverted",
         "deadline_s": e2.DEADLINE_S,
@@ -381,14 +401,16 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
                   "calls": judge.calls, "share_supported": judge.yes / judge.calls},
         "health": health, "health_limits": {"broken": e2.BROKEN_MAX, "timeout": e2.TIMEOUT_MAX, "invalid": e2.INVALID_MAX},
         "unmeasured_versions": failed,
+        "abstention": {n: e3.drop_report(scenarios, p) for n, p in systems.items()},
         "modes": {n: e2.mode_report(scenarios, p) for n, p in systems.items()},
         "injection_findings": {n: e2.injection_findings_report(scenarios, p) for n, p in systems.items()},
         "cold_start_s": cold, "gpu_memory_used_mb": gpu,
         "memory_build": {"cases": len(scenarios), "failed": memory_failed,
                          "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "note": "built once per case before the press and shared by every version"},
-        "calls": call_counts(len(scenarios), len(versions)),
+        "calls": call_counts(len(scenarios), len(versions), system),
         "notes": [
+            label_text(root, e2.SCENARIO_SOURCE),
             "grounded_rate and unsupported_claim_rate come from the local judge alone; no person has reviewed a sample "
             "(config.judge_review is absent), so they are not claims.",
             "The injected-claim counts are a word-overlap proxy, not a reader's judgement.",
@@ -407,17 +429,22 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     return {"selected": choice["selected"], "record": path, "choice": choice}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
     from contextlens.llm.client import Embedder, OllamaClient
 
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--system", choices=SYSTEMS, default=DEFAULT_SYSTEM, help="what the prompt versions run on")
+    args = ap.parse_args(argv)
     try:
-        result = run_e6(writer=OllamaClient(e2.WRITER_MODEL), judge_llm=OllamaClient(e2.JUDGE_MODEL),
+        result = run_e6(system=args.system, writer=OllamaClient(e2.WRITER_MODEL), judge_llm=OllamaClient(e2.JUDGE_MODEL),
                         embedder=Embedder(e2.EMBED_MODEL), ctl=OllamaCtl(),
                         retrieval_config=e2.load_retrieval_config(ROOT / e2.CONFIG_REL))
     except e2.RunBroken as exc:
         print(f"E6 stopped, nothing written: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps({"selected": result["selected"], "record": result["record"].as_posix(),
+    print(json.dumps({"system": args.system, "selected": result["selected"], "record": result["record"].as_posix(),
                       "qualifies": result["choice"]["qualifies"]}, indent=1))
     return 0
 
