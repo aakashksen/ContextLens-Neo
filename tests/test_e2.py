@@ -889,3 +889,14 @@ def test_the_analysis_command_reads_the_tried_record_and_lists_the_old_ones(repo
     text = e2.analysis_only(root=repo, local_run=local, cloud_run=cloud, tried_prompt_run=new.stem).read_text(encoding="utf-8")
     assert new.stem in text and "Recall cases that went to respond" in text and "tried and reverted" in text
     assert "No record of the reverted prompt" not in text and "old prompt vs the reverted prompt, on the same" in text
+
+
+def test_a_failed_memory_build_is_named_on_stderr_and_to_the_callback(capsys) -> None:
+    sc = _scn("fail1", "recall", ["SECRET words here", "noted"])
+    seen: list[tuple[str, str]] = []
+    store, cost = e2.build_memory(sc, FakeLLM([]), lambda cid, why: seen.append((cid, why)))
+    assert cost is None and store.items("fail1", 99) == []
+    assert len(seen) == 1 and seen[0][0] == "fail1" and seen[0][1].startswith("LLMError:")
+    err = capsys.readouterr().err
+    assert "fail1" in err and "LLMError" in err and "SECRET" not in err
+    assert e2.build_memory(sc, FakeLLM([]))[1] is None  # the callback stays optional

@@ -396,15 +396,24 @@ def build_store(sc: Scenario) -> InMemoryTranscriptStore:
     return store
 
 
-def build_memory(sc: Scenario, llm: LLMClient) -> tuple[MemoryStore, dict[str, float] | None]:
-    """The notes a running system would have made from the turns so far, and what that cost. None when it failed."""
+def build_memory(
+    sc: Scenario, llm: LLMClient, on_failure: Callable[[str, str], None] | None = None,
+) -> tuple[MemoryStore, dict[str, float] | None]:
+    """The notes a running system would have made from the turns so far, and what that cost. None when it failed.
+
+    A failure is named on stderr and passed to `on_failure` as (case id, reason): the exception type and a
+    shortened message, never the transcript."""
     store = MemoryStore()
     meter = Metered(llm)
     t0 = time.perf_counter()
     try:
         turns = build_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)
         store.add(MemoryExtractor(meter).update(turns, []))
-    except Exception:
+    except Exception as exc:
+        reason = f"{type(exc).__name__}: {str(exc)[:300]}"
+        print(f"memory build failed for {sc.id}: {reason}", file=sys.stderr)
+        if on_failure is not None:
+            on_failure(sc.id, reason)
         return MemoryStore(), None
     return store, {"ms": (time.perf_counter() - t0) * 1000, "tokens": float(meter.tokens)}
 
@@ -926,7 +935,7 @@ def _check_models(
 
 def _generate_all(
     scenarios: list[Scenario], writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
-    say: Callable[[str], None],
+    say: Callable[[str], None], memory_failures: list[dict[str, str]] | None = None,
 ) -> tuple[dict[str, list[Prediction]], dict[str, dict[str, Any]], dict[str, MemoryStore], int, list[dict[str, float]]]:
     """Every local strategy's rows, its health, and the memories built for the memory strategy."""
     systems: dict[str, list[Prediction]] = {}
@@ -934,11 +943,16 @@ def _generate_all(
     memories: dict[str, MemoryStore] = {}
     memory_cost: list[dict[str, float]] = []
     memory_failed = 0
+
+    def note_failure(case_id: str, reason: str) -> None:
+        if memory_failures is not None:
+            memory_failures.append({"id": case_id, "reason": reason})
+
     for name in SYSTEMS:
         say(f"running {name}")
         if name == "retrieval_memory":
             for sc in scenarios:
-                memories[sc.id], cost = build_memory(sc, writer)
+                memories[sc.id], cost = build_memory(sc, writer, note_failure)
                 if cost is None:
                     memory_failed += 1
                 else:
@@ -967,8 +981,9 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
     gpu: dict[str, int | None] = {}
     _check_models(ctl, names, writer, judge_llm, embedder, gpu_mb, say, cold, gpu)
 
+    memory_failures: list[dict[str, str]] = []
     systems, health, memories, memory_failed, memory_cost = _generate_all(
-        scenarios, writer, embedder, retrieval_config, say)
+        scenarios, writer, embedder, retrieval_config, say, memory_failures)
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
 
@@ -996,6 +1011,7 @@ def _run(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl
         "gpu_memory_note": "nvidia-smi memory.used for the whole GPU, so it includes other processes; the writer is "
                            "unloaded before the judge is loaded",
         "memory_build": {"cases": len(scenarios), "failed": memory_failed,
+                         "failed_reasons": memory_failures,
                          "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "mean_tokens": sum(c["tokens"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
                          "note": "built before the press, outside the card's latency and tokens"},
