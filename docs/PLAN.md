@@ -385,6 +385,8 @@ See `docs/HUMAN-GATES.md`.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Decision (the coordinator):** The report's limits state that statements restating a conflict are where both judges wobble.
+
+**Decision (the coordinator):** The report's limits also state the number rule's known false-keep (`docs/DECISIONS.md`, entry 41): a finding citing N turns may say a spelled number up to N with no quote holding it, so an invented "two companies" over two cited turns is left for the judge to catch. They give the measured count from the `full_cloud` rerun. Ordinary `first`, `second` and `third` in a statement are not checked either.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off
