@@ -559,8 +559,10 @@ def _cards(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, c
     say("building memory")
     memories: dict[str, MemoryStore] = {}
     memory_failed_ids: list[str] = []
+    memory_failed_reasons: list[dict[str, str]] = []
     for sc in scenarios:
-        memories[sc.id], cost = build_memory(sc, writer)
+        memories[sc.id], cost = build_memory(
+            sc, writer, lambda cid, why: memory_failed_reasons.append({"id": cid, "reason": why}))
         if cost is None:
             memory_failed_ids.append(sc.id)  # the scenario id is kept: a failed memory changes that case's result
     if len(memory_failed_ids) / len(scenarios) > e2.BROKEN_MAX:
@@ -610,7 +612,8 @@ def _cards(root: Path, writer: LLMClient, judge_llm: LLMClient, embedder: Any, c
                         "build with no consistency checker; recent and retrieval_memory are the one-shot systems of E2",
         "retrieval": {k: retrieval_config.get(k) for k in ("winner", "mode", "k", "rerank", "chunk_turns", "run_ids")},
         "row_report": report, "health": health, "cold_start_s": cold,
-        "memory_build": {"cases": len(scenarios), "failed": len(memory_failed_ids), "failed_ids": memory_failed_ids},
+        "memory_build": {"cases": len(scenarios), "failed": len(memory_failed_ids), "failed_ids": memory_failed_ids,
+                         "failed_reasons": memory_failed_reasons},
         "drops": {n: drop_report(scenarios, p) for n, p in rows.items()},
         "wrongful_drop_check": {"judge": names.judge, "by_system": wrongful,
                                 "note": "judge's reading of each dropped finding against the full text of its cited turns"},

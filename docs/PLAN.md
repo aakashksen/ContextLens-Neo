@@ -366,6 +366,7 @@ See `docs/HUMAN-GATES.md`.
 **Decision (the person), judge check before this task:** Sonnet, through the existing `claude -p` client, grades a random sample of at least 200 answers the local `gemma4` judge already graded, across experiments on dev only, never test. QMSum and DECODE text may go to Claude through `claude -p` for this grading (the person, 2026-11-03), so include those sources when gemma-graded answers on them exist, report the count per source, and say plainly if none exist; raw text is still never committed, so rows for those sources hold ids and verdicts only. Report agreement, Cohen's kappa, which way disagreements lean, and whether the local judge flatters results. Save rows as they arrive, inside the call cap, with a run record and a `docs/DECISIONS.md` entry. If agreement is poor, say so and propose Sonnet as the judge for final numbers. This adds to the person-reviewed sample in `docs/TESTING.md`, and doesn't replace it.
 **From T4.2:** `false_alert_rate` is a paired yes/no outcome whose comparisons still save no McNemar, in E4's and E3's consistency records. E8's comparisons must have it, with the finding saying better or worse only when the interval and McNemar agree.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
+**Decision (the coordinator), judges:** E8 reports both the cloud grader and the local judge on the same claims, with agreement stated; neither is called final by itself until a person's sample exists (`docs/DECISIONS.md` entry 40). If selection differs between judges on dev, the coordinator hears first.
 **Accept:** `{py} -m pytest tests/test_e8.py -q`; `{py} -m contextlens.eval.check_run E8 --min-n 100 --split test --all`.
 
 ### T9.2: User study kit
@@ -382,6 +383,7 @@ See `docs/HUMAN-GATES.md`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
+**Decision (the coordinator):** The report's limits state that statements restating a conflict are where both judges wobble.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off

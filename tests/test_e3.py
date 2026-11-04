@@ -321,6 +321,7 @@ def test_a_tiny_run_writes_one_valid_record_with_all_four_systems_and_their_comp
     cfg = rec["config"]
     assert cfg["notes"][0].startswith("The team ") and "dev" in cfg["choice_note"] and cfg["selection_rule"]
     assert cfg["memory_build"]["failed_ids"] == [] and cfg["public_slice"]["small"] is True
+    assert cfg["memory_build"]["failed_reasons"] == []
     assert set(cfg["drops"]) == set(e3.CARD_SYSTEMS) and cfg["instruction_guard"]["injecting_turns"] == 2
     assert cfg["respond"]["team"]["respond_cases"] == 2 and "injection_findings_and_suggestions" in cfg
 
