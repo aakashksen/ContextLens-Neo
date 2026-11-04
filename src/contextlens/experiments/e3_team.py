@@ -466,7 +466,7 @@ def plain_finding(metrics: dict[str, dict[str, Any]], comparisons: list[dict[str
 # ---------------------------------------------------------------- the card systems
 
 def make_card_assistant(system: str, sc: Scenario, writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any],
-                        memory: MemoryStore, deadline_s: float = DEADLINE_S) -> Assistant:
+                        memory: MemoryStore, deadline_s: float = DEADLINE_S, checker: ConsistencyChecker | None = None) -> Assistant:
     if system in ("recent", "retrieval_memory"):
         return e2.make_assistant(system, sc, writer, embedder, retrieval_config, memory, deadline_s)
     store = build_store(sc)
@@ -474,7 +474,7 @@ def make_card_assistant(system: str, sc: Scenario, writer: LLMClient, embedder: 
     query, last = query_for(sc)
     if last >= 0:
         retriever.search(sc.conversation.id, query, last, k=1, mode="dense")  # index outside the timing
-    tools = Tools(store, retriever, memory, sc.request.as_of_seq, sc.conversation.id)  # no consistency checker, for both
+    tools = Tools(store, retriever, memory, sc.request.as_of_seq, sc.conversation.id, checker)  # E3's arms pass none
     if system == "single":
         return SingleAgent(writer, tools, PROMPT_VERSION, deadline_s=deadline_s)
     return TeamAssistant({"memory": writer, "consistency": writer, "assistance": writer}, tools, PROMPT_VERSION,
