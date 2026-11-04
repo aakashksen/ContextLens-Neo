@@ -137,10 +137,10 @@ def system(request) -> str:
     return request.param
 
 
-def _go(repo: Path, *, writer=None, judge=None, wire=None, **kw):
+def _go(repo: Path, *, writer=None, judge=None, wire=None, say=lambda text: None, **kw):
     return e6.run_e6(root=repo, writer=writer or Scripted(), judge_llm=judge or Scripted("test-judge:1"),
                      embedder=HashEmbedder(), ctl=OllamaCtl(request=wire or Wire()), names=NAMES,
-                     retrieval_config=RETRIEVAL, gpu_mb=lambda: None, say=lambda text: None, **kw)
+                     retrieval_config=RETRIEVAL, gpu_mb=lambda: None, say=say, **kw)
 
 
 def test_record_lists_every_version(repo: Path, system: str) -> None:
@@ -313,3 +313,40 @@ def test_rows_saved_on_one_system_are_not_reused_on_the_other(repo: Path, monkey
     other = Scripted()
     _go(repo, system="retrieval_memory", writer=other)
     assert len(_cards(other)) >= len(_cases()) * len(e6.VERSIONS)
+
+
+def test_versions_run_in_the_order_that_lets_a_run_be_cut_short(repo: Path, system: str) -> None:
+    assert e6.RUN_ORDER == ("v1", "v3", "v4", "v6", "v2", "v5", "v7") and set(e6.RUN_ORDER) == set(e6.VERSIONS)
+    said: list[str] = []
+    _go(repo, system=system, say=said.append)
+    ran = [s.split()[1] for s in said if s.startswith("running ")]
+    assert ran == list(e6.RUN_ORDER)
+
+
+def test_the_stop_file_stops_between_versions_and_the_rerun_loses_no_row(repo: Path, system: str) -> None:
+    (repo / e6.STOP_REL).parent.mkdir(parents=True, exist_ok=True)
+    (repo / e6.STOP_REL).write_text("", encoding="utf-8")
+    with pytest.raises(e6.Stopped, match="after v1"):
+        _go(repo, system=system)
+    assert len((repo / e6.PARTIAL_REL).read_text(encoding="utf-8").splitlines()) == len(_cases())
+    (repo / e6.STOP_REL).unlink()
+    said: list[str] = []
+    result = _go(repo, system=system, say=said.append)
+    assert any(s.startswith("reusing saved rows: v1") for s in said)
+    assert json.loads(result["record"].read_text(encoding="utf-8"))["n"] == len(_cases())
+
+
+def test_a_trimmed_run_lists_what_it_did_not_run_and_must_keep_the_baseline(repo: Path, system: str) -> None:
+    result = _go(repo, system=system, only=("v1", "v3", "v4", "v6"))
+    rec = json.loads(result["record"].read_text(encoding="utf-8"))
+    assert set(rec["metrics"]) <= {"v1", "v3", "v4", "v6"} and rec["config"]["versions_not_run"] == ["v2", "v5", "v7"]
+    assert check("E6", root=repo, min_n=len(_cases()), split="dev") == []
+    with pytest.raises(e6.e2.RunBroken, match="must include"):
+        _go(repo, system=system, only=("v3",))
+
+
+def test_generate_only_saves_every_card_and_judges_nothing(repo: Path, system: str) -> None:
+    result = _go(repo, system=system, generate_only=True)
+    assert result["record"] is None and result["generated"] == list(e6.RUN_ORDER)
+    assert len((repo / e6.PARTIAL_REL).read_text(encoding="utf-8").splitlines()) == len(_cases()) * len(e6.VERSIONS)
+    assert not list((repo / "results" / "runs").glob("E6-*.json"))

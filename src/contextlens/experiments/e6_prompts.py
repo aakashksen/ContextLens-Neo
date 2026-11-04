@@ -43,7 +43,8 @@ from contextlens.schemas import Scenario
 
 BASELINE = "v1"
 FACTORS = ("few_shot", "evidence_format", "abstention", "output_format", "length_limit", "role_split")
-VERSIONS = ("v1", "v2", "v3", "v4", "v5", "v6", "v7")  # the order they run in, and the tie-break order
+VERSIONS = ("v1", "v2", "v3", "v4", "v5", "v6", "v7")  # the tie-break order
+RUN_ORDER = ("v1", "v3", "v4", "v6", "v2", "v5", "v7")  # the versions that fit every system first, so a run can be cut short
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 PROMPT_NAME = "recall"
 
@@ -171,6 +172,7 @@ SPLIT = "dev"
 SYSTEMS = ("single", "retrieval_memory")  # what the prompt is tried on; the record names the one it ran on
 DEFAULT_SYSTEM = "single"  # E3's written rule selects it; `retrieval_memory` was E2's choice and stays selectable
 PARTIAL_REL = Path("results/partial/e6-rows.jsonl")  # git-ignored; one line per finished card
+STOP_REL = Path("results/partial/e6-stop")  # git-ignored; if it exists the run stops cleanly after the current version
 CALLS_PER_CARD_WORST = {
     "retrieval_memory": 4,  # the card and its schema retry, then the suggestion and its schema retry (respond mode only)
     # one model call per step and a retry for each, then the suggestion and its retry
@@ -252,16 +254,21 @@ def _health(version: str, rows: list[Prediction]) -> tuple[dict[str, Any], str |
     return counts, None
 
 
+class Stopped(Exception):
+    """The stop file was found between versions. Every finished row is saved; the same command resumes at the same commit."""
+
+
 def run_e6(*, root: Path = ROOT, system: str = DEFAULT_SYSTEM, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl,
            names: e2.Models | None = None, retrieval_config: dict[str, Any],
-           gpu_mb: Callable[[], int | None] = e2.gpu_used_mb, say: Callable[[str], None] = print) -> dict[str, Any]:
+           gpu_mb: Callable[[], int | None] = e2.gpu_used_mb, say: Callable[[str], None] = print,
+           only: tuple[str, ...] | None = None, generate_only: bool = False) -> dict[str, Any]:
     """Run every prompt version on dev with the writer, judge the cards, write one record. The prompts and the agent
     code are taken as they are at the run's commit. Raises RunBroken, before anything is written, when the setup is
     broken. Models are unloaded at the end whatever happens."""
     names = names or e2.Models()
     mine = [(names.writer, False), (names.judge, False), (names.embedder, True)]
     try:
-        return _run(root, system, writer, judge_llm, embedder, ctl, names, retrieval_config, gpu_mb, say)
+        return _run(root, system, writer, judge_llm, embedder, ctl, names, retrieval_config, gpu_mb, say, only, generate_only)
     except LLMError as exc:
         raise e2.RunBroken(f"a model server call failed: {exc}") from exc
     finally:
@@ -269,7 +276,8 @@ def run_e6(*, root: Path = ROOT, system: str = DEFAULT_SYSTEM, writer: LLMClient
 
 
 def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embedder: Any, ctl: OllamaCtl, names: e2.Models,
-         retrieval_config: dict[str, Any], gpu_mb: Callable[[], int | None], say: Callable[[str], None]) -> dict[str, Any]:
+         retrieval_config: dict[str, Any], gpu_mb: Callable[[], int | None], say: Callable[[str], None],
+         only: tuple[str, ...] | None = None, generate_only: bool = False) -> dict[str, Any]:
     started = datetime.now(timezone.utc).isoformat()
     if system not in SYSTEMS:
         raise e2.RunBroken(f"unknown system {system!r}; expected one of {SYSTEMS}")
@@ -281,6 +289,11 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
         versions = declared_versions()
     except (ValueError, KeyError, OSError) as exc:
         raise e2.RunBroken(f"the prompt versions are not valid: {exc}") from exc
+    if only is not None and (BASELINE not in only or set(only) - set(VERSIONS)):
+        raise e2.RunBroken(f"--versions must include {BASELINE} and name only {VERSIONS}; got {only}")
+    versions = [v for v in versions if only is None or v.version in only]
+    run_order = sorted(versions, key=lambda v: RUN_ORDER.index(v.version))
+    not_run = [n for n in VERSIONS if only is not None and n not in only]
     commit = head_commit(root)
     manifest_rel = SCENARIO_SOURCES[e2.SCENARIO_SOURCE][0]
     entry = json.loads((root / manifest_rel).read_text(encoding="utf-8"))["splits"][SPLIT]
@@ -343,7 +356,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
     systems: dict[str, list[Prediction]] = {}
     health: dict[str, dict[str, Any]] = {}
     failed: dict[str, str] = {}
-    for v in versions:
+    for v in run_order:
         say(f"running {v.version} ({v.factor})")
 
         def make(sc: Scenario, version: str = v.version) -> Assistant:
@@ -363,8 +376,13 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
             failed[v.version] = why
         else:
             systems[v.version] = rows
+        if (root / STOP_REL).exists() and v is not run_order[-1]:
+            raise Stopped(f"stopped after {v.version}; every finished row is saved")
     gpu["after_generate"] = gpu_mb()
     ctl.unload(names.writer)
+    if generate_only:
+        say("every card is written and saved; nothing judged, no record written")
+        return {"generated": [v.version for v in run_order], "record": None}
 
     say("judging")
     cold["judge"] = ctl.load(names.judge)
@@ -401,6 +419,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
                   "calls": judge.calls, "share_supported": judge.yes / judge.calls},
         "health": health, "health_limits": {"broken": e2.BROKEN_MAX, "timeout": e2.TIMEOUT_MAX, "invalid": e2.INVALID_MAX},
         "unmeasured_versions": failed,
+        "versions_not_run": not_run,
         "abstention": {n: e3.drop_report(scenarios, p) for n, p in systems.items()},
         "modes": {n: e2.mode_report(scenarios, p) for n, p in systems.items()},
         "injection_findings": {n: e2.injection_findings_report(scenarios, p) for n, p in systems.items()},
@@ -414,7 +433,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
             "grounded_rate and unsupported_claim_rate come from the local judge alone; no person has reviewed a sample "
             "(config.judge_review is absent), so they are not claims.",
             "The injected-claim counts are a word-overlap proxy, not a reader's judgement.",
-            "Six candidates are compared with the baseline without a multiple-comparison correction.",
+            f"{len(versions) - 1} candidates are compared with the baseline without a multiple-comparison correction.",
         ],
         "claude_calls": 0, "labels_reviewed": False, "started_at": started,
     }
@@ -436,14 +455,23 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--system", choices=SYSTEMS, default=DEFAULT_SYSTEM, help="what the prompt versions run on")
+    ap.add_argument("--versions", nargs="+", help="run only these, in RUN_ORDER; the record lists the rest as not run")
+    ap.add_argument("--generate-only", action="store_true", help="write and save every card, then stop before judging")
     args = ap.parse_args(argv)
     try:
         result = run_e6(system=args.system, writer=OllamaClient(e2.WRITER_MODEL), judge_llm=OllamaClient(e2.JUDGE_MODEL),
                         embedder=Embedder(e2.EMBED_MODEL), ctl=OllamaCtl(),
-                        retrieval_config=e2.load_retrieval_config(ROOT / e2.CONFIG_REL))
+                        retrieval_config=e2.load_retrieval_config(ROOT / e2.CONFIG_REL),
+                        only=tuple(args.versions) if args.versions else None, generate_only=args.generate_only)
+    except Stopped as exc:
+        print(f"E6 {exc}. Remove {STOP_REL} and rerun the same command at this commit to resume.", file=sys.stderr)
+        return 3
     except e2.RunBroken as exc:
         print(f"E6 stopped, nothing written: {exc}", file=sys.stderr)
         return 2
+    if result["record"] is None:
+        print(json.dumps({"system": args.system, "generated": result["generated"]}))
+        return 0
     print(json.dumps({"system": args.system, "selected": result["selected"], "record": result["record"].as_posix(),
                       "qualifies": result["choice"]["qualifies"]}, indent=1))
     return 0
