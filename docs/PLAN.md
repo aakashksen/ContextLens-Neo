@@ -378,6 +378,8 @@ See `docs/HUMAN-GATES.md`.
 ### H4: Run the user study
 See `docs/HUMAN-GATES.md`.
 
+**From phase review:** E3 measured the team without the `check_consistency` tool, while the design and `api/production.py` give the team `PromptedChecker`, and `CascadeChecker` is wired into the team nowhere (phase-4 D1). E8 measures the system that ships, and its record says which checker that is; E3's team figures are not presented as the shipping team. E3's abstention finding rests on 16 cases (D7): T9.1 and T9.3 state the count. The injection-in-suggestion count could not fail, and the respond rule reads the latest turn rather than the latest turn from another speaker (D8): the report says so and draws no claim from either.
+
 ### T9.3: Report, README, and bullets
 **Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
 **Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
