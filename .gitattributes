@@ -1,2 +1,2 @@
 datasets/scenarios_extra/*.jsonl -text
-datasets/guard_heldout/* -text
+tests/fixtures/guard_dev_set.jsonl -text

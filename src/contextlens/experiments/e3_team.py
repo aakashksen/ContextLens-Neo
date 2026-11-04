@@ -790,17 +790,22 @@ def judged_case(s: Scenario) -> Case3:
     return s, turns[-1], turns[:-1]
 
 
-def views(statement: Turn, earlier: list[Turn], mode: str) -> dict[str, tuple[Turn, list[Turn]]]:
-    """The case as shown, renamed, and with each injected turn added."""
+Template = tuple[str, str]  # (id, text) of an extra injected turn given on the command line
+
+
+def views(statement: Turn, earlier: list[Turn], mode: str, extra: tuple[Template, ...] = ()) -> dict[str, tuple[Turn, list[Turn]]]:
+    """The case as shown, renamed, and with each injected turn added (the fixed ones, then `extra`)."""
     out = {"base": shown(statement, earlier, mode), "rename": shown(*renamed(statement, earlier), mode)}
     for k, text in enumerate(INJECTED_TURNS):
         out[f"inject{k}"] = shown(*injected(statement, earlier, text), mode)
+    for k, (_, text) in enumerate(extra):
+        out[f"extra{k}"] = shown(*injected(statement, earlier, text), mode)
     return out
 
 
-def analyse(ev: Evaluator, cases: list[Case3], mode: str) -> dict[str, dict[str, Outcome]]:
+def analyse(ev: Evaluator, cases: list[Case3], mode: str, extra: tuple[Template, ...] = ()) -> dict[str, dict[str, Outcome]]:
     """scenario id -> view -> outcome."""
-    return {s.id: {v: ev.outcome(*pair) for v, pair in views(st, ea, mode).items()} for s, st, ea in cases}
+    return {s.id: {v: ev.outcome(*pair) for v, pair in views(st, ea, mode, extra).items()} for s, st, ea in cases}
 
 
 def flips(outcomes: dict[str, dict[str, Outcome]], system: str, cases: list[Case3]) -> dict[str, list[int]]:
@@ -887,14 +892,17 @@ def rows_for(source: str, system: str, cases: list[Case3], outcomes: dict[str, d
     for s, st, _ in cases:
         o = outcomes[s.id]["base"]
         label, conf = system_label(o, system)
-        ms = {"total": int(total_ms(o, system))}
-        if source == "decode":  # ids and a bare label only
-            out.append(Prediction(scenario_id=s.id, label="contradiction" if label == "contradiction" else "consistent",
-                                  probability=min(1.0, max(0.0, conf)), stage_latency_ms=ms))
-        else:
-            out.append(Prediction(scenario_id=s.id, card=e4._card(label, conf, st.text),
-                                  probability=min(1.0, max(0.0, conf)), stage_latency_ms=ms))
+        out.append(row_from(source, s, st, label, conf, int(total_ms(o, system))))
     return out
+
+
+def row_from(source: str, s: Scenario, st: Turn, label: str, conf: float, ms: int) -> Prediction:
+    """One prediction row holding a label: ids and a bare label for decode, a card for our own cases."""
+    p = min(1.0, max(0.0, conf))
+    if source == "decode":
+        return Prediction(scenario_id=s.id, label="contradiction" if label == "contradiction" else "consistent",
+                          probability=p, stage_latency_ms={"total": ms})
+    return Prediction(scenario_id=s.id, card=e4._card(label, conf, st.text), probability=p, stage_latency_ms={"total": ms})
 
 
 def latency_summary(outcomes: dict[str, dict[str, Outcome]], system: str) -> dict[str, Any]:
@@ -908,49 +916,11 @@ def latency_summary(outcomes: dict[str, dict[str, Outcome]], system: str) -> dic
             "second_stage_tokens_unreported": len(called) - len(tokens) if system.startswith("cascade") else 0}
 
 
-STRIP_NOTE = ("before: the context as it was in the main rows of this record (nothing removed). after: earlier turns the "
-              "instruction guard flags are removed from the context before scoring, by the same function the product's "
-              "TrainedChecker uses; the statement being scored is never removed. Same cases, same chosen speaker mode. "
-              "Neither version is chosen here by flip rate alone: label_accuracy and alert accuracy are reported beside it, "
-              "and `accuracy_fell` lists every checker and source where either went down.")
-
-
-def strip_comparison(before: dict[str, dict[str, dict[str, Outcome]]], after: dict[str, dict[str, dict[str, Outcome]]],
-                     cases: dict[str, list[Case3]], labelled: dict[str, list[Case3]], data: dict[str, tuple[list[Scenario], str]],
-                     ) -> dict[str, Any]:
-    """Flips, catch and false-alert counts, and label metrics for the same cases with and without the strip."""
-    def side(outcomes: dict[str, dict[str, dict[str, Outcome]]]) -> dict[str, Any]:
-        out: dict[str, Any] = {}
-        for sy in CHECKERS:
-            out[sy] = {}
-            for src in CONSISTENCY_SOURCES:
-                cf = catch_far(outcomes[src], sy, labelled[src])
-                right = cf["catch"][0] + cf["far"][1] - cf["far"][0]
-                total = cf["catch"][1] + cf["far"][1]
-                m = recompute_metrics(data[src][0], rows_for(src, sy, cases[src], outcomes[src]))
-                out[sy][src] = {
-                    "flips": {k: {"flipped": kn[0], "trials": kn[1], "rate": rate(kn)}
-                              for k, kn in flips(outcomes[src], sy, labelled[src]).items()},
-                    "catch_far": {k: list(kn) for k, kn in cf.items()},
-                    "alert_accuracy": right / total if total else None,
-                    "label_accuracy": m.get("label_accuracy"), "macro_f1": m.get("macro_f1")}
-        return out
-
-    b, a = side(before), side(after)
-    fell = [f"{sy} {src} {m}" for sy in CHECKERS for src in CONSISTENCY_SOURCES for m in ("label_accuracy", "alert_accuracy")
-            if None not in (b[sy][src][m], a[sy][src][m]) and a[sy][src][m] < b[sy][src][m]]
-    return {"note": STRIP_NOTE, "before": b, "after": a, "accuracy_fell": fell,
-            "cases_with_a_flagged_earlier_turn": {src: sum(len(without_instruction_turns(ea)) != len(ea) for _, _, ea in cases[src])
-                                                  for src in CONSISTENCY_SOURCES},
-            "injected_templates_flagged_by_the_guard": {f"inject{k}": instruction_kind(t) for k, t in enumerate(INJECTED_TURNS)},
-            "templates_note": ("a template the guard does not flag is not removed, so its flips cannot change; the 'after' "
-                               "injection flips can fall only for the templates listed here with a kind (not null)")}
-
-
 def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...], prompted: ConsistencyChecker,
                     threshold: float, provenance: dict[str, Any], run_conditions: str,
                     devices: dict[str, Any] | None = None, probe_devices: Callable[[], dict[str, Any]] | None = None,
-                    hand_read: Path | None = None,
+                    hand_read: Path | None = None, prompted_stripped: ConsistencyChecker | None = None,
+                    extra_templates: tuple[Template, ...] = (), extra_templates_sha256: str | None = None,
                     say: Callable[[str], None] = print) -> dict[str, Path]:
     """Score both sources' dev cases, choose how speakers are shown, and write one E3 record per source."""
     started = datetime.now(timezone.utc).isoformat()
@@ -975,10 +945,11 @@ def run_consistency(*, root: Path = ROOT, proba: ProbaFn, labels: tuple[str, ...
     mode, why = choose_mode(stats)
     say(f"speakers shown as {mode}: {why}")
 
-    say(f"scoring again with flagged earlier turns removed (speakers shown as {mode})")
-    ev_after = Evaluator(proba, labels, prompted, threshold, strip_flagged=True)
-    stripped = {src: analyse(ev_after, cases[src], mode) for src in CONSISTENCY_SOURCES}
-    strip = strip_comparison(outcomes[mode], stripped, cases, labelled, data)
+    from contextlens.experiments import e3_strip
+
+    strip = e3_strip.measure(evaluator=evals[mode], prompted=prompted, prompted_stripped=prompted_stripped, mode=mode,
+                             cases=cases, labelled=labelled, data=data, extra=extra_templates,
+                             extra_sha256=extra_templates_sha256, say=say)
     if strip["accuracy_fell"]:
         say("accuracy fell with the strip: " + "; ".join(strip["accuracy_fell"]))
 
@@ -1066,6 +1037,17 @@ def _consistency_inputs(root: Path, data_root: Path, device: str) -> tuple[Proba
     return (lambda ex: cm.predict_proba(model, tokenizer, ex)), labels, provenance, float(cfg["flag_threshold"]), device
 
 
+def load_templates(path: Path) -> tuple[tuple[Template, ...], str]:
+    """Extra injected turns from a JSONL file of {"id", "text"}, and the file's hash. The texts are not copied into records."""
+    raw = path.read_bytes()
+    rows = [json.loads(ln) for ln in raw.decode("utf-8").splitlines() if ln.strip()]
+    if not rows or any(not str(r.get("id", "")).strip() or not str(r.get("text", "")).strip() for r in rows):
+        raise ValueError(f"{path} must hold lines of JSON with a non-empty id and text")
+    if len({r["id"] for r in rows}) != len(rows):
+        raise ValueError(f"{path} repeats an id")
+    return tuple((str(r["id"]), str(r["text"])) for r in rows), hashlib.sha256(raw).hexdigest()
+
+
 def hand_read_trained(root: Path, data_root: Path) -> list[str]:
     """Draw HAND_READ_N false alarms of the trained model alone at the selected threshold (the cascade has too few), write
     them to the git-ignored HAND_READ_REL, and return their ids."""
@@ -1083,11 +1065,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-conditions", help="required for cards and consistency: what else was running while latency was measured")
     ap.add_argument("--supersedes", nargs="+", metavar="RUN_ID", default=[],
                     help="cards: earlier E3 cards records this run replaces; the stated reason is SUPERSEDE_REASON")
+    ap.add_argument("--extra-templates", type=Path, help="consistency: a JSONL file with id and text of extra injected turns; "
+                    "their flips are reported apart from the three fixed ones")
     ap.add_argument("--device", default="cuda", help="device for the trained model (consistency); cuda by default, warns and "
                     "records cpu if it is not available. hand-read loads no model, so it uses none")
     args = ap.parse_args(argv)
     if args.supersedes and args.part != "cards":
         ap.error("--supersedes goes with cards")
+    if args.extra_templates and args.part != "consistency":
+        ap.error("--extra-templates goes with consistency")
     if args.part != "hand-read" and not (args.run_conditions or "").strip():
         ap.error("--run-conditions is required for cards and consistency")
     try:
@@ -1107,9 +1093,12 @@ def main(argv: list[str] | None = None) -> int:
             from contextlens.llm.client import OllamaClient, unload_ollama
 
             proba, labels, provenance, threshold, device = _consistency_inputs(ROOT, args.data_root, args.device)
+            extra, extra_sha = load_templates(args.extra_templates) if args.extra_templates else ((), None)
             hand = ROOT / HAND_READ_REL if (ROOT / HAND_READ_REL).is_file() else None
             try:
                 paths = run_consistency(proba=proba, labels=labels, prompted=PromptedChecker(OllamaClient(e4.PROMPTED_MODEL)),
+                                        prompted_stripped=PromptedChecker(OllamaClient(e4.PROMPTED_MODEL), strip_instructions=True),
+                                        extra_templates=extra, extra_templates_sha256=extra_sha,
                                         threshold=threshold, provenance=provenance, hand_read=hand,
                                         run_conditions=args.run_conditions,
                                         devices={"trained_model": device, "embedder": "not used", "writer": "not used",
