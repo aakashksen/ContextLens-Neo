@@ -890,3 +890,41 @@ def test_the_analysis_command_reads_the_tried_record_and_lists_the_old_ones(repo
     text = e2.analysis_only(root=repo, local_run=local, cloud_run=cloud, tried_prompt_run=new.stem).read_text(encoding="utf-8")
     assert new.stem in text and "Recall cases that went to respond" in text and "tried and reverted" in text
     assert "No record of the reverted prompt" not in text and "old prompt vs the reverted prompt, on the same" in text
+
+
+def test_a_failed_memory_build_is_named_on_stderr_and_to_the_callback(capsys) -> None:
+    sc = _scn("fail1", "recall", ["SECRET words here", "noted"])
+    seen: list[tuple[str, str]] = []
+    store, cost = e2.build_memory(sc, FakeLLM([]), lambda cid, why: seen.append((cid, why)))
+    assert cost is None and store.items("fail1", 99) == []
+    assert len(seen) == 1 and seen[0][0] == "fail1" and seen[0][1].startswith("LLMError:")
+    err = capsys.readouterr().err
+    assert "fail1" in err and "LLMError" in err and "SECRET" not in err
+    assert e2.build_memory(sc, FakeLLM([]))[1] is None  # the callback stays optional
+
+
+class _Raises:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def complete(self, *a, **k):  # type: ignore[no-untyped-def]
+        raise self.exc
+
+
+@pytest.mark.parametrize("exc", [
+    LLMError("output failed schema validation twice: input_value='SENTINEL-TRANSCRIPT-TEXT'"),
+    LLMError("unexpected reply: {'text': 'SENTINEL-TRANSCRIPT-TEXT'}"),
+    ValueError("SENTINEL-TRANSCRIPT-TEXT"),
+])
+def test_a_memory_failure_reason_never_carries_model_or_transcript_text(exc, capsys) -> None:
+    seen: list[tuple[str, str]] = []
+    e2.build_memory(_scn("f2", "recall", ["a", "b"]), _Raises(exc), lambda cid, why: seen.append((cid, why)))  # type: ignore[arg-type]
+    assert "SENTINEL" not in capsys.readouterr().err and "SENTINEL" not in seen[0][1]
+    assert seen[0][1].startswith(type(exc).__name__)
+
+
+def test_a_timeout_failure_reason_still_names_the_timeout() -> None:
+    seen: list[tuple[str, str]] = []
+    exc = LLMError("request to http://127.0.0.1:11434/api/chat failed: timed out")
+    e2.build_memory(_scn("f3", "recall", ["a", "b"]), _Raises(exc), lambda cid, why: seen.append((cid, why)))  # type: ignore[arg-type]
+    assert "timed out" in seen[0][1] and seen[0][1].startswith("LLMError:")
