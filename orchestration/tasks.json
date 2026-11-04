@@ -414,16 +414,16 @@
         "{py} -m pytest tests/test_e3.py -q",
         "{py} -m contextlens.eval.check_run E3 --min-n 100 --split dev"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T17:15:37+00:00",
       "verified": {
-        "commit": "6fed87b620465705dfde4139a25307c8954bb2c6",
+        "commit": "e130a2891cb3974e22bf36fbce0dd055c1f5c094",
         "passed": true,
-        "at": "2026-11-04T01:52:30+00:00"
+        "at": "2026-11-04T03:26:58+00:00"
       },
       "attempts": 1,
-      "reason": "E3 cards record has mcnemar_p null on every comparison though the plan asks for McNemar, and its finding says the team beats single on answering from 4 discordant cases (exact p=0.125); that metric counts non-abstention, not correctness"
+      "reason": "E3 cards record has mcnemar_p null on every comparison though the plan asks for McNemar, and its finding says the team beats single on answering from 4 discordant cases (exact p=0.125); that metric counts non-abstention, not correctness",
+      "done_at": "2026-11-04T03:42:58+00:00"
     },
     {
       "id": "T5.1",
