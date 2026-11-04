@@ -1,4 +1,4 @@
-"""One written attempt to fix how the team merges its specialists (docs/DECISIONS.md, entry 40). Dev only.
+"""One written attempt to fix how the team merges its specialists (docs/DECISIONS.md, entry 48). Dev only.
 
 Three systems on the same cases and settings: `single`, `team`, and `team_changed` (the team with `memory_gap_abstains`:
 a clean empty memory pass withholds the other agent's findings). Each of the two dev sources, the 148 old cases
@@ -171,7 +171,7 @@ def finding(comparisons: list[dict[str, Any]], paired: dict[str, Any], insuffici
 
 
 def select(sets: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """The written rule (entry 40): `single` unless a challenger beats its score on the old set and on the new set and is
+    """The written rule (entry 48): `single` unless a challenger beats its score on the old set and on the new set and is
     not clearly worse on grounded_rate, answer_when_answerable or abstain_when_insufficient on both together."""
     qualified: dict[str, dict[str, Any]] = {}
     for ch in CHALLENGERS:

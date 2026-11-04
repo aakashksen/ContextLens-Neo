@@ -1,4 +1,4 @@
-"""The runner of entry 40: three systems on both dev sources, one valid record per source, resumable. No real model."""
+"""The runner of entry 48: three systems on both dev sources, one valid record per source, resumable. No real model."""
 
 import json
 import shutil

@@ -341,7 +341,7 @@ Why each real choice was made, written so it can be explained out loud. One entr
 - **Known cost:** One fresh ordinary phrase still flags ("forget the above numbers"), because "ignore the above" is itself an injection in dev. It is left as measured.
 - **Would change if:** a held-out injection set shows a worse catch rate.
 
-## 40. One attempt to fix how the team merges its specialists (written before any run)
+## 48. One attempt to fix how the team merges its specialists (written before any run)
 - **Date / task:** 2026-11-03, not a plan task; it follows E3 (branch `prep/team-attempt`, from `build`).
 - **Who:** The coordinator set the terms; the implementer wrote this entry and the change. Dev only: no test split is opened.
 - **Hypothesis:** How the team merges its specialists loses their "not enough evidence" signal. The memory specialist's protocol is to give no findings when the turns do not support one, but `_assist` marks the card `answered` whenever the shared store holds any verified finding from either specialist. The consistency specialist, asked a recall question it cannot answer, writes a finding that says the transcript does not give the detail (a finding with label `insufficient`, or with no label), and that finding passes the checks because its quote is real. So memory's "found nothing" is outvoted.
