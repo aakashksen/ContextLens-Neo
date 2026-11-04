@@ -1,1 +1,2 @@
 datasets/scenarios_extra/*.jsonl -text
+datasets/guard_heldout/* -text
