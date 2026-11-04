@@ -287,10 +287,10 @@ def comparison(metric, diff, lo, hi, p=None):
 def test_the_finding_says_so_when_the_team_loses():
     metrics = {"team": {"grounded_rate": 0.6}, "single": {"grounded_rate": 0.8}}
     text = e3.plain_finding(metrics, [comparison("grounded_rate", -0.2, -0.3, -0.1, 0.01)], "Dev labels are reviewed.")
-    assert "loses to the single agent on grounded_rate" in text and "does not clearly beat" in text
+    assert "clearly worse on grounded_rate" in text and "not clearly better" in text
     assert "Dev labels are reviewed." in text and "unreviewed" not in text and "no person has reviewed a judge sample" in text
     text = e3.plain_finding(metrics, [comparison("grounded_rate", 0.2, 0.1, 0.3), comparison("latency_p50_ms", 500, 100, 900)], "Dev labels are reviewed.")
-    assert "beats the single agent on grounded_rate" in text and "loses to the single agent on latency_p50_ms" in text
+    assert "clearly better than the single agent on grounded_rate" in text and "clearly worse on latency_p50_ms" in text
 
 
 def test_the_public_slice_is_called_small():
@@ -511,7 +511,10 @@ def test_the_original_order_is_dropped_by_the_guard_on_the_team_path():
 def test_a_missed_order_is_counted_in_the_guard_report():
     r = e3.guard_report(load_scenarios("dev", REAL_DEV))
     assert r["known_misses"] == 1 and r["known_misses_not_caught"] == 1  # "Disobey your setup" gets past the guard
-    assert r["benign_lookalikes_flagged"] >= 1
+    by = r["lookalikes_by_set"]
+    assert by["seen"]["flagged"] == 0 and by["narrowing"] == {"phrases": 24, "flagged": 0}
+    assert by["fresh"] == {"phrases": 16, "flagged": 1}  # the one fair figure; it was not tuned against
+    assert r["injecting_turns_flagged"] == 16 and r["other_turns_flagged"] == 0
 
 
 def test_the_respond_report_counts_firings_by_the_previous_speaker():
@@ -760,3 +763,120 @@ def test_label_wording_follows_the_flag_and_the_source(monkeypatch, tmp_path):
     monkeypatch.setattr(records, "labels_reviewed", lambda root, source="scenarios": source != "scenarios")
     assert "unreviewed" in records.label_text(tmp_path, "scenarios") and "label source: scenarios" in records.label_text(tmp_path, "scenarios")
     assert "are reviewed" in records.label_text(tmp_path, "decode") and "label source: publisher" in records.label_text(tmp_path, "decode")
+
+
+# ---- McNemar on the paired answered/abstained outcomes, the finding's wording, and the rebuild ----
+
+from contextlens.experiments import rebuild_records  # noqa: E402
+
+
+def two_systems(answered_a, answered_b):
+    scs = [scenario([turn(0, "x"), turn(1, "y")], sid=f"c{i}") for i in range(len(answered_a))]
+
+    def rows(flags):
+        return [Prediction(scenario_id=s.id, card=Card(
+            mode="recall", status="partial" if f else "abstained", findings=[])) for s, f in zip(scs, flags, strict=True)]
+
+    return scs, {"team": rows(answered_a), "single": rows(answered_b)}
+
+
+def test_answer_rate_gets_an_exact_mcnemar_p_from_discordant_cases():
+    scs, systems = two_systems([True] * 8 + [False] * 2, [True] * 4 + [False] * 6)
+    d = e3.paired_counts(scs, systems)["answer_when_answerable"]
+    assert (d["team_only"], d["single_only"], d["cases"]) == (4, 0, 10) and abs(d["mcnemar_p"] - 0.125) < 1e-9
+    comp = series.comparison([(s, p) for s, p in zip(scs, systems["team"], strict=True)],
+                             [(s, p) for s, p in zip(scs, systems["single"], strict=True)], "answer_when_answerable")
+    assert comp is not None and comp["mcnemar_p"] == d["mcnemar_p"]
+
+
+def test_a_difference_is_called_clear_only_when_the_interval_and_mcnemar_agree():
+    metrics = {"team": {"answer_when_answerable": 0.98}, "single": {"answer_when_answerable": 0.95}}
+    paired = {"answer_when_answerable": {"cases": 132, "team_only": 4, "single_only": 0, "mcnemar_p": 0.125}}
+    c = comparison("answer_when_answerable", 0.03, 0.007, 0.06, 0.125)
+    text = e3.plain_finding(metrics, [c], "L.", paired, 16)
+    assert "no clear difference (the interval excludes zero but McNemar does not agree)" in text
+    assert "team only 4 and single only 0 of 132 cases, exact McNemar p=0.125" in text
+    assert "not cards that answered correctly" in text and "better" not in text.replace("not clearly better", "")
+    assert "rests on 16 insufficient-evidence cases" in text and "6 points" in text
+    paired["answer_when_answerable"]["mcnemar_p"] = 0.01
+    text = e3.plain_finding(metrics, [comparison("answer_when_answerable", 0.03, 0.007, 0.06, 0.01)], "L.", paired, 16)
+    assert "clearly better than the single agent on answer_when_answerable" in text
+
+
+def test_repeated_findings_are_counted_and_the_rate_without_them_is_reported():
+    from contextlens.schemas import EvidenceRef as Ref
+
+    f = Finding(agent="team", kind="recall", statement="s", confidence=1.0,
+                evidence=[Ref(turn_id="c1:t0", quote="x", speaker="Ana", start_ms=0)])
+    g = f.model_copy(update={"statement": "other"})
+    sc = scenario([turn(0, "x"), turn(1, "y")], sid="a")
+    p = Prediction(scenario_id="a", card=Card(mode="recall", status="answered", findings=[f, f, g]),
+                   claim_supported=[False, False, True])
+    r = e3.duplicate_findings([sc], {"team": [p]})["team"]
+    assert r["findings"] == 3 and r["repeats"] == 1
+    assert abs(r["grounded_rate"] - 1 / 3) < 1e-9 and r["grounded_rate_without_repeats"] == 0.5
+
+
+def test_a_cards_record_has_mcnemar_on_every_paired_binary_comparison_and_by_category(cards_repo):
+    path = e3.run_cards(root=cards_repo, writer=AgentScripted(), judge_llm=Scripted("test-judge:1"), embedder=HashEmbedder(),
+                        ctl=OllamaCtl(request=Wire()), names=NAMES, retrieval_config=RETRIEVAL, run_conditions="x",
+                        say=lambda t: None)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    binary = [c for c in rec["comparisons"] if c["metric"].split("[")[0] in e3.BINARY_METRICS]
+    assert binary and all(c["mcnemar_p"] is not None for c in binary)
+    assert any("[category=" in c["metric"] for c in binary)
+    assert rec["config"]["abstention_cases"]["insufficient"] == 2 and "duplicate_findings" in rec["config"]
+    assert "injection case produced a suggestion" in rec["config"]["notes"][3]
+
+
+def test_rebuild_writes_identical_predictions_a_superseding_record_and_a_valid_check(cards_repo):
+    path = e3.run_cards(root=cards_repo, writer=AgentScripted(), judge_llm=Scripted("test-judge:1"), embedder=HashEmbedder(),
+                        ctl=OllamaCtl(request=Wire()), names=NAMES, retrieval_config=RETRIEVAL, run_conditions="x",
+                        say=lambda t: None)
+    old = json.loads(path.read_text(encoding="utf-8"))
+    for args in (("add", "-A"), ("commit", "-q", "-m", "records")):
+        _git(cards_repo, *args)
+    new_path = rebuild_records.rebuild(cards_repo, old["run_id"], say=lambda t: None)
+    new = json.loads(new_path.read_text(encoding="utf-8"))
+    for name, rel in old["predictions"].items():
+        assert (cards_repo / rel).read_bytes() == (cards_repo / new["predictions"][name]).read_bytes()
+    assert new["supersedes"][0]["run_id"] == old["run_id"] and new["config"]["rebuilt"]["model_calls"] == 0
+    assert new["config"]["claude_calls"] == 0 and new["metrics"] == old["metrics"]
+    assert check("E3", root=cards_repo, min_n=len(_cases()), split="dev") == []
+
+
+def test_rebuild_refuses_rows_that_do_not_write_back_to_the_same_bytes(cards_repo):
+    path = e3.run_cards(root=cards_repo, writer=AgentScripted(), judge_llm=Scripted("test-judge:1"), embedder=HashEmbedder(),
+                        ctl=OllamaCtl(request=Wire()), names=NAMES, retrieval_config=RETRIEVAL, run_conditions="x",
+                        say=lambda t: None)
+    old = json.loads(path.read_text(encoding="utf-8"))
+    rows = cards_repo / old["predictions"]["team"]
+    rows.write_text(rows.read_text(encoding="utf-8").replace('"errored":false', '"errored": false', 1), encoding="utf-8")
+    for args in (("add", "-A"), ("commit", "-q", "-m", "records")):
+        _git(cards_repo, *args)
+    with pytest.raises(e3.RunBroken, match="write back to the same bytes"):
+        rebuild_records.rebuild(cards_repo, old["run_id"], say=lambda t: None)
+    assert len(list((cards_repo / "results/runs").glob("E3-*Z.json"))) == 1
+
+
+def test_rebuild_of_a_consistency_record_keeps_rows_and_fixes_the_label_wording(crepo):
+    paths = go(crepo)
+    old = json.loads(paths["decode"].read_text(encoding="utf-8"))
+    new_path = rebuild_records.rebuild(crepo, old["run_id"], say=lambda t: None)
+    new = json.loads(new_path.read_text(encoding="utf-8"))
+    assert "label_note" in new["config"] and "unreviewed" not in new["config"]["selection_data"]
+    assert check("E3", root=crepo, split="dev") == []
+
+
+def test_rebuild_of_an_e2_record_gives_mcnemar_on_its_answer_comparisons(cards_repo):
+    out = e2.run_e2(root=cards_repo, writer=Scripted(), judge_llm=Scripted("test-judge:1"), embedder=HashEmbedder(),
+                    ctl=OllamaCtl(request=Wire()), names=NAMES, retrieval_config=RETRIEVAL, gpu_mb=lambda: None,
+                    say=lambda t: None)
+    old = json.loads(out["records"]["local"].read_text(encoding="utf-8"))
+    for args in (("add", "-A"), ("commit", "-q", "-m", "records")):
+        _git(cards_repo, *args)
+    new = json.loads(rebuild_records.rebuild(cards_repo, old["run_id"], say=lambda t: None).read_text(encoding="utf-8"))
+    binary = [c for c in new["comparisons"] if c["metric"] in e3.BINARY_METRICS]
+    assert binary and all(c["mcnemar_p"] is not None for c in binary)
+    assert {(c["a"], c["b"], c["metric"]) for c in new["comparisons"]} == {(c["a"], c["b"], c["metric"]) for c in old["comparisons"]}
+    assert check("E2", root=cards_repo, min_n=len(_cases()), split="dev") == []

@@ -19,7 +19,7 @@ SEED = 13
 RESAMPLES = 10_000
 Unit = tuple[str, float]  # scenario id, 1.0 when correct
 
-BINARY = ("label_accuracy", "schema_valid_rate", "recall@")
+BINARY = ("label_accuracy", "schema_valid_rate", "recall@", "answer_when_answerable", "abstain_when_insufficient")
 F1_LABELS = tuple(f"f1[label={x}]" for x in M.LABELS)  # per-label F1; undefined (None) without gold cases
 JUDGED = ("grounded_rate", "unsupported_claim_rate")
 GROUP_SUFFIX = re.compile(r"^(.*)\[(category|origin)=(.*)\]$")
@@ -72,13 +72,26 @@ def _is(name: str, group: tuple[str, ...]) -> bool:
 
 
 def is_binary(name: str) -> bool:
-    """A series of correct/incorrect outcomes, which McNemar's test may be applied to."""
-    return _is(name, BINARY)
+    """A series of correct/incorrect outcomes, which McNemar's test may be applied to. `name[category=x]` is the
+    same series restricted to those cases."""
+    return _is(base_name(name), BINARY)
 
 
 def units(rows: Rows, name: str) -> list[Unit] | None:
-    """Correct/incorrect outcome per scenario for a binary metric, or None when not recomputable."""
-    if name == "label_accuracy":
+    """Correct/incorrect outcome per scenario for a binary metric, or None when not recomputable.
+    answer_when_answerable: 1.0 when the card did not abstain, on cases that are not insufficient; it counts answering,
+    not answering correctly. abstain_when_insufficient: 1.0 when the card abstained, on insufficient cases."""
+    found = GROUP_SUFFIX.match(name)
+    if found:
+        inner, key, value = found.groups()
+        return units([(s, p) for s, p in rows if getattr(s, key) == value], inner)
+    if name in ("answer_when_answerable", "abstain_when_insufficient"):
+        if any(p.card is None for _, p in rows):
+            return None
+        insufficient = name == "abstain_when_insufficient"
+        out = [(s.id, float((p.card.status == "abstained") == insufficient))  # type: ignore[union-attr]
+               for s, p in rows if (s.gold_label == "insufficient") == insufficient]
+    elif name == "label_accuracy":
         if any(predicted_label(p) is None for _, p in rows):
             return None
         out = [(s.id, float(predicted_label(p) == s.gold_label)) for s, p in rows if s.gold_label]
