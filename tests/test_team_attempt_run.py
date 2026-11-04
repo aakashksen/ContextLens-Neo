@@ -14,6 +14,7 @@ from contextlens.data.extra_cases import SHAPES
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import series
 from contextlens.eval.check_run import check
+from contextlens.experiments import e2_context as e2
 from contextlens.experiments import team_attempt as ta
 from contextlens.experiments.e2_context import RunBroken
 from contextlens.llm.client import LLMError
@@ -100,7 +101,6 @@ def test_the_changed_team_is_the_team_with_the_one_switch_on_and_the_other_two_a
 
 def test_only_the_shipping_arm_has_a_consistency_checker_and_the_others_are_as_entry_48_ran_them():
     from contextlens.api import production
-    from contextlens.experiments import e2_context as e2
 
     args = (EXTRA[0], Scripted(), HashEmbedder(), RETRIEVAL, MemoryStore())
     built = {n: ta.make_assistant(n, *args) for n in ta.RUN_SYSTEMS}
@@ -255,14 +255,20 @@ def test_an_interrupted_run_resumes_at_the_same_commit_without_redoing_saved_row
         go(repo, Writer(die_after=1400))
     saved = [json.loads(x) for x in (repo / ta.PARTIAL_REL).read_text(encoding="utf-8").splitlines()]
     assert saved and not (repo / "results/runs").exists()
-    per_case: dict[str, int] = {}
+    per_case: dict[str, int] = {}  # rows a resume may keep: a broken one is saved, but it is run again
+    broken = set()
     for e in saved:
-        per_case[e["row"]["scenario_id"]] = per_case.get(e["row"]["scenario_id"], 0) + 1
+        sid = e["row"]["scenario_id"]
+        if e2.row_state(Prediction.model_validate(e["row"])) == "broken":
+            broken.add(sid)
+            continue
+        per_case[sid] = per_case.get(sid, 0) + 1
     finished = [sid for sid, n in per_case.items() if n == len(ta.RUN_SYSTEMS)]
-    assert finished
+    assert finished and broken  # the dead server left broken rows behind
     writer = Writer()
     paths = go(repo, writer)
     seen = json.dumps(writer.calls)
     assert len(paths) == 2 and not (repo / ta.PARTIAL_REL).exists()
     assert not any(f'"{sid}:' in seen or f"{sid}:t" in seen for sid in finished)  # a finished case was not run again
+    assert all(f'"{sid}:' in seen or f"{sid}:t" in seen for sid in broken)  # a broken row was run again
     assert check(ta.EXPERIMENT, root=repo, min_n=100, split="dev") == []
