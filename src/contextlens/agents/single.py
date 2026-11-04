@@ -175,6 +175,7 @@ _ORDINALS = {
     **dict(zip("twentieth thirtieth fortieth fiftieth sixtieth seventieth eightieth ninetieth".split(), range(20, 100, 10))),
 }
 _SMALL = {**_UNITS, **_TEENS, **_TENS, **_ORDINALS}
+_LOOSE = frozenset({"first", "second", "third"})
 _BIG = {"hundred": 100, "dozen": 12, "thousand": 1000, "million": 10**6, "billion": 10**9}
 _TOKEN = re.compile(r"(\d+(?:\.\d+)?)(?:st|nd|rd|th)?(?![a-z])|(\d+(?:\.\d+)?)|([a-z]+)")
 
@@ -213,10 +214,11 @@ def _spoken(words: list[str]) -> set[Fraction]:
     return out
 
 
-def _values(text: str, *, digits: bool = True, words: bool = True) -> set[Fraction]:
+def _values(text: str, *, digits: bool = True, words: bool = True, loose: bool = False) -> set[Fraction]:
     """The numbers in `text`, by value: `2`, `two`, `2nd` and `second` give 2, `1,000` and `one thousand` give 1000,
     `half` is 1/2 and `a dozen` is 12. A lone `one` is a pronoun and is not a number. Units, `%` and `$` are ignored.
-    `digits=False` leaves out numbers written with digits, `words=False` those written as words."""
+    `digits=False` leaves out numbers written with digits, `words=False` those written as words, `loose=True` the
+    words first, second and third when they stand alone (everyday adverbs: "she first said")."""
     toks = [m.group(1) or m.group(2) or m.group(3) for m in _TOKEN.finditer(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower()))]
     out: set[Fraction] = set()
     i = 0
@@ -238,7 +240,7 @@ def _values(text: str, *, digits: bool = True, words: bool = True) -> set[Fracti
             while j + 1 < len(toks) and (toks[j + 1] in _SMALL or toks[j + 1] in _BIG or (
                     toks[j + 1] == "and" and toks[j] in _BIG and j + 2 < len(toks) and toks[j + 2] in _SMALL)):
                 j += 1
-            if toks[i : j + 1] != ["one"]:
+            if toks[i : j + 1] != ["one"] and not (loose and j == i and t in _LOOSE):
                 out |= _spoken(toks[i : j + 1])
             i = j
         i += 1
@@ -262,7 +264,7 @@ def without_turn_refs(text: str, turn_ids: Sequence[str] = ()) -> str:
 def _missing(text: str, quotes: list[str], turn_ids: Sequence[str]) -> set[Fraction]:
     """Numbers in `text` (turn references aside) that are not, by value, in one of the quotes. Each quote is read on
     its own, so `five` ending one and `hundred` starting the next do not make 500."""
-    return _values(without_turn_refs(text, turn_ids)) - set().union(*(_values(q) for q in quotes))
+    return _values(without_turn_refs(text, turn_ids), loose=True) - set().union(*(_values(q) for q in quotes))
 
 
 def _runs_in(text: str, quotes: list[str], turn_ids: Sequence[str] = ()) -> bool:
@@ -277,7 +279,7 @@ def numbers_supported(statement: str, quotes: list[str], turn_ids: Sequence[str]
     if missing:
         clean = without_turn_refs(statement, turn_ids)
         counts = {Fraction(k) for k in range(2, len(set(turn_ids)) + 1)}
-        missing -= (_values(clean, digits=False) - _values(clean, words=False)) & counts
+        missing -= (_values(clean, digits=False, loose=True) - _values(clean, words=False)) & counts
     return not missing
 
 

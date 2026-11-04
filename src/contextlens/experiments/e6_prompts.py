@@ -214,8 +214,8 @@ def _retriever(sc: Scenario, embedder: Any) -> Retriever:
     return r
 
 
-def _saved_rows(path: Path, commit: str, ids: set[str]) -> dict[str, dict[str, Prediction]]:
-    """Rows of an interrupted run at this commit, by version and case. A row that failed outright is not reused,
+def _saved_rows(path: Path, commit: str, system: str, ids: set[str]) -> dict[str, dict[str, Prediction]]:
+    """Rows of an interrupted run at this commit and on this system, by version and case. A row that failed outright is not reused,
     and a line cut short by a crash is skipped."""
     have: dict[str, dict[str, Prediction]] = {}
     if not path.exists():
@@ -224,7 +224,7 @@ def _saved_rows(path: Path, commit: str, ids: set[str]) -> dict[str, dict[str, P
         try:
             e = json.loads(line)
             row = Prediction.model_validate(e["row"])
-            if e["commit"] != commit or row.scenario_id not in ids or e2.row_state(row) == "broken":
+            if (e["commit"], e["system"]) != (commit, system) or row.scenario_id not in ids or e2.row_state(row) == "broken":
                 continue
             have.setdefault(e["version"], {}).setdefault(row.scenario_id, row)
         except (ValueError, KeyError, TypeError):
@@ -337,7 +337,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
         raise e2.RunBroken(f"memory extraction failed on {memory_failed} of {len(scenarios)} cases")
     retrievers: dict[str, Retriever] = {}
 
-    saved = _saved_rows(root / PARTIAL_REL, commit, {s.id for s in scenarios})
+    saved = _saved_rows(root / PARTIAL_REL, commit, system, {s.id for s in scenarios})
     if saved:
         say("reusing saved rows: " + ", ".join(f"{v} {len(r)}" for v, r in saved.items()))
     systems: dict[str, list[Prediction]] = {}
@@ -352,7 +352,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
             return _build_assistant(system, version, sc, writer, retrievers[sc.id], memories[sc.id], retrieval_config)
 
         def keep(row: Prediction, version: str = v.version) -> None:
-            line = json.dumps({"commit": commit, "version": version, "row": json.loads(row.model_dump_json())})
+            line = json.dumps({"commit": commit, "system": system, "version": version, "row": json.loads(row.model_dump_json())})
             e2._append_durable(root / PARTIAL_REL, line)
 
         rows = e2.run_system(v.version, scenarios, make, e2.STREAK_LOCAL, say=say, have=saved.get(v.version), on_row=keep)

@@ -613,6 +613,12 @@ def _f(statement, quote):
     ("the fifth floor", "the 5th floor", True),
     ("the fifth floor", "the sixth floor", False),
     ("the 5th floor", "the 6th floor", False),
+    ("she first said it", "nothing numeric", True),  # first, second and third alone are not read as numbers in a statement
+    ("the second statement", "I agree", True),
+    ("the 1st option", "the first option", True),
+    ("the 1st option", "the second option", False),
+    ("the fourth floor", "the third floor", False),
+    ("the twenty-first", "the 20th", False),
     ("twenty-first", "21st", True),
     ("2 thousand", "two thousand", True),
     ("2500 dollars", "two thousand five hundred dollars", True),

@@ -295,3 +295,21 @@ def test_the_record_reports_abstention_from_drops_labels_from_the_flag_and_mcnem
 def test_the_runner_never_reads_the_test_split() -> None:
     src = Path(e6.__file__).read_text(encoding="utf-8")
     assert '"test"' not in src and "'test'" not in src and e6.SPLIT == "dev"
+
+
+def test_the_few_shot_example_is_in_the_single_agents_final_step_form() -> None:
+    from contextlens.agents.single import _Step
+
+    v2 = next(v for v in e6.declared_versions() if v.factor == "few_shot")
+    steps = [_Step.model_validate_json(ln) for ln in v2.text.splitlines() if ln.startswith('{"tool"')]
+    assert [s.card.status for s in steps] == ["answered", "abstained"] and steps[0].card.findings[0].agent == "single"
+
+
+def test_rows_saved_on_one_system_are_not_reused_on_the_other(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(e6, "write_run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop")))
+    with pytest.raises(RuntimeError):
+        _go(repo, system="single")
+    monkeypatch.undo()
+    other = Scripted()
+    _go(repo, system="retrieval_memory", writer=other)
+    assert len(_cards(other)) >= len(_cases()) * len(e6.VERSIONS)
