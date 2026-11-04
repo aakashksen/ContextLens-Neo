@@ -646,6 +646,25 @@ def test_number_words_do_not_join_across_two_quotes_and_an_invented_number_still
     assert single._numbers_supported(invented) is False
 
 
+def _cites(statement, *turn_ids):
+    return Finding(agent="a", kind="recall", statement=statement, confidence=0.5, evidence=[
+        EvidenceRef(turn_id=t, quote="some words", speaker="Ana", start_ms=0) for t in turn_ids])
+
+
+@pytest.mark.parametrize(("statement", "turns", "kept"), [
+    ("the two statements differ", ("c:t0", "c:t2"), True),  # two counts the cited turns
+    ("the two statements differ", ("c:t0", "c:t1", "c:t2"), True),
+    ("the two statements differ", ("c:t0",), False),  # only one turn is cited
+    ("the two statements differ", ("c:t0", "c:t0"), False),  # one turn cited twice is one turn
+    ("the three speakers differ", ("c:t0", "c:t2"), False),  # more than the evidence holds
+    ("the 2 statements differ", ("c:t0", "c:t2"), False),  # digits must be in a quote
+    ("the seven statements differ", ("c:t0", "c:t2"), False),
+    ("Sam asked for 500, and the two differ", ("c:t0", "c:t2"), False),  # an invented number is still dropped
+])
+def test_a_spelled_number_up_to_the_count_of_cited_turns_counts_the_evidence(statement, turns, kept):
+    assert single._numbers_supported(_cites(statement, *turns)) is kept
+
+
 NUMS = [turn(1, "The fee is five hundred dollars", "Ravi"), turn(2, "ok"), turn(3, "What was the fee?")]
 
 

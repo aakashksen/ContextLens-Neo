@@ -213,9 +213,10 @@ def _spoken(words: list[str]) -> set[Fraction]:
     return out
 
 
-def _values(text: str) -> set[Fraction]:
+def _values(text: str, *, digits: bool = True, words: bool = True) -> set[Fraction]:
     """The numbers in `text`, by value: `2`, `two`, `2nd` and `second` give 2, `1,000` and `one thousand` give 1000,
-    `half` is 1/2 and `a dozen` is 12. A lone `one` is a pronoun and is not a number. Units, `%` and `$` are ignored."""
+    `half` is 1/2 and `a dozen` is 12. A lone `one` is a pronoun and is not a number. Units, `%` and `$` are ignored.
+    `digits=False` leaves out numbers written with digits, `words=False` those written as words."""
     toks = [m.group(1) or m.group(2) or m.group(3) for m in _TOKEN.finditer(re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text.lower()))]
     out: set[Fraction] = set()
     i = 0
@@ -226,7 +227,10 @@ def _values(text: str) -> set[Fraction]:
             if i + 1 < len(toks) and toks[i + 1] in _BIG:
                 v *= _BIG[toks[i + 1]]
                 i += 1
-            out.add(v)
+            if digits:
+                out.add(v)
+        elif not words:
+            pass
         elif t == "half":
             out.add(Fraction(1, 2))
         elif t in _SMALL or t in _BIG:
@@ -255,14 +259,30 @@ def without_turn_refs(text: str, turn_ids: Sequence[str] = ()) -> str:
     return _TURN_REF.sub(" ", text)
 
 
+def _missing(text: str, quotes: list[str], turn_ids: Sequence[str]) -> set[Fraction]:
+    """Numbers in `text` (turn references aside) that are not, by value, in one of the quotes. Each quote is read on
+    its own, so `five` ending one and `hundred` starting the next do not make 500."""
+    return _values(without_turn_refs(text, turn_ids)) - set().union(*(_values(q) for q in quotes))
+
+
 def _runs_in(text: str, quotes: list[str], turn_ids: Sequence[str] = ()) -> bool:
-    """Every number in `text` (turn references aside) is, by value, a number in one of the quotes. Each quote is read
-    on its own, so `five` ending one and `hundred` starting the next do not make 500."""
-    return _values(without_turn_refs(text, turn_ids)) <= set().union(*(_values(q) for q in quotes))
+    """Every number in `text` is, by value, a number in the quotes."""
+    return not _missing(text, quotes, turn_ids)
+
+
+def numbers_supported(statement: str, quotes: list[str], turn_ids: Sequence[str]) -> bool:
+    """Every number in the statement is in the quotes, or is a spelled-out count of the turns cited ("the two
+    statements" over two turns): that counts the finding's own evidence, and no quote holds it."""
+    missing = _missing(statement, quotes, turn_ids)
+    if missing:
+        clean = without_turn_refs(statement, turn_ids)
+        counts = {Fraction(k) for k in range(2, len(set(turn_ids)) + 1)}
+        missing -= (_values(clean, digits=False) - _values(clean, words=False)) & counts
+    return not missing
 
 
 def _numbers_supported(f: Finding) -> bool:
-    return _runs_in(f.statement, [e.quote for e in f.evidence], [e.turn_id for e in f.evidence])
+    return numbers_supported(f.statement, [e.quote for e in f.evidence], [e.turn_id for e in f.evidence])
 
 
 class _Suggestion(BaseModel):

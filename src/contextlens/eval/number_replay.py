@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from contextlens.agents.single import _runs_in
+from contextlens.agents.single import numbers_supported
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.records import ROOT, RUNS_REL, SCENARIO_SOURCES
 from contextlens.replay.runner import Prediction
@@ -35,7 +35,7 @@ def replay_record(run_id: str, root: Path = ROOT) -> dict[str, Any]:
             sc = scenarios[p.scenario_id]
             texts = {t.id: t.text for t in sc.conversation.turns if t.seq <= sc.request.as_of_seq}
             kept = [d for d in p.drops if d.reason == "number"
-                    and _runs_in(d.statement, [texts.get(i, "") for i in d.turn_ids], d.turn_ids)]
+                    and numbers_supported(d.statement, [texts.get(i, "") for i in d.turn_ids], d.turn_ids)]
             number_drops += sum(d.reason == "number" for d in p.drops)
             survivors += len(kept)
             others = [d for d in p.drops if d.reason != "number"]
