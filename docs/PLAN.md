@@ -273,6 +273,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **Tests:** `test_each_version_differs_by_a_declared_factor`; `test_record_lists_every_version`.
 **Decision (the coordinator):** `retrieval_memory`'s weak spots in E2 are explicit targets here: it abstains correctly only half the time when evidence is insufficient, and its groundedness is below the other strategies'. Selection uses the lower of the two abstention sides alongside groundedness, written down before the run.
 **Decision (the coordinator):** T3.3 reverted a single-agent prompt that defined the modes: it reached respond on 0 of 16 respond cases and answered fewer answerable cases (record `E2-20261103T155026435232Z`). Any further single-agent prompt work on modes belongs here, and measures respond mode and injected claims in findings as well as suggestions.
+**Decision (the coordinator), number rule:** T3.2's number rule still drops true statements that use number words such as "two". This is a real bug, and E8's numbers must not inherit it. Fix it here, test first, whatever the count from T4.2 shows. Any records it affects go through the same written-rule rerun approach as the short-id bug: state the rule first, same cases and settings, old records listed.
 **Accept:** `{py} -m pytest tests/test_e6.py -q`; `{py} -m contextlens.eval.check_run E6 --min-n 100 --split dev`.
 
 ### T7.2: Prompt regression tests in CI
