@@ -214,7 +214,7 @@ def write_run(
         "dataset_hash": dataset_hash,
         "split": split,
         "scenario_source": scenario_source,
-        "config": config,
+        "config": {k: v for k, v in config.items() if k != "labels_reviewed"},  # the top-level flag is the only one
         "models": models,
         "prompt_versions": prompt_versions,
         "n": len(next(iter(predictions.values()))),

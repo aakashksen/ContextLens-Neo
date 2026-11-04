@@ -319,3 +319,30 @@ def test_evidence_store_keeps_findings():
     assert store.all() == [f]
     store.all().clear()
     assert len(store.all()) == 1
+
+
+def test_an_unexpected_error_in_the_assistance_step_keeps_the_verified_findings():
+    class Breaks(FakeLLM):
+        def _raw(self, *a):
+            raise RuntimeError("secret model text")
+
+    ls = {"memory": FakeLLM([MEM]), "consistency": FakeLLM([CON]), "assistance": Breaks([])}
+    team, ctx, _ = build(ls)
+    card = team.answer(req(), ctx)
+    assert card.status == "partial" and {f.agent for f in card.findings} == {"memory", "consistency"}
+    assert "assistance: failed: RuntimeError" in card.missing
+    assert "secret model text" not in repr(card.missing)
+
+
+def test_an_unexpected_error_while_finishing_the_card_abstains_and_names_the_error(monkeypatch):
+    from contextlens.agents import graph
+
+    def broken(*a, **k):
+        raise ValueError("secret transcript text")
+
+    monkeypatch.setattr(graph, "_finish", broken)
+    team, ctx, _ = build(llms([MEM], [CON], [PLAN]))
+    card = team.answer(req(), ctx)
+    assert card.status == "abstained" and not card.findings
+    assert any("assistance: failed: ValueError" in m for m in card.missing)
+    assert "secret transcript text" not in repr(card.missing)
