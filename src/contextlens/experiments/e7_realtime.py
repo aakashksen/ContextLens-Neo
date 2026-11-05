@@ -25,11 +25,15 @@ Each record also states the device of every stage (whisper, pyannote, embeddings
 one that did not is recorded as it ran and warned about, never hidden. Latency is only meaningful when the machine ran
 nothing else, so the person says so with --alone or --not-alone and the record keeps the answer.
 
-Run (the person runs these; the real run needs a GPU turn, Ollama, the speech service and HF_TOKEN):
-  .venv/Scripts/python tools/hf_audio.py plan|build --dataset edinburghcstr/ami --config ihm --revision <sha> --meetings ...
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime build-scenarios      # then commit the manifest
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime run --alone
-  .venv/Scripts/python -m contextlens.experiments.e7_realtime run --alone --rerun BASELINE_RUN_ID --change "what changed"
+Stages (each can run in the background; the first, third and fourth need the speech service on 50052, Ollama and
+HF_TOKEN; `CONTEXTLENS_METRICS_PORT` must be set for the writing stage and the rerun so the obs profile is on):
+  tools/hf_audio.py plan|build ...                                    # audio, once (datasets/raw/ami-audio, git-ignored)
+  python -m contextlens.experiments.e7_realtime build-scenarios      # then commit the manifest
+  python -m contextlens.experiments.e7_realtime ready --meeting ES2003a            # 4x keep-up; exit 3 = use --shortest 5
+  python -m contextlens.experiments.e7_realtime run --alone --speedup 4 --realtime-meeting ES2003a   # writing, holds the GPU
+  python -m contextlens.experiments.e7_realtime run --alone --shortest 5           # fallback, real time, not a record
+  python -m contextlens.experiments.e7_judge RUN_ID                                # after the GPU is released
+  python -m contextlens.experiments.e7_realtime rerun-segment --alone --baseline RUN_ID --change "what changed"
 """
 import argparse
 import asyncio
