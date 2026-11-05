@@ -1,0 +1,335 @@
+{
+ "run_id": "JC-20261104T144600470844Z",
+ "experiment": "JC",
+ "git_commit": "9a85778e96da66c1f9c290cfad3656e5d1082cfe",
+ "dirty": false,
+ "dataset_hash": "27febb4633b0606f64b63060dcff0b4e914f2c28e4811edd0899d8a8a91289aa",
+ "split": "dev",
+ "scenario_source": "scenarios_extra",
+ "config": {
+  "experiment": "JC",
+  "mode": "all_claims",
+  "provisional": true,
+  "commit_of_rows": "9a85778e96da66c1f9c290cfad3656e5d1082cfe",
+  "set": "new",
+  "judge": {
+   "model": "gemma4:e4b-it-qat",
+   "rubric_version": "e2-v1",
+   "same_model_and_prompt_as_writer": false
+  },
+  "cloud_grader": {
+   "model": "sonnet",
+   "role": "grades every claim of the named systems, blind to the local verdict, the writing system and the experiment"
+  },
+  "source_runs": [
+   "E3T-20261104T131120203662Z",
+   "E3T-20261104T131417960789Z"
+  ],
+  "systems": [
+   "single",
+   "team_changed"
+  ],
+  "this_record_covers": {
+   "set": "new",
+   "systems": [
+    "single",
+    "team_changed"
+   ]
+  },
+  "scores": {
+   "single": {
+    "covers": {
+     "sets": [
+      "old",
+      "new"
+     ],
+     "records": [
+      "E3T-20261104T131120203662Z",
+      "E3T-20261104T131417960789Z"
+     ]
+    },
+    "old": {
+     "cases": 148,
+     "claims": 127,
+     "grounded_rate": 0.9763779527559056,
+     "answer_when_answerable": 0.946969696969697,
+     "abstain_when_insufficient": 0.875,
+     "cloud_grounded_rate": 0.8740157480314961,
+     "judge_agreement": 0.8976377952755905,
+     "judge_kappa": 0.2874406560207164,
+     "written_score_local": 0.9256889763779528,
+     "written_score_cloud": 0.874507874015748
+    },
+    "new": {
+     "cases": 108,
+     "claims": 85,
+     "grounded_rate": 1.0,
+     "answer_when_answerable": 1.0,
+     "abstain_when_insufficient": 0.42592592592592593,
+     "cloud_grounded_rate": 0.8352941176470589,
+     "judge_agreement": 0.8352941176470589,
+     "judge_kappa": 0.0,
+     "written_score_local": 0.712962962962963,
+     "written_score_cloud": 0.6306100217864924
+    },
+    "both": {
+     "cases": 256,
+     "claims": 212,
+     "grounded_rate": 0.9858490566037735,
+     "answer_when_answerable": 0.9623655913978495,
+     "abstain_when_insufficient": 0.5285714285714286,
+     "cloud_grounded_rate": 0.8584905660377359,
+     "judge_agreement": 0.8726415094339622,
+     "judge_kappa": 0.16021126760563423,
+     "written_score_local": 0.7572102425876011,
+     "written_score_cloud": 0.6935309973045822
+    }
+   },
+   "team_changed": {
+    "covers": {
+     "sets": [
+      "old",
+      "new"
+     ],
+     "records": [
+      "E3T-20261104T131120203662Z",
+      "E3T-20261104T131417960789Z"
+     ]
+    },
+    "old": {
+     "cases": 148,
+     "claims": 215,
+     "grounded_rate": 0.9627906976744186,
+     "answer_when_answerable": 0.9772727272727273,
+     "abstain_when_insufficient": 1.0,
+     "cloud_grounded_rate": 0.9209302325581395,
+     "judge_agreement": 0.9209302325581395,
+     "judge_kappa": 0.2837546541250246,
+     "written_score_local": 0.9700317124735729,
+     "written_score_cloud": 0.9491014799154334
+    },
+    "new": {
+     "cases": 108,
+     "claims": 147,
+     "grounded_rate": 1.0,
+     "answer_when_answerable": 1.0,
+     "abstain_when_insufficient": 0.6666666666666666,
+     "cloud_grounded_rate": 0.8435374149659864,
+     "judge_agreement": 0.8435374149659864,
+     "judge_kappa": 0.0,
+     "written_score_local": 0.8333333333333333,
+     "written_score_cloud": 0.7551020408163265
+    },
+    "both": {
+     "cases": 256,
+     "claims": 362,
+     "grounded_rate": 0.9779005524861878,
+     "answer_when_answerable": 0.9838709677419355,
+     "abstain_when_insufficient": 0.7428571428571429,
+     "cloud_grounded_rate": 0.8895027624309392,
+     "judge_agreement": 0.8895027624309392,
+     "judge_kappa": 0.1347992351816453,
+     "written_score_local": 0.8603788476716654,
+     "written_score_cloud": 0.816179952644041
+    }
+   }
+  },
+  "scores_note": "written score = mean(grounded rate, min(answer_when_answerable, abstain_when_insufficient)), as in docs/DECISIONS.md. 'local' takes the grounded rate from the local judge's verdicts and 'cloud' from the cloud grader's, on the same claims; the answer and abstain rates come from the cards and do not depend on a judge. old = the 148 dev cases of `scenarios`, new = the 108 dev cases of `scenarios_extra`, both = the two together.",
+  "coverage": {
+   "records": {
+    "E3T-20261104T131120203662Z": {
+     "source": "scenarios",
+     "set": "old",
+     "systems_graded": [
+      "single",
+      "team_changed"
+     ],
+     "systems_not_graded": [
+      "team",
+      "team_shipping"
+     ]
+    },
+    "E3T-20261104T131417960789Z": {
+     "source": "scenarios_extra",
+     "set": "new",
+     "systems_graded": [
+      "single",
+      "team_changed"
+     ],
+     "systems_not_graded": [
+      "team",
+      "team_shipping"
+     ]
+    }
+   },
+   "claims": {
+    "single/old": 127,
+    "team_changed/old": 215,
+    "single/new": 85,
+    "team_changed/new": 147
+   }
+  },
+  "claude_calls": 232,
+  "claude_calls_note": "asks made for this set's claims, one call each; the client may retry a reply that is not valid JSON, so calls used are between claude_calls and twice that. The whole run made 574 asks; the other set's record holds the rest.",
+  "shared_counter_before": 1132,
+  "shared_counter_after": 1706,
+  "started_at": "2026-11-04T14:07:11.206441+00:00",
+  "notes": [
+   "Provisional: no claim comes from this record alone.",
+   "Every claim of each named system in this set was graded; no sample was drawn.",
+   "If the cloud grader also wrote some of the graded answers, its verdicts on those may favour its own wording."
+  ]
+ },
+ "models": {
+  "judge": "gemma4:e4b-it-qat",
+  "cloud_grader": "sonnet"
+ },
+ "prompt_versions": {
+  "judge_rubric": "e2-v1"
+ },
+ "n": 108,
+ "metrics": {
+  "single": {
+   "abstain_when_insufficient": 0.42592592592592593,
+   "answer_when_answerable": 1.0,
+   "grounded_rate": 1.0,
+   "cloud_grounded_rate": 0.8352941176470589,
+   "grounded_gap": 0.16470588235294115,
+   "judge_agreement": 0.8352941176470589,
+   "judge_kappa": 0.0,
+   "gemma_yes_cloud_no": 0.16470588235294117,
+   "gemma_no_cloud_yes": 0.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.42592592592592593,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "cloud_grounded_rate[category=insufficient_evidence]": 0.8387096774193549,
+   "grounded_gap[category=insufficient_evidence]": 0.16129032258064513,
+   "judge_agreement[category=insufficient_evidence]": 0.8387096774193549,
+   "judge_kappa[category=insufficient_evidence]": 0.0,
+   "gemma_yes_cloud_no[category=insufficient_evidence]": 0.16129032258064516,
+   "gemma_no_cloud_yes[category=insufficient_evidence]": 0.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "cloud_grounded_rate[category=recall]": 0.8333333333333334,
+   "grounded_gap[category=recall]": 0.16666666666666663,
+   "judge_agreement[category=recall]": 0.8333333333333334,
+   "judge_kappa[category=recall]": 0.0,
+   "gemma_yes_cloud_no[category=recall]": 0.16666666666666666,
+   "gemma_no_cloud_yes[category=recall]": 0.0,
+   "abstain_when_insufficient[origin=synthetic]": 0.42592592592592593,
+   "answer_when_answerable[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 1.0,
+   "cloud_grounded_rate[origin=synthetic]": 0.8352941176470589,
+   "grounded_gap[origin=synthetic]": 0.16470588235294115,
+   "judge_agreement[origin=synthetic]": 0.8352941176470589,
+   "judge_kappa[origin=synthetic]": 0.0,
+   "gemma_yes_cloud_no[origin=synthetic]": 0.16470588235294117,
+   "gemma_no_cloud_yes[origin=synthetic]": 0.0
+  },
+  "team_changed": {
+   "abstain_when_insufficient": 0.6666666666666666,
+   "answer_when_answerable": 1.0,
+   "grounded_rate": 1.0,
+   "cloud_grounded_rate": 0.8435374149659864,
+   "grounded_gap": 0.15646258503401356,
+   "judge_agreement": 0.8435374149659864,
+   "judge_kappa": 0.0,
+   "gemma_yes_cloud_no": 0.1564625850340136,
+   "gemma_no_cloud_yes": 0.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.6666666666666666,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "grounded_rate[category=insufficient_evidence]": 1.0,
+   "cloud_grounded_rate[category=insufficient_evidence]": 0.8717948717948718,
+   "grounded_gap[category=insufficient_evidence]": 0.1282051282051282,
+   "judge_agreement[category=insufficient_evidence]": 0.8717948717948718,
+   "judge_kappa[category=insufficient_evidence]": 0.0,
+   "gemma_yes_cloud_no[category=insufficient_evidence]": 0.1282051282051282,
+   "gemma_no_cloud_yes[category=insufficient_evidence]": 0.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "cloud_grounded_rate[category=recall]": 0.8333333333333334,
+   "grounded_gap[category=recall]": 0.16666666666666663,
+   "judge_agreement[category=recall]": 0.8333333333333334,
+   "judge_kappa[category=recall]": 0.0,
+   "gemma_yes_cloud_no[category=recall]": 0.16666666666666666,
+   "gemma_no_cloud_yes[category=recall]": 0.0,
+   "abstain_when_insufficient[origin=synthetic]": 0.6666666666666666,
+   "answer_when_answerable[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 1.0,
+   "cloud_grounded_rate[origin=synthetic]": 0.8435374149659864,
+   "grounded_gap[origin=synthetic]": 0.15646258503401356,
+   "judge_agreement[origin=synthetic]": 0.8435374149659864,
+   "judge_kappa[origin=synthetic]": 0.0,
+   "gemma_yes_cloud_no[origin=synthetic]": 0.1564625850340136,
+   "gemma_no_cloud_yes[origin=synthetic]": 0.0
+  }
+ },
+ "intervals": {
+  "single": {
+   "grounded_rate": [
+    1.0,
+    1.0
+   ],
+   "cloud_grounded_rate": [
+    0.7532427449094116,
+    0.9101123595505618
+   ],
+   "grounded_gap": [
+    0.0898876404494382,
+    0.24675725509058832
+   ],
+   "judge_agreement": [
+    0.7532427449094116,
+    0.9101123595505618
+   ],
+   "judge_kappa": [
+    0.0,
+    0.0
+   ]
+  },
+  "team_changed": {
+   "grounded_rate": [
+    1.0,
+    1.0
+   ],
+   "cloud_grounded_rate": [
+    0.7692307692307693,
+    0.9113924050632911
+   ],
+   "grounded_gap": [
+    0.08860759493670889,
+    0.23076923076923073
+   ],
+   "judge_agreement": [
+    0.7692307692307693,
+    0.9113924050632911
+   ],
+   "judge_kappa": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "comparisons": [],
+ "supersedes": [],
+ "attempts": [
+  {
+   "setting": "cloud_grader",
+   "kind": "grading",
+   "ok": true,
+   "error": null,
+   "asks": 232
+  }
+ ],
+ "claude_calls": 232,
+ "labels_reviewed": false,
+ "label_source": "unreviewed_extra",
+ "predictions": {
+  "single": "results/runs/JC-20261104T144600470844Z.single.predictions.jsonl",
+  "team_changed": "results/runs/JC-20261104T144600470844Z.team_changed.predictions.jsonl"
+ },
+ "started_at": "2026-11-04T14:07:11.206441+00:00",
+ "finished_at": "2026-11-04T14:46:00.470844+00:00"
+}
