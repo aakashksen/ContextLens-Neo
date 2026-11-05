@@ -91,8 +91,7 @@ def data_root() -> Path:
 
 def training_summary(stats: Counter) -> dict[str, Any]:
     n = stats["train_final_size"]
-    by_mode_status = {k.split("_", 1)[1]: v for k, v in stats.items()
-                      if k.split("_", 1)[0] in ("qmsum", "scenarios") and k.endswith(("answered", "abstained", "partial"))}
+    built = {k: v for k, v in stats.items() if k.startswith(("qmsum_", "scenarios_train_")) and k.endswith(("_answered", "_abstained", "_partial"))}
     return {
         "size": n, "answered": stats["train_class_answered"], "abstained": stats["train_class_abstained"],
         "abstained_share": stats["train_class_abstained"] / n if n else None,
@@ -101,7 +100,7 @@ def training_summary(stats: Counter) -> dict[str, Any]:
         "converted_consistent": stats["converted_consistent"],
         "abstained_dropped_by_cap": stats["train_abstained_dropped_by_cap"],
         "dropped": {k: v for k, v in stats.items() if k.startswith("dropped_")},
-        "built_by_source_mode_status": by_mode_status,
+        "built_before_cap_and_split_by_source_mode_status": built,
         "max_gold": MAX_GOLD, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
         "under_minimum": n < MIN_EXAMPLES, "minimum": MIN_EXAMPLES,
     }
