@@ -72,11 +72,28 @@ def is_architecture_error(e: BaseException) -> bool:
     return isinstance(e, (ValueError, KeyError, TypeError, AttributeError))
 
 
+def card_loss(model: Any, input_ids: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """Mean loss over the card's tokens of one unpadded row, the same value as the model's own loss. Only the hidden
+    states of the card span (and the one before it) reach the LM head, so no full-vocabulary logits are made for the input."""
+    import torch.nn.functional as F
+
+    n = int((labels != -100).sum())
+    logits = model(input_ids=input_ids, logits_to_keep=n + 1).logits[:, :-1].float()
+    return F.cross_entropy(logits.reshape(-1, logits.size(-1)), labels[:, -n:].reshape(-1))
+
+
 def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps: int, batch_size: int = 2,
-              lr: float = 2e-4, vram_limit_gb: float | None = None) -> list[float]:
+              lr: float = 2e-4, vram_limit_gb: float | None = None, micro_batch: int | None = None,
+              card_loss_only: bool = False) -> list[float]:
     """Plain loop: AdamW over the LoRA parameters only. Returns the loss at each step. With `vram_limit_gb`, the
-    peak memory is checked after every step, so a run over the limit stops at the first step."""
+    peak memory is checked after every step, so a run over the limit stops at the first step. A step uses `batch_size`
+    rows; with a smaller `micro_batch` they go through the model in pieces and the gradients add up, which gives
+    the same update with less memory. `card_loss_only` computes the loss with `card_loss` and needs `micro_batch` 1."""
     import torch
+
+    micro = micro_batch or batch_size
+    if card_loss_only and micro != 1:
+        raise ValueError("card_loss_only needs micro_batch=1: padded rows break the slice to the card's tokens")
 
     rows = [r for e in examples if (r := tokenize_example(tok, e, max_len)) is not None]
     if not rows:
@@ -86,11 +103,18 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
     model.train()
     losses = []
     for step in range(steps):
-        batch = collate([rows[(step * batch_size + k) % len(rows)] for k in range(batch_size)], tok.pad_token_id)
-        batch = {k: v.to(model.device) for k, v in batch.items()}
-        loss = model(**batch).loss
-        losses.append(require_finite(loss.item(), f"step {step}"))  # before backward: a bad loss never updates the weights
-        loss.backward()
+        picked = [rows[(step * batch_size + k) % len(rows)] for k in range(batch_size)]
+        total = 0.0
+        for i in range(0, batch_size, micro):
+            piece = picked[i:i + micro]
+            batch = collate(piece, tok.pad_token_id)
+            batch = {k: v.to(model.device) for k, v in batch.items()}
+            loss = card_loss(model, batch["input_ids"], batch["labels"]) if card_loss_only else model(**batch).loss
+            if len(piece) != batch_size:
+                loss = loss * (len(piece) / batch_size)
+            total += require_finite(loss.item(), f"step {step}")  # before backward: a bad loss never updates the weights
+            loss.backward()
+        losses.append(total)
         opt.step()
         opt.zero_grad()
         if vram_limit_gb is not None:

@@ -9,7 +9,8 @@ from tokenizers import Tokenizer, decoders, models, pre_tokenizers, trainers
 from transformers import PreTrainedTokenizerFast, Qwen2Config, Qwen2ForCausalLM
 
 from contextlens.cards.dataset import MAX_GOLD, Example, build_examples, load_examples
-from contextlens.cards.train_lora import attach_lora, check_vram, is_architecture_error, run_steps, tokenize_example
+from contextlens.cards.train_lora import (attach_lora, card_loss, check_vram, collate, is_architecture_error, run_steps,
+                                          tokenize_example)
 from contextlens.llm.untrusted import unescape
 from contextlens.data.scenarios import load_scenarios
 from contextlens.schemas import ButtonRequest, Card, Conversation, EvidenceRef, Finding, Scenario, Turn
@@ -211,6 +212,46 @@ def test_vram_limit_is_checked_during_training(data, tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="blocked"):
         run_steps(model, tok, ex, max_len=4096, steps=5, vram_limit_gb=7.0)
     assert check_vram(10.0) == 9.0
+
+
+def _tiny_model(tok):
+    cfg = Qwen2Config(vocab_size=len(tok), hidden_size=32, intermediate_size=64, num_hidden_layers=2,
+                      num_attention_heads=4, num_key_value_heads=2, max_position_embeddings=4096)
+    return attach_lora(Qwen2ForCausalLM(cfg))
+
+
+def test_card_loss_matches_the_full_loss_without_the_full_logits(data, tmp_path):
+    ex, tok = _small(data, tmp_path)
+    model = _tiny_model(tok).eval()
+    batch = collate([tokenize_example(tok, ex[0], 4096)], tok.pad_token_id)
+    with torch.no_grad():
+        full = model(**batch).loss
+        sliced = card_loss(model, batch["input_ids"], batch["labels"])
+    assert torch.allclose(full, sliced, atol=1e-5)
+
+
+def test_accumulating_one_row_at_a_time_with_card_only_loss_trains(data, tmp_path):
+    ex, tok = _small(data, tmp_path)
+    model = _tiny_model(tok)
+    losses = run_steps(model, tok, ex, max_len=4096, steps=2, batch_size=2, micro_batch=1, card_loss_only=True)
+    assert len(losses) == 2 and all(torch.isfinite(torch.tensor(x)) for x in losses)
+    assert any(p.any() for n, p in model.named_parameters() if "lora_B" in n)
+
+
+def test_card_only_loss_needs_unpadded_rows(data, tmp_path):
+    ex, tok = _small(data, tmp_path)
+    with pytest.raises(ValueError, match="micro_batch"):
+        run_steps(_tiny_model(tok), tok, ex, max_len=4096, steps=1, batch_size=2, micro_batch=2, card_loss_only=True)
+
+
+def test_nan_guard_still_stops_an_accumulating_step(data, tmp_path, monkeypatch):
+    from contextlens.cards import train_lora as tl
+    from contextlens.train_guard import NonFiniteLoss
+
+    ex, tok = _small(data, tmp_path)
+    monkeypatch.setattr(tl, "card_loss", lambda m, i, lab: torch.tensor(float("nan"), requires_grad=True))
+    with pytest.raises(NonFiniteLoss):
+        run_steps(_tiny_model(tok), tok, ex, max_len=4096, steps=1, batch_size=2, micro_batch=1, card_loss_only=True)
 
 
 @pytest.mark.real
