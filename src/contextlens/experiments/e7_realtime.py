@@ -632,7 +632,7 @@ def _run_real(args: argparse.Namespace) -> int:
     from contextlens.speech.client import GrpcSpeech
     from contextlens.speech.diarize import PyannoteBackend
 
-    backend = PyannoteBackend(device="cuda")  # falls back to the CPU with a warning, and says so in `device`
+    backend = PyannoteBackend()  # picks the GPU if it has room, else the CPU with a warning; `device` says which
 
     telemetry = Telemetry()
     production.serve_metrics_if_asked(telemetry)

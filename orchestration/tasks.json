@@ -482,7 +482,8 @@
       ],
       "status": "in_progress",
       "worktree": "<local path>",
-      "started_at": "2026-11-03T17:15:41+00:00"
+      "started_at": "2026-11-03T17:15:41+00:00",
+      "verifier": false
     },
     {
       "id": "T7.2",
@@ -495,7 +496,8 @@
       "acceptance": [
         "{py} -m pytest tests/regression -q"
       ],
-      "status": "pending"
+      "status": "pending",
+      "verifier": false
     },
     {
       "id": "T6.1",
@@ -792,16 +794,15 @@
       "title": "Report, README, and bullets",
       "owner": "agent",
       "deps": [
-        "T9.1",
-        "H3",
-        "H4"
+        "T9.1"
       ],
       "acceptance": [
         "{py} -m contextlens.eval.claims check",
         "{py} tools/check_report_numbers.py",
         "{py} -m pytest -q"
       ],
-      "status": "pending"
+      "status": "pending",
+      "verifier": false
     },
     {
       "id": "H5",

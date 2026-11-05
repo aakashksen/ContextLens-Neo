@@ -6,10 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.data.loaders import Pair
+from contextlens.device import resolve_device
+from contextlens.guard.instructions import without_instruction_turns
 from contextlens.schemas import ConsistencyLabel, Scenario, Turn
 
 BASE_MODEL = "microsoft/deberta-v3-base"  # MIT, see docs/datasets.md
 LABELS: tuple[ConsistencyLabel, ...] = ("consistent", "update", "contradiction", "insufficient")
+NEEDS_MB = 2000  # inference budget, not a measurement
 MAX_LENGTH = 256
 CONTEXT_TURNS = 6
 LABEL_MAP_FILE = "label_map.json"
@@ -109,20 +112,27 @@ class TrainedChecker:
     """Gives the most probable label and its probability. When even the top probability is below `threshold` it
     abstains: it returns "insufficient" with the model's probability for that label."""
 
-    def __init__(self, model: Any, tokenizer: Any, labels: tuple[str, ...] = LABELS, threshold: float = THRESHOLD) -> None:
+    def __init__(self, model: Any, tokenizer: Any, labels: tuple[str, ...] = LABELS, threshold: float = THRESHOLD,
+                 strip_instructions: bool = True) -> None:
         self.model, self.tokenizer, self.labels, self.threshold = model, tokenizer, labels, threshold
+        self.strip_instructions = strip_instructions
+
+    def _example(self, statement: Turn, earlier: list[Turn]) -> Example:
+        """Earlier turns the instruction guard flags are left out; the statement is never removed."""
+        return example_from_turns(statement, without_instruction_turns(earlier) if self.strip_instructions else earlier)
 
     @classmethod
-    def from_checkpoint(cls, directory: Path, threshold: float = THRESHOLD, device: str = "cpu") -> "TrainedChecker":
+    def from_checkpoint(cls, directory: Path, threshold: float = THRESHOLD, device: str | None = None,
+                        strip_instructions: bool = True) -> "TrainedChecker":
         model, tokenizer, labels = load_checkpoint(directory)
-        return cls(model.to(device), tokenizer, labels, threshold)
+        return cls(model.to(device or resolve_device(NEEDS_MB)), tokenizer, labels, threshold, strip_instructions)
 
     def probabilities(self, statement: Turn, earlier: list[Turn]) -> dict[ConsistencyLabel, float]:
-        probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]
+        probs = predict_proba(self.model, self.tokenizer, [self._example(statement, earlier)])[0]
         return dict(zip(self.labels, probs, strict=True))  # type: ignore[arg-type]
 
     def check(self, statement: Turn, earlier: list[Turn]) -> tuple[ConsistencyLabel, float]:
-        probs = predict_proba(self.model, self.tokenizer, [example_from_turns(statement, earlier)])[0]
+        probs = predict_proba(self.model, self.tokenizer, [self._example(statement, earlier)])[0]
         best = max(range(len(probs)), key=probs.__getitem__)
         if probs[best] < self.threshold:
             return "insufficient", probs[self.labels.index("insufficient")]

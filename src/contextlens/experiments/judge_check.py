@@ -2,6 +2,7 @@
 already graded, on dev only, to see whether the local judge can be trusted and whether it flatters results.
 
     python -m contextlens.experiments.judge_check RUN_ID [RUN_ID ...]
+    python -m contextlens.experiments.judge_check RUN_ID [RUN_ID ...] --systems S [S ...] --all-claims   (judge_check_all.py)
 
 Each RUN_ID is a dev run record whose saved rows hold the cards and the local judge's verdict per claim. The method
 and its thresholds are in docs/DECISIONS.md. The rows are saved as they arrive under results/partial/judge-check/
@@ -337,6 +338,25 @@ def _notes(verdict: str, kappa: float | None, tab: dict[str, Any], n_scored: int
     return notes
 
 
+def _grade(pending: list[Claim], judge: Judge, path: Path, rows: dict[str, dict[str, Any]], asks: int) -> int:
+    """Ask the grader about each pending claim, saving every answer as it arrives; the number of asks made so far."""
+    in_a_row = 0
+    for c in pending:
+        try:
+            verdict = judge.supports(c.finding)
+            row = {"claim_id": c.id, "status": "ok", "cloud": verdict}
+            in_a_row = 0
+        except JudgeFailed as exc:
+            row = {"claim_id": c.id, "status": "failed", "error": str(exc)[:200]}
+            in_a_row += 1
+        _fsync_append(path, json.dumps(row, sort_keys=True))
+        rows[c.id] = row
+        asks += 1
+        if in_a_row >= MAX_FAILURES_IN_A_ROW:
+            raise Refused(f"{in_a_row} asks failed in a row; stopped with {len(rows)} rows kept, rerun to resume")
+    return asks
+
+
 def run(
     run_ids: list[str], *, llm: LLMClient, grader_name: str, root: Path = ROOT, counter_path: Path = CLAUDE_CALLS_PATH,
     cap: int = CLAUDE_CALL_CAP, n_sample: int = N_SAMPLE,
@@ -355,21 +375,7 @@ def run(
     pending = [c for c in sample.all if rows.get(c.id, {}).get("status") != "ok"]
     before = preflight(len(pending), counter_path, cap)
     started = _now()
-    judge = Judge(llm, tries=1)  # the same code that asked the local judge, so the same messages
-    in_a_row = 0
-    for c in pending:
-        try:
-            verdict = judge.supports(c.finding)
-            row = {"claim_id": c.id, "status": "ok", "cloud": verdict}
-            in_a_row = 0
-        except JudgeFailed as exc:
-            row = {"claim_id": c.id, "status": "failed", "error": str(exc)[:200]}
-            in_a_row += 1
-        _fsync_append(path, json.dumps(row, sort_keys=True))
-        rows[c.id] = row
-        asks += 1
-        if in_a_row >= MAX_FAILURES_IN_A_ROW:
-            raise Refused(f"{in_a_row} asks failed in a row; stopped with {len(rows)} rows kept, rerun to resume")
+    asks = _grade(pending, Judge(llm, tries=1), path, rows, asks)  # the same code that asked the local judge, so the same messages
     strata = stratum_of(sample)
     scored = [(c, rows[c.id]["cloud"], strata[c.id]) for c in sample.all if rows[c.id]["status"] == "ok"]
     failed = [c.id for c in sample.all if rows[c.id]["status"] != "ok"]
@@ -434,16 +440,26 @@ def _counter(path: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(description=__doc__.split(chr(10))[0])
     ap.add_argument("run_ids", nargs="+", help="dev run records to draw claims from")
+    ap.add_argument("--systems", nargs="+", help="with --all-claims: grade every claim of these systems and of no other")
+    ap.add_argument("--all-claims", action="store_true", help="grade every claim of the named systems instead of a sample")
     args = ap.parse_args(argv)
+    if bool(args.systems) != args.all_claims:
+        ap.error("--systems and --all-claims go together")
     llm = ClaudeCodeClient(model="sonnet")
     try:
-        path = run(args.run_ids, llm=llm, grader_name=llm.model)
+        if args.all_claims:
+            from contextlens.experiments.judge_check_all import run_all
+
+            paths = run_all(args.run_ids, args.systems, llm=llm, grader_name=llm.model)
+        else:
+            paths = [run(args.run_ids, llm=llm, grader_name=llm.model)]
     except Refused as exc:
         print("refused:", exc, file=sys.stderr)
         return 1
-    print(path)
+    for path in paths:
+        print(path)
     return 0
 
 

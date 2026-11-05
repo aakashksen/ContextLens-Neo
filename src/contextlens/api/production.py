@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from contextlens.agents.consistency_check import PromptedChecker
 from contextlens.agents.graph import TeamAssistant
+from contextlens.agents.single import SingleAgent
 from contextlens.agents.tools import Tools
 from contextlens.api.app import create_app
 from contextlens.api.stream import Services
@@ -32,11 +33,21 @@ PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
+ASSISTANTS = ("team", "single")
+DEFAULT_ASSISTANT = "team"
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
 
 def database_url() -> str:
     return os.environ.get("DATABASE_URL", "postgresql://contextlens:contextlens@127.0.0.1:5432/contextlens")
+
+
+def assistant_kind() -> str:
+    """CONTEXTLENS_ASSISTANT picks the system behind the button: `team` (the default) or `single`."""
+    kind = os.environ.get("CONTEXTLENS_ASSISTANT", DEFAULT_ASSISTANT)
+    if kind not in ASSISTANTS:
+        raise ValueError(f"CONTEXTLENS_ASSISTANT must be one of {ASSISTANTS}, got {kind!r}")
+    return kind
 
 
 def local_llms() -> dict[str, LLMClient]:
@@ -89,14 +100,26 @@ class TeamPerPress:
         return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s).answer(req, ctx)
 
 
+class _SinglePerPress(TeamPerPress):
+    """The single agent as E3 measured it: the same tools, with no consistency checker."""
+
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id)
+        return SingleAgent(self.llms["assistance"], tools, PROMPT_VERSION, deadline_s=self.deadline_s).answer(req, ctx)
+
+
 def build_services(
     *, store: TranscriptStore, embedder, llms: dict[str, LLMClient], background_llm: LLMClient | None,
     speech: SpeechService, make_backend=None, telemetry: Telemetry | None = None,
-    deadline_s: float = DEADLINE_S, unload: Callable[[], None] | None = None, **service_kw,
+    deadline_s: float = DEADLINE_S, assistant: str = DEFAULT_ASSISTANT, unload: Callable[[], None] | None = None,
+    **service_kw,
 ) -> Production:  # fmt: skip
+    if assistant not in ASSISTANTS:
+        raise ValueError(f"assistant must be one of {ASSISTANTS}, got {assistant!r}")
     retriever, memory = Retriever(store, embedder), MemoryStore()
     telemetry = telemetry or Telemetry()
-    inner: Assistant = TeamPerPress(store, retriever, memory, llms, deadline_s)
+    per_press = _SinglePerPress if assistant == "single" else TeamPerPress
+    inner: Assistant = per_press(store, retriever, memory, llms, deadline_s)
     traced, scenes = TracedAssistant(inner, telemetry), SceneStore()
 
     def forget(conversation_id: str) -> None:
@@ -131,7 +154,7 @@ def create_production_app() -> FastAPI:
     serve_metrics_if_asked(telemetry)
     prod = build_services(
         store=PostgresTranscriptStore(database_url(), embedder), embedder=embedder, llms=llms,
-        telemetry=telemetry, warmup=local_warmup(llms["memory"], embedder, telemetry),
+        telemetry=telemetry, assistant=assistant_kind(), warmup=local_warmup(llms["memory"], embedder, telemetry),
         background_llm=llms["memory"], speech=GrpcSpeech(os.environ.get("SPEECH_ADDR", "localhost:50051")),
         make_backend=SharedSpeakerModel(PyannoteBackend), unload=unload_local_models,
     )  # fmt: skip

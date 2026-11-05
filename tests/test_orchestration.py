@@ -77,6 +77,16 @@ class Gate(Sandbox):
         self.verdict("T1", "FAIL")
         self.assertIn("not passed this exact commit", self.ctl("done", "T1").stderr)
 
+    def test_only_an_exempt_task_skips_the_verifier(self):
+        self.ctl("start", "T1")
+        self.assertEqual(self.ctl("verify", "T1").returncode, 0)
+        self.assertIn("no verifier verdict", self.ctl("done", "T1").stderr)
+        path = self.root / "orchestration" / "tasks.json"
+        tasks = json.loads(path.read_text())["tasks"]
+        next(t for t in tasks if t["id"] == "T1")["verifier"] = False
+        self.write(tasks)
+        self.assertNotIn("verdict", self.ctl("done", "T1").stderr)
+
     def test_done_is_refused_when_a_commit_landed_after_verifying(self):
         self.ctl("start", "T1")
         self.ctl("verify", "T1")
@@ -668,9 +678,17 @@ class PlanMatchesState(unittest.TestCase):
         needs = json.loads((REPO / "orchestration" / "gpu_needs.json").read_text(encoding="utf-8"))
         agent_tasks = {t["id"] for t in self.tasks if t["owner"] == "agent"}
         exclusive = needs.pop("_exclusive", [])
+        non_task = set(needs.pop("_non_task", []))  # dev runs the coordinator approved that are not plan tasks
+        all_ids = {t["id"] for t in self.tasks}
+        self.assertFalse(non_task & all_ids, "a non-task holder may not reuse a task id")
+        self.assertTrue(non_task <= set(needs), non_task - set(needs))
         self.assertTrue(needs)
-        self.assertTrue(set(needs) <= agent_tasks, set(needs) - agent_tasks)
-        self.assertTrue(set(exclusive) <= agent_tasks)
+        self.assertTrue(set(needs) - non_task <= agent_tasks, set(needs) - non_task - agent_tasks)
+        self.assertTrue(set(exclusive) <= agent_tasks | non_task)
+
+    def test_only_the_named_tasks_skip_the_verifier(self):
+        exempt = {t["id"] for t in self.tasks if t.get("verifier") is False}
+        self.assertEqual(exempt, {"T7.1", "T7.2", "T9.3"})
 
     def test_every_agent_declares_a_model(self):
         for path in (REPO / ".claude" / "agents").glob("*.md"):

@@ -172,7 +172,8 @@ def _proof(reranker: Any) -> None:
         raise RerankerFallback(f"the reranker did not run: {reranker.fallback_reason}")
 
 
-def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dict[str, Any]:
+def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print,
+           probe_devices: Callable[[], dict[str, Any]] | None = None) -> dict[str, Any]:
     """Run every system on every source, write one record per source, then the config of the winner.
     A reranker that did not run fails the run before anything is written. A system that errors is listed in
     `attempts` and left out; then there is no winner and no config."""
@@ -195,6 +196,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
                      for n in p} for src, (scs, _, p, _) in done.items()}
     complete = all(not failed for *_, failed in done.values())
     winner = pick_winner(metrics) if complete else None
+    devices = {"reranker": getattr(reranker, "device", "unknown"), **(probe_devices() if probe_devices else {})}
     paths = {}
     for source, (scs, digest, preds, failed) in done.items():
         attempts = [{"setting": n, "kind": n.rsplit("_", 1)[0], "chunk_turns": CHUNKS[n.rsplit("_", 1)[1]],
@@ -205,7 +207,7 @@ def run_e1(*, root: Path = ROOT, embedder: Any, reranker: Any, say=print) -> dic
             if other != winner and (c := recompute_comparison(scs, preds[winner], preds[other], "recall@5")):
                 comparisons.append({"a": winner, "b": other, **c})
         config = {"experiment": "E1", "k": K, "pool": POOL, "chunks": CHUNKS, "query_rule": QUERY_RULE,
-                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started}
+                  "winner_rule": WINNER_RULE, "winner": winner, "started_at": started, "devices": devices}
         paths[source] = write_run(
             "E1", SPLIT, config, {"embedder": embedder.model, "reranker": reranker.model_name}, {}, metrics[source],
             intervals, attempts, preds, digest, comparisons=comparisons, scenario_source=source, root=root)
@@ -270,7 +272,12 @@ def main() -> int:
     from contextlens.llm.client import Embedder
     from contextlens.retrieval.rerank import Reranker
 
-    result = run_e1(embedder=Embedder(), reranker=Reranker())
+    from contextlens.device import ollama_device
+    from contextlens.llm.ollama_ctl import OllamaCtl
+
+    embedder = Embedder()
+    result = run_e1(embedder=embedder, reranker=Reranker(),
+                    probe_devices=lambda: {"embedder": ollama_device(OllamaCtl(), embedder.model)})
     print(json.dumps({"winner": result["winner"], "complete": result["complete"],
                       "records": [p.as_posix() for p in result["records"].values()]}, indent=1))
     return 0 if result["complete"] else 2
