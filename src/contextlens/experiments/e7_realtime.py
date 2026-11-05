@@ -34,6 +34,7 @@ Run (the person runs these; the real run needs a GPU turn, Ollama, the speech se
 import argparse
 import asyncio
 import json
+import statistics
 import os
 import sys
 import time
@@ -72,6 +73,13 @@ KS = (1, 3, 5)
 SAVED = {"recall@1", "recall@3", "recall@5", "mrr", "tokens_per_card", "speaker_accuracy", "label_accuracy",
          "abstain_when_insufficient", "answer_when_answerable", "wer", "der", "latency_p50_ms", "latency_p95_ms"}
 ALL = 2**62
+SEGMENT_MS = 600_000  # the one real-time segment: the first ten minutes of a meeting
+READY_AUDIO_S = 300  # how much audio the 4x keep-up check streams
+READY_SPEEDUP = 4.0
+MAX_LAG_GROWTH_MS = 5_000  # speech keeps up if the median lag of the last third is within this of the first third's
+MAX_FINAL_LAG_MS = 30_000  # ... and the last segment came no later than this after its audio was sent
+MIN_SEGMENTS = 6
+RULE_MIN_QUESTIONS = 30
 MAPPING_RULE = ("each cited ASR turn becomes the clean turn it overlaps most in time (the nearest by midpoint "
                 "when none overlaps); the speaker the card names is kept")
 
@@ -172,6 +180,83 @@ async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
         reader.cancel()
         await stream.close()
     return sorted(segments, key=lambda s: (s.start_ms, s.end_ms)), lags, time.perf_counter() - t0
+
+
+# -- the 10-minute real-time segment ---------------------------------------------------------------------------------
+
+def segment_scenarios(scs: list[Scenario], segment_ms: int = SEGMENT_MS, every_ms: int = STEP_MS) -> list[Scenario]:
+    """Presses for the real-time segment: each of the meeting's questions, asked at every tick from the second one and
+    at the end of the first `segment_ms` of the meeting (or at its last turn, if it is shorter). Only timing is taken
+    from them, so they carry no gold."""
+    meeting = scs[0].conversation.id
+    turns = max((s.conversation.turns for s in scs), key=len)
+    inside = [t for t in turns if t.end_ms <= segment_ms]
+    ticks = {*range(2 * every_ms, segment_ms, every_ms), segment_ms}
+    as_ofs = sorted({max((t.seq for t in inside if t.end_ms <= tick), default=-1) for tick in ticks} - {-1})
+    return [Scenario(id=f"{meeting}-rt{a}-q{i}", conversation=Conversation(id=meeting, turns=turns[: a + 1], source="ami", split=SPLIT),
+                     request=s.request.model_copy(update={"as_of_seq": a}), category=s.category,
+                     gold_evidence_turn_ids=[], gold_label=None, gold_answer=None, origin="dataset")
+            for a in as_ofs for i, s in enumerate(scs, 1)]
+
+
+# -- can speech keep up with sped-up audio? --------------------------------------------------------------------------
+
+def keeps_up(lags_ms: list[int], *, max_growth_ms: int = MAX_LAG_GROWTH_MS, max_final_ms: int = MAX_FINAL_LAG_MS,
+             min_segments: int = MIN_SEGMENTS) -> tuple[bool, dict[str, Any]]:
+    """Whether the speech service kept pace: how late each segment arrived must not grow over the stream (median of
+    the last third against the first third) and the last one must not be very late. A service falling behind shows
+    lag that keeps growing."""
+    n = len(lags_ms)
+    if n < min_segments:
+        raise ValueError(f"too few segments ({n}) to tell whether speech keeps up")
+    third = n // 3
+    first, last = statistics.median(lags_ms[:third]), statistics.median(lags_ms[-third:])
+    why = {"segments": n, "first_third_p50_ms": first, "last_third_p50_ms": last, "final_lag_ms": lags_ms[-1],
+           "max_growth_ms": max_growth_ms, "max_final_lag_ms": max_final_ms}
+    return last <= first + max_growth_ms and lags_ms[-1] <= max_final_ms, why
+
+
+def shortest_meetings(audio_dir: Path, meetings: list[str], n: int) -> list[str]:
+    def frames(m: str) -> int:
+        with wave.open(str(audio_dir / f"{m}.wav"), "rb") as w:
+            return w.getnframes()
+
+    return sorted(meetings, key=lambda m: (frames(m), m))[:n]
+
+
+async def readiness(speech: SpeechService, audio_dir: Path, meeting: str, *, speedup: float = READY_SPEEDUP,
+                    audio_s: float = READY_AUDIO_S, settle_s: float = 10.0, max_growth_ms: int = MAX_LAG_GROWTH_MS,
+                    max_final_ms: int = MAX_FINAL_LAG_MS, needed: list[str] | None = None,
+                    question_counts: dict[str, int] | None = None) -> dict[str, Any]:
+    """Stream the first `audio_s` of a meeting at `speedup` and say whether speech kept up, and so which plan runs:
+    every meeting sped up, or (when it cannot) the shortest five in real time, which has too few questions for the
+    30-question rule."""
+    pcm = read_wav(audio_dir / f"{meeting}.wav")[: int(audio_s * 1000) * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
+    info: dict[str, Any] = {}
+    out: dict[str, Any] = {"meeting": meeting, "speedup": speedup, "audio_s": audio_s}
+    try:
+        _, lags, wall_s = await transcribe(speech, pcm, speedup=speedup, settle_s=settle_s, info=info)
+        ok, why = keeps_up(lags, max_growth_ms=max_growth_ms, max_final_ms=max_final_ms)
+        out.update(why, wall_s=wall_s)
+    except SpeechUnavailable as exc:
+        return {**out, "keeps_up": False, "error": f"the speech service failed: {exc}", "segments": 0}
+    except ValueError as exc:
+        return {**out, "keeps_up": False, "error": str(exc), "segments": len(lags)}
+    out.update(keeps_up=ok, compute_backend=info.get("compute_backend"))
+    if ok:
+        out["plan"] = (f"all meetings at {speedup:g}x for speech, speaker and quality numbers, plus one 10-minute "
+                       "real-time segment for latency")
+        return out
+    names = needed if needed is not None else meetings_needed()
+    counts = question_counts if question_counts is not None else {
+        m: sum(q["meeting"] == m for q in load_questions()[0]) for m in names}
+    chosen = shortest_meetings(audio_dir, names, 5)
+    total = sum(counts.get(m, 0) for m in chosen)
+    out["plan"] = "the shortest 5 meetings in real time"
+    out["fallback"] = {"meetings": chosen, "speedup": 1.0, "questions": total,
+                       "note": f"{len(chosen)} meetings give {total} questions, so the {RULE_MIN_QUESTIONS}-question rule "
+                               f"(check_run --min-n {RULE_MIN_QUESTIONS}) needs changing; tell the coordinator"}
+    return out
 
 
 # -- one meeting, three ways -------------------------------------------------------------------------------------
@@ -446,8 +531,9 @@ def run_e7(
     make_assistant: MakeAssistant, extractor: Extractor | None, models: dict[str, str],
     prompt_versions: dict[str, str], telemetry: Telemetry | None = None, audio_dir: Path | None = None,
     rerun_of: str | None = None, changes: list[str] | None = None, speedup: float = 1.0, settle_s: float = 10.0,
-    realtime_meeting: str | None = None, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
+    realtime_meeting: str | None = None, segment_ms: int = SEGMENT_MS, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
     ran_alone: bool, speech_address: str, device_probe: Callable[[], dict[str, str | None]], only_meeting: str | None = None,
+    only_meetings: list[str] | None = None, gpu_peak: Callable[[], dict[str, Any] | None] = lambda: None,
 ) -> Path:
     """Replay every dev scenario three ways and write one E7 record. A first run is the baseline and names
     its two slowest press stages; a rerun (`rerun_of` a baseline's run id, with the `changes` made) must be on the
@@ -463,15 +549,21 @@ def run_e7(
     actually ran on; whisper's comes from the speech service itself.
 
     `only_meeting` is a short check of the whole pipeline on one meeting's questions. It writes no run record (the
-    record must cover the whole split): the summary goes to the git-ignored results/local/ and its path is returned."""
+    record must cover the whole split): the summary goes to the git-ignored results/local/ and its path is returned.
+    `only_meetings` is the same for several meetings: the fallback of the shortest five in real time, which has too few
+    questions for check_run's rule, so it is not a record either.
+
+    The real-time segment is the first `segment_ms` of `realtime_meeting` (see `segment_scenarios`); `gpu_peak` is
+    called at the end and returns the GPU memory seen during the run, for the record."""
     manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
     if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
         raise RuntimeError("the AMI manifest must be committed before the run")
     scenarios, digest = _load_dev(root)
-    if only_meeting:
-        scenarios = [s for s in scenarios if s.conversation.id == only_meeting]
+    subset = [only_meeting] if only_meeting else only_meetings
+    if subset:
+        scenarios = [s for s in scenarios if s.conversation.id in subset]
         if not scenarios:
-            raise ValueError(f"no scenarios for {only_meeting}")
+            raise ValueError(f"no scenarios for {subset}")
         if rerun_of or changes or realtime_meeting or speedup != 1.0:
             raise ValueError("a one-meeting check runs in real time and is not a baseline or a rerun")
     baseline = None
@@ -527,10 +619,11 @@ def run_e7(
     segment = None
     if realtime_meeting:
         say(f"real-time segment: {realtime_meeting} at 1.0")
-        scs = by_meeting[realtime_meeting]
+        scs = segment_scenarios(by_meeting[realtime_meeting], segment_ms, step_ms)
         got, st, lags = play(realtime_meeting, scs, 1.0, None)  # not in Prometheus: it would count these presses twice
         seg_metrics = recompute_metrics(scs, [got["asr_pipeline"][s.id] for s in scs], KS)
-        segment = {"meeting": realtime_meeting, "speedup": 1.0, "audio_s": st["audio_s"],
+        segment = {"meeting": realtime_meeting, "speedup": 1.0, "audio_s": st["audio_s"], "presses": len(scs),
+                   "basis": f"the first {segment_ms // 1000} s of the meeting; each of its questions pressed at every tick",
                    "asr_lag_ms": _summary(lags), "diarization_run_ms": _summary(st["diar_ms"]),
                    "asr_real_time_factor": st["asr_wall_s"] / max(1e-9, st["audio_s"]),
                    "press_latency_ms": {k: v for k, v in seg_metrics.items() if k.startswith("latency_p")}}
@@ -578,6 +671,7 @@ def run_e7(
             "errored_presses": {n: sum(p.errored for p in ps) for n, ps in preds.items()},
         },
         "per_meeting": {m: {k: v for k, v in s.items() if k != "diar_ms"} for m, s in stats.items()},
+        "gpu_peak": gpu_peak(), "subset": subset,
         "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
     }
     if baseline is None:
@@ -586,10 +680,10 @@ def run_e7(
         named = baseline["config"]["bottlenecks"]
         config.update(baseline_run_id=rerun_of, bottlenecks=named, changes=changes)
         config["before_after"] = before_after(baseline["metrics"]["asr_pipeline"], pipeline, [b["stage"] for b in named])
-    if only_meeting:
-        out = root / "results/local" / f"e7-check-{only_meeting}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
+    if subset:
+        out = root / "results/local" / f"e7-check-{only_meeting or 'shortest'}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps({"not_a_record": True, "meeting": only_meeting, "n": len(scenarios), "config": config,
+        out.write_text(json.dumps({"not_a_record": True, "meeting": only_meeting, "meetings": subset, "n": len(scenarios), "config": config,
                                    "metrics": metrics}, indent=1) + "\n", encoding="utf-8")
         return out
     attempts = [{"setting": n, "ok": True, "errored_presses": sum(p.errored for p in preds[n])} for n in SYSTEMS]

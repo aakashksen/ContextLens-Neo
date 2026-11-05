@@ -521,3 +521,29 @@ def test_a_full_run_refuses_to_start_without_the_metrics_port(monkeypatch, capsy
     monkeypatch.delenv("CONTEXTLENS_METRICS_PORT", raising=False)
     assert e7.main(["run", "--alone"]) == 2
     assert "CONTEXTLENS_METRICS_PORT" in capsys.readouterr().err
+
+
+# -- the stages the orchestrator runs on their own --------------------------------------------------------------------
+
+def test_the_real_time_segment_is_the_first_part_of_one_meeting_with_its_presses_counted(repo: Path) -> None:
+    rec = json.loads(run(repo, segment_ms=22_000).read_text(encoding="utf-8"))
+    seg = rec["config"]["realtime_segment"]
+    assert seg["presses"] == 4 and seg["basis"].startswith("the first 22 s") and seg["audio_s"] == 21  # turns end at 3 s steps
+    assert rec["config"]["gpu_peak"] is None and rec["config"]["subset"] is None
+
+
+def test_a_gpu_peak_probe_is_recorded(repo: Path) -> None:
+    peak = {"baseline_mb": 400, "peak_mb": 5100, "used_by_run_mb": 4700}
+    rec = json.loads(run(repo, gpu_peak=lambda: peak).read_text(encoding="utf-8"))
+    assert rec["config"]["gpu_peak"] == peak
+
+
+def test_several_meetings_check_writes_no_run_record(repo: Path) -> None:
+    out = e7.run_e7(
+        root=repo, speech=ScriptedSpeech([aligned_script("m1"), merged_script("m2")]), backend=TruthBackend(),
+        embedder=NoEmbed(), make_assistant=make_assistant, extractor=None, models={}, prompt_versions={},
+        say=lambda m: None, step_ms=10_000, ran_alone=True, speech_address=e7.GPU_SPEECH_ADDRESS,
+        device_probe=ALL_CUDA, only_meetings=["m1", "m2"])
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["not_a_record"] is True and doc["n"] == 4 and doc["meetings"] == ["m1", "m2"]
+    assert "shortest" in out.name and not (repo / "results/runs").exists()
