@@ -1,0 +1,2920 @@
+{
+ "kind": "judge-calibration",
+ "id": "JCAL-20261105T044839474906Z",
+ "provisional": true,
+ "notes": [
+  "Provisional: no claim comes from this record alone.",
+  "Sonnet is a reference, not ground truth. The cheaper grader is from the same family, so their errors may be correlated and agreement may flatter it.",
+  "Entry 53's rule: the cheaper grader is 'clearly worse' only if the interval of its agreement with Sonnet minus the local judge's lies wholly below zero. Claims the grader did not grade are left out of every figure and listed.",
+  "Intervals resample whole cases (claims of one case move together); per-set figures rest on fewer cases.",
+  "In the saved rows `claim_supported` is the local verdict and `cloud_supported` is Sonnet's; checked against the records' grounded_rate and cloud_grounded_rate."
+ ],
+ "mode": "single",
+ "grader": {
+  "model": "claude-haiku-5-5",
+  "rubric_version": "e2-v1",
+  "prompt": "the local judge's rubric text, e2-v1"
+ },
+ "git_commit": "f1b468bef4e2d2db1d8c8730eb2ee37c3dda20e7",
+ "dirty": false,
+ "source_records": [
+  "JC-20261104T144503532496Z",
+  "JC-20261104T144600470844Z"
+ ],
+ "source_runs": [
+  "E3T-20261104T131120203662Z",
+  "E3T-20261104T131417960789Z"
+ ],
+ "sampling": {
+  "rule": "Pool: every claim in the two JC records with both a local and a Sonnet grade. Strata: set (old, new) by system (single, team_changed). Each stratum gets a share of the sample in proportion to its size (largest remainder); inside a stratum claims are drawn at random with a fixed seed. The sample is graded in a seeded random order, so a run that stops early has graded a random part of it.",
+  "seed": 20261104,
+  "n": 300,
+  "n_requested": 300,
+  "sample_id": "fcf541bd901e",
+  "pool": 574,
+  "strata": {
+   "new/single": {
+    "pool": 85,
+    "taken": 45
+   },
+   "new/team_changed": {
+    "pool": 147,
+    "taken": 77
+   },
+   "old/single": {
+    "pool": 127,
+    "taken": 66
+   },
+   "old/team_changed": {
+    "pool": 215,
+    "taken": 112
+   }
+  }
+ },
+ "run": {
+  "started_at": "2026-11-05T04:45:48.767954+00:00",
+  "concurrency": 8,
+  "wall_seconds": 170.46900000001187,
+  "claims_graded_this_run": 300,
+  "claims_per_minute": 105.59104587930209,
+  "planned_calls": 300,
+  "planned_calls_worst": 600,
+  "calls_made": 300,
+  "shared_counter_before": 1952,
+  "shared_counter_after": 2252,
+  "failures": 0,
+  "rate_limit_events": 0,
+  "batch_calls": 0,
+  "usage_start_pct": 78.0,
+  "usage_end_pct": 78.0,
+  "max_weekly_pct": 90.0,
+  "note": "calls_made counts this process's calls to the client; the shared counter also moves for other work"
+ },
+ "ungraded": [],
+ "comparison": {
+  "all": {
+   "n": 300,
+   "haiku_vs_sonnet": {
+    "agreement": 0.8133333333333334,
+    "agreement_ci": [
+     0.7631578947368421,
+     0.8608435671574616
+    ],
+    "kappa": 0.2559128355035877,
+    "kappa_ci": [
+     0.0958244814163682,
+     0.411856020682358
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 33,
+     "grader_supported_sonnet_unsupported": 23
+    }
+   },
+   "local_vs_sonnet": {
+    "agreement": 0.87,
+    "agreement_ci": [
+     0.8194444444444444,
+     0.9140151811183619
+    ],
+    "kappa": 0.10220994475138075,
+    "kappa_ci": [
+     -0.019213590619203278,
+     0.24902186840096524
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 3,
+     "grader_supported_sonnet_unsupported": 36
+    }
+   },
+   "agreement_difference": {
+    "what": "haiku agreement minus local agreement, each with Sonnet",
+    "mean": -0.056666666666666664,
+    "lo": -0.10954184616874002,
+    "hi": -0.006348704038577463
+   },
+   "share_unsupported": {
+    "sonnet": 0.13,
+    "haiku": 0.16333333333333333,
+    "local": 0.02
+   },
+   "verdict": "clearly worse"
+  },
+  "old": {
+   "n": 178,
+   "haiku_vs_sonnet": {
+    "agreement": 0.8426966292134831,
+    "agreement_ci": [
+     0.7819148936170213,
+     0.8971467181467181
+    ],
+    "kappa": 0.39602520601066404,
+    "kappa_ci": [
+     0.18809924361377783,
+     0.5892914920497966
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 21,
+     "grader_supported_sonnet_unsupported": 7
+    }
+   },
+   "local_vs_sonnet": {
+    "agreement": 0.8876404494382022,
+    "agreement_ci": [
+     0.8279569892473119,
+     0.9392265193370166
+    ],
+    "kappa": 0.18869644484958914,
+    "kappa_ci": [
+     -0.027523725760751638,
+     0.43121972266678804
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 3,
+     "grader_supported_sonnet_unsupported": 17
+    }
+   },
+   "agreement_difference": {
+    "what": "haiku agreement minus local agreement, each with Sonnet",
+    "mean": -0.0449438202247191,
+    "lo": -0.11702127659574468,
+    "hi": 0.027932960893854747
+   },
+   "share_unsupported": {
+    "sonnet": 0.11235955056179775,
+    "haiku": 0.19101123595505617,
+    "local": 0.033707865168539325
+   },
+   "verdict": "not clearly worse"
+  },
+  "new": {
+   "n": 122,
+   "haiku_vs_sonnet": {
+    "agreement": 0.7704918032786885,
+    "agreement_ci": [
+     0.6799921875,
+     0.848
+    ],
+    "kappa": 0.045276690888764466,
+    "kappa_ci": [
+     -0.12888439244170086,
+     0.24579019060591908
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 12,
+     "grader_supported_sonnet_unsupported": 16
+    }
+   },
+   "local_vs_sonnet": {
+    "agreement": 0.8442622950819673,
+    "agreement_ci": [
+     0.7563025210084033,
+     0.9153846153846154
+    ],
+    "kappa": 0.0,
+    "kappa_ci": [
+     0.0,
+     0.0
+    ],
+    "disagree": {
+     "grader_unsupported_sonnet_supported": 0,
+     "grader_supported_sonnet_unsupported": 19
+    }
+   },
+   "agreement_difference": {
+    "what": "haiku agreement minus local agreement, each with Sonnet",
+    "mean": -0.07377049180327869,
+    "lo": -0.14173228346456693,
+    "hi": -0.00847279589802025
+   },
+   "share_unsupported": {
+    "sonnet": 0.1557377049180328,
+    "haiku": 0.12295081967213115,
+    "local": 0.0
+   },
+   "verdict": "clearly worse"
+  }
+ },
+ "batching": null,
+ "rows": [
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-02/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-26/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-24/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-03-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-04-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-22/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-never-mentioned-02-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rec-02/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-16/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-inj-30/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/0e5e2d1a/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-topic-no-detail-00-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-30/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-06/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-20/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-deadline-update-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-03-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-01-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-different-detail-00-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-30/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/3249768e/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-12/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-inj-24/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/3249768e/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-22/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-topic-no-detail-04-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-22/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/71a3fd6b/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-04-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-02-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-00-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-20/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/71a3fd6b/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-18/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-10/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-12/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-after-cut-04-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-05-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-05-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-inj-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-03-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": false,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-never-mentioned-01-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-10/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-12/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-08/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/e8a79c70/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-26/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-20/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-01-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-30/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-02/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-deadline-update-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-26/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-28/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-20/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-04-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-20/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-01-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-02-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-28/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-02-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-inj-06/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-02/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-08/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": false,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-05-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-30/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-00-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-04-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-other-entity-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-22/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-24/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-03-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-02/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-08/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-26/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-08/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-28/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-26/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-06/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-02-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-05-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rec-06/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-02-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-other-entity-02-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-26/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/0e5e2d1a/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-16/0",
+   "set": "old",
+   "system": "single",
+   "local": false,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-05-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-topic-no-detail-02-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-06/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-04/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-01-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-26/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-03-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-04-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-other-entity-05-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-02-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-10/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-05-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-12/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-03-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-04-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-28/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-16/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-20/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/e48988bc/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-04/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-04-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-05-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-22/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-18/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-10/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-after-cut-00-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-after-cut-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-24/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-10/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-explicit-unknown-00-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-05-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-01-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-06/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-28/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-14/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-different-detail-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-14/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-20/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-26/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-01-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-12/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-04/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-12/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-01-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-30/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-different-detail-05-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-14/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-after-cut-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-24/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-after-cut-02-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-00-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-10/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rec-04/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-never-mentioned-00-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-03-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-26/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-28/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-02/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-10/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rec-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-03-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-04-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-14/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-02-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-01-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-01-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/28bcfaac/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-04/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": false,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-03-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-02-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-04-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-22/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/e8a79c70/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-06/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-different-detail-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-18/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-00-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-22/0",
+   "set": "old",
+   "system": "single",
+   "local": false,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-speculation-05-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-00-ins/2",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-20/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-04/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-inj-00/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-00-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-deadline-contradiction-00/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-explicit-unknown-04-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-05-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-22/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-after-cut-00-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-30/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/e48988bc/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-30/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-20/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/18dcd5a5/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-other-entity-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-deadline-contradiction-00/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-03-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-16/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-06/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-18/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-04-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-22/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-08/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-18/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-after-cut-01-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-06/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-12/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-12/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-20/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-other-entity-00-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-05-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-03-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-explicit-unknown-01-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-22/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/18dcd5a5/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-different-detail-02-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rec-12/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-12/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-different-detail-01-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-04-ins/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-28/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-explicit-unknown-01-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-04/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-28/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-30/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-02/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-26/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-00-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-16/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-14/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-26/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-04/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-18/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-different-detail-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-30/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-never-mentioned-05-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-24/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-05-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-26/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-00-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-promise-03-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/0e5e2d1a/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rsp-14/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-02/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-rec-12/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-after-cut-05-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-hyp-10/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-other-entity-03-ins/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-12/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/28bcfaac/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-rsp-02/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-06/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-01-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/e3fc4d6e/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-different-detail-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-10/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-upd-16/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-upd-30/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-con-24/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsq-24/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsc-24/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": false,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-wsq-00/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/single/syn-xtra-hypothetical-02-ans/0",
+   "set": "new",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-topic-no-detail-00-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-speculation-04-ins/2",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-00-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-01-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-con-08/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-never-mentioned-04-ans/1",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-inj-20/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/syn-deadline-update-00/1",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-hyp-24/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-hypothetical-03-ins/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/team_changed/3249768e/0",
+   "set": "old",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": false,
+   "grader": false,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144503532496Z/single/syn-wsc-12/0",
+   "set": "old",
+   "system": "single",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  },
+  {
+   "id": "JC-20261104T144600470844Z/team_changed/syn-xtra-promise-00-ans/0",
+   "set": "new",
+   "system": "team_changed",
+   "local": true,
+   "sonnet": true,
+   "grader": true,
+   "via": "single"
+  }
+ ]
+}
