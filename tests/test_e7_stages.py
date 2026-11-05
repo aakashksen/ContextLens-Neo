@@ -133,3 +133,43 @@ def test_readiness_names_the_fallback_when_speech_cannot_keep_up(tmp_path: Path)
     assert out["fallback"]["meetings"] == ["d", "b", "f", "c", "a"] and out["fallback"]["speedup"] == 1.0
     assert "30-question rule" in out["fallback"]["note"] and "15 questions" in out["fallback"]["note"]
     json.dumps(out)
+
+
+def test_gpu_sampler_reports_baseline_peak_and_what_the_run_added():
+    import time
+
+    from contextlens.experiments.e7_realtime import GpuSampler
+
+    seen = iter([400, 900, 5100, 4800, 600] + [600] * 100)
+    sampler = GpuSampler(read=lambda: next(seen), every_s=0.001)
+    sampler.start()
+    time.sleep(0.1)
+    assert sampler.stop() == {"baseline_mb": 400, "peak_mb": 5100, "used_by_run_mb": 4700}
+
+
+def test_gpu_sampler_says_nothing_when_the_gpu_cannot_be_read():
+    from contextlens.experiments.e7_realtime import GpuSampler
+
+    sampler = GpuSampler(read=lambda: None, every_s=0.001)
+    sampler.start()
+    assert sampler.stop() is None
+
+
+def test_ready_command_writes_its_answer_under_results_local(tmp_path, monkeypatch, capsys):
+    write_wav(tmp_path / "m.wav", 60)
+    monkeypatch.setattr(e7, "ROOT", tmp_path)
+
+    async def fake(speech, audio_dir, meeting, **kw):
+        return {"meeting": meeting, "keeps_up": True, "plan": "p", "speedup": kw["speedup"]}
+
+    monkeypatch.setattr(e7, "readiness", fake)
+    monkeypatch.setattr(e7, "_open_speech", lambda addr: Speech())
+    assert e7.main(["ready", "--meeting", "m", "--audio-dir", str(tmp_path)]) == 0
+    path = Path(capsys.readouterr().out.splitlines()[0])
+    assert path.parent == tmp_path / "results/local" and json.loads(path.read_text())["keeps_up"] is True
+
+    async def slow(speech, audio_dir, meeting, **kw):
+        return {"meeting": meeting, "keeps_up": False, "plan": "the shortest 5 meetings in real time"}
+
+    monkeypatch.setattr(e7, "readiness", slow)
+    assert e7.main(["ready", "--meeting", "m", "--audio-dir", str(tmp_path)]) == 3

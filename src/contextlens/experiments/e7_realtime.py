@@ -35,6 +35,8 @@ import argparse
 import asyncio
 import json
 import statistics
+import subprocess
+import threading
 import os
 import sys
 import time
@@ -180,6 +182,47 @@ async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
         reader.cancel()
         await stream.close()
     return sorted(segments, key=lambda s: (s.start_ms, s.end_ms)), lags, time.perf_counter() - t0
+
+
+# -- GPU memory ----------------------------------------------------------------------------------------------------
+
+def nvidia_used_mb() -> int | None:
+    """GPU memory in use now (all processes), or None when nvidia-smi is not there or says nothing usable."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10, check=True).stdout
+        return int(out.splitlines()[0].strip())
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+class GpuSampler:
+    """Polls GPU memory while a run goes on. `used_by_run_mb` is the peak above the level at the start, so another job
+    that started or stopped meanwhile moves it; the record gives all three numbers."""
+
+    def __init__(self, read: Callable[[], int | None] = nvidia_used_mb, every_s: float = 1.0) -> None:
+        self.read, self.every_s = read, every_s
+        self.baseline: int | None = None
+        self.peak: int | None = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._poll, daemon=True)
+
+    def start(self) -> None:
+        self.baseline = self.peak = self.read()
+        self._thread.start()
+
+    def _poll(self) -> None:
+        while not self._stop.wait(self.every_s):
+            now = self.read()
+            if now is not None and (self.peak is None or now > self.peak):
+                self.peak = now
+
+    def stop(self) -> dict[str, int] | None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+        if self.baseline is None or self.peak is None:
+            return None
+        return {"baseline_mb": self.baseline, "peak_mb": self.peak, "used_by_run_mb": self.peak - self.baseline}
 
 
 # -- the 10-minute real-time segment ---------------------------------------------------------------------------------
@@ -706,18 +749,49 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--rerun", metavar="BASELINE_RUN_ID")
     r.add_argument("--change", action="append", default=[])
     r.add_argument("--speedup", type=float, default=1.0)
-    r.add_argument("--realtime-meeting", help="required with a speedup other than 1.0: replayed again at 1.0")
+    r.add_argument("--realtime-meeting", help="required with a speedup other than 1.0: its first 10 minutes are replayed at 1.0")
+    r.add_argument("--shortest", type=int, metavar="N",
+                   help="the fallback when speech cannot keep up at 4x: only the N shortest meetings, in real time; "
+                        "writes no run record (too few questions for check_run --min-n 30)")
+    d = sub.add_parser("ready", help="can speech keep up with sped-up audio? writes results/local/e7-readiness-*.json")
+    d.add_argument("--meeting", required=True, help="a dev meeting whose first minutes are streamed")
+    d.add_argument("--speedup", type=float, default=READY_SPEEDUP)
+    d.add_argument("--audio-dir", type=Path)
+    d.add_argument("--speech-address", default=GPU_SPEECH_ADDRESS)
     args = ap.parse_args(argv)
     if args.cmd == "build-scenarios":
         print(build_ami_dev(raw_root=args.raw))
         return 0
+    if args.cmd == "ready":
+        return _ready(args)
     return _run_real(args)
+
+
+def _open_speech(address: str) -> SpeechService:
+    from contextlens.speech.client import GrpcSpeech
+
+    return GrpcSpeech(address)
+
+
+def _ready(args: argparse.Namespace) -> int:
+    """Exit 0 when speech keeps up (run all meetings sped up), 3 when it does not or fails (see the file's `fallback`)."""
+    out = asyncio.run(readiness(_open_speech(args.speech_address), args.audio_dir or ROOT / AUDIO_REL, args.meeting,
+                                speedup=args.speedup))
+    path = ROOT / "results/local" / f"e7-readiness-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+    print(path.as_posix())
+    print("keeps up:", out["keeps_up"], "|", out.get("plan") or out.get("error"))
+    return 0 if out["keeps_up"] else 3
 
 
 def _run_real(args: argparse.Namespace) -> int:
     """The real parts, as the live backend builds them. Unloads the Ollama models before returning, so the GPU
     turn can be released. A full run needs the metrics port, since its record says the obs profile was on."""
-    if not args.only_meeting and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
+    if args.shortest and (args.speedup != 1.0 or args.realtime_meeting or args.only_meeting):
+        print("--shortest runs in real time on its own", file=sys.stderr)
+        return 2
+    if not (args.only_meeting or args.shortest) and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
         print("set CONTEXTLENS_METRICS_PORT (see docs/run-everything.md, Metrics) so E7 runs with the obs profile on",
               file=sys.stderr)
         return 2
@@ -726,6 +800,8 @@ def _run_real(args: argparse.Namespace) -> int:
     from contextlens.speech.client import GrpcSpeech
     from contextlens.speech.diarize import PyannoteBackend
 
+    sampler = GpuSampler()
+    sampler.start()  # before the models load, so the peak includes them
     backend = PyannoteBackend()  # picks the GPU if it has room, else the CPU with a warning; `device` says which
 
     telemetry = Telemetry()
@@ -744,7 +820,8 @@ def _run_real(args: argparse.Namespace) -> int:
                     "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
             prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
             speedup=args.speedup, realtime_meeting=args.realtime_meeting, ran_alone=args.alone,
-            only_meeting=args.only_meeting, speech_address=args.speech_address,
+            only_meeting=args.only_meeting, speech_address=args.speech_address, gpu_peak=sampler.stop,
+            only_meetings=shortest_meetings(ROOT / AUDIO_REL, meetings_needed(), args.shortest) if args.shortest else None,
             device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
                                   "llm": ollama_device(production.MODEL, _get_json)})
     finally:
