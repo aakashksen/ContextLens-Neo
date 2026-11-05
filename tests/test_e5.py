@@ -1,5 +1,6 @@
 """E5: fine-tuned against prompted. Fakes and invented text only; no GPU, no network, no model loaded, no torch."""
 import json
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -68,12 +69,31 @@ def test_consistent_scenario_becomes_a_clarify_card_citing_both_turns() -> None:
     assert ds._example(_sc("one", "consistent", gold=[0]), "train", "scenarios_train", Counter(), True) is None
 
 
+def test_max_gold_is_12_and_a_card_cites_every_gold_turn_or_the_example_is_dropped() -> None:
+    assert ds.MAX_GOLD == 12
+
+    def wide(sid: str, n_gold: int) -> Scenario:
+        turns = _turns(sid, [f"Remark number {i} about the {sid} plan." for i in range(n_gold + 4)])
+        return Scenario(id=sid, conversation=Conversation(id=sid, turns=turns, source="synthetic", split="train"),
+                        request=ButtonRequest(conversation_id=sid, as_of_seq=len(turns) - 1), category="c",
+                        gold_evidence_turn_ids=[t.id for t in turns[:n_gold]], gold_label="contradiction", gold_answer=None,
+                        origin="synthetic")
+
+    stats: Counter = Counter()
+    ex = ds._example(wide("ok", 12), "train", "scenarios_train", stats)
+    assert ex is not None
+    cited = [e.turn_id for e in Card.model_validate_json(ex.completion).findings[0].evidence]
+    assert cited == [f"ok:t{i}" for i in range(12)]  # every gold turn, none left out
+    assert ds._example(wide("too-wide", 13), "train", "scenarios_train", stats) is None  # dropped, not cut to 12
+    assert stats["dropped_answer_not_citable"] == 1
+
+
 def test_training_summary_reports_mix_and_flags_a_small_set() -> None:
     st = Counter({"train_final_size": 120, "train_class_answered": 90, "train_class_abstained": 30, "train_source_qmsum": 100,
                   "train_source_scenarios_train": 20, "train_synthetic_share": 20 / 120, "converted_consistent": 5})
     s = e5.training_summary(st)
     assert s["by_source"] == {"qmsum": 100, "scenarios_train": 20} and s["under_minimum"] is True
-    assert s["abstained_share"] == pytest.approx(0.25) and s["max_gold"] == 4 and s["abstain_cap"] == 0.25
+    assert s["abstained_share"] == pytest.approx(0.25) and s["max_gold"] == 12 and s["abstain_cap"] == 0.25
     assert e5.training_summary(Counter({"train_final_size": 300}))["under_minimum"] is False
 
 
@@ -177,6 +197,7 @@ def repo(tmp_path: Path) -> Path:
     (d / "dev.jsonl").write_text("".join(s.model_dump_json() + "\n" for s in scs), encoding="utf-8")
     (d / "test.jsonl").write_text("", encoding="utf-8")
     write_scenarios_manifest(tmp_path)
+    (tmp_path / ".gitignore").write_text("results/partial/\n", encoding="utf-8")
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "init")
@@ -259,3 +280,92 @@ def test_a_non_finite_training_loss_in_the_record_is_rejected(repo: Path, tmp_pa
         assert any("non-finite training loss" in p for p in check("E5", root=repo))
     finally:
         series.RESAMPLES = 10_000
+
+
+# ---- write, then judge, end to end with fakes ----
+
+class FakeHF(e5.RecordingHF):
+    """No model: replies with a one-finding card quoting the first turn id found in the prompt."""
+
+    log: list[tuple[str, str | None]] = []
+    turns: dict[str, Turn] = {}
+    generated = 0
+
+    def load(self) -> None:
+        FakeHF.log.append(("load", self.adapter_path))
+
+    def unload(self) -> None:
+        FakeHF.log.append(("unload", self.adapter_path))
+
+    def _generate(self, messages, max_tokens, temperature, timeout_s):
+        FakeHF.generated += 1
+        t = FakeHF.turns[re.search(r"[\w-]+:t\d+", messages[-1]["content"]).group(0)]
+        f = Finding(agent="a", kind="recall", statement=f"{t.speaker} said it.", confidence=1.0,
+                    evidence=[EvidenceRef(turn_id=t.id, quote=t.text, speaker=t.speaker, start_ms=t.start_ms)])
+        return Card(mode="recall", status="answered", findings=[f]).model_dump_json(), 10, 5
+
+
+class FakeHaiku(FakeLLM):
+    def __init__(self, n: int) -> None:
+        super().__init__([{"supported": True}] * n)
+        self.model, self.calls_made = "claude-haiku-5-5", 0
+
+
+def test_write_then_judge_runs_offline_and_judges_qmsum_too(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import contextlens.experiments.judge_check as jc
+    import contextlens.llm.client as client_mod
+    from contextlens.data.scenarios import load_scenarios
+
+    shared = tmp_path / "shared"
+    adapter = _adapter(shared / "models/e5-adapter")
+    (adapter / "e5_training.json").write_text(json.dumps(_training(adapter)), encoding="utf-8")
+    own = load_scenarios("dev", repo / "datasets/scenarios")
+    qm = [_sc("q1", None, question="When?", gold=[1]), _sc("q2", "contradiction", gold=[0, 2])]
+    FakeHF.log, FakeHF.generated = [], 0
+    FakeHF.turns = {t.id: t for s in [*own, *qm] for t in s.conversation.turns}
+    unloaded: list[str] = []
+    monkeypatch.setattr(e5, "data_root", lambda: shared)
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": own, "qmsum": qm})
+    monkeypatch.setattr(e5, "RecordingHF", FakeHF)
+    monkeypatch.setattr(e5, "select_evidence",
+                        lambda scs, emb, cfg: {s.id: [(s.conversation.turns[1].id, 0.5), (s.conversation.turns[2].id, 0.4)] for s in scs})
+    monkeypatch.setattr(client_mod, "unload_ollama", lambda model, *a, **k: unloaded.append(model))
+    monkeypatch.setattr(jc, "preflight", lambda *a, **k: 0)
+
+    folder = e5.run_write(repo, "v1", say=lambda *_: None)
+    assert unloaded == [e5.EMBED_MODEL]  # the embedder is released before any model loads
+    assert FakeHF.log == [("load", None), ("unload", None), ("load", str(adapter)), ("unload", str(adapter))]
+    assert FakeHF.generated == 2 * (len(own) + len(qm))
+    for side in ("prompted", "adapter"):
+        for source in ("scenarios", "qmsum"):
+            assert (folder / f"{side}.{source}.rows.jsonl").is_file()
+    e5.run_write(repo, "v1", say=lambda *_: None)
+    assert FakeHF.generated == 2 * (len(own) + len(qm))  # a rerun finds every card saved and writes none
+
+    haiku = FakeHaiku(200)
+    series.RESAMPLES = 50
+    try:
+        path = e5.run_judge(repo, "v1", say=lambda *_: None, llm=haiku, guard=SimpleNamespace(start=lambda: 0.0, check=lambda: None),
+                            concurrency=1)
+        assert check("E5", root=repo) == []
+    finally:
+        series.RESAMPLES = 10_000
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    q = rec["config"]["per_source"]["qmsum"]
+    assert q["judged"] is True and q["adapter"]["grounded_rate"] == 1.0 and "unsupported_claims" in q["prompted"]
+    assert rec["models"]["judge"] == "claude-haiku-5-5" and rec["config"]["adapter_hash"] == e5.adapter_hash(adapter)
+    saved = (folder / "judge.rows.jsonl").read_text(encoding="utf-8")
+    assert "shipment" not in saved and "claim_id" in saved  # ids and verdicts only
+    assert len(haiku.calls) == 2 * (len(own) + len(qm))  # one call per claim, one claim per card here
+
+
+def test_judge_refuses_when_cards_are_missing(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.data.scenarios import load_scenarios
+
+    shared = tmp_path / "shared"
+    adapter = _adapter(shared / "models/e5-adapter")
+    (adapter / "e5_training.json").write_text(json.dumps(_training(adapter)), encoding="utf-8")
+    monkeypatch.setattr(e5, "data_root", lambda: shared)
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": load_scenarios("dev", repo / "datasets/scenarios"), "qmsum": []})
+    with pytest.raises(RuntimeError, match="run --write first"):
+        e5.run_judge(repo, "v1", say=lambda *_: None, llm=FakeHaiku(1), guard=SimpleNamespace(start=lambda: 0.0, check=lambda: None))

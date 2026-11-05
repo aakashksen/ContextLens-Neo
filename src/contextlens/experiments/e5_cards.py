@@ -9,8 +9,8 @@ Stages (each its own command; only `--probe`, `--train` and `--write` hold the G
 
 The prompted side is the product's `RetrievalAssistant` with prompt V; the adapter side shows the model the same retrieved
 turns in the format it was trained on (`cards.dataset.SYSTEM` and `user_prompt`). Retrieval runs once, before any model is
-loaded, and both sides read the saved selection. Dev text of QMSum never goes to a cloud model: its rows are scored on
-the measures that need no judge and are kept under the git-ignored results/partial/.
+loaded, and both sides read the saved selection. QMSum dev cards are judged like the rest (approved, docs/HANDOFF.md section 8);
+their rows stay under the git-ignored results/partial/ and no raw text is committed.
 """
 from __future__ import annotations
 
@@ -77,8 +77,33 @@ JUDGE_STATEMENT = ("Judge: Haiku through `claude -p`, one claim per call, rubric
                    "-0.057 with an interval wholly below zero). The explanation there, that the local judge says supported to "
                    "nearly everything and so gains from the base rate, is a reading and not proof. Sonnet did not grade E5. "
                    "No person reviewed these judgements (no config.judge_review), so they are provisional, not claims.")
-QMSUM_STATEMENT = ("QMSum dev cards are scored without a judge: their text is not sent to a cloud model and not committed. "
-                   "Their figures are counts from git-ignored rows, so check_run cannot recompute them.")
+QMSUM_STATEMENT = ("QMSum dev cards are judged by Haiku like the rest, on published labels; sending that text to Claude through "
+                   "`claude -p` is approved (docs/HANDOFF.md section 8). Their rows stay in git-ignored files and no raw text is "
+                   "committed; the record holds only the figures, so check_run cannot recompute them.")
+MAX_GOLD_CHOICE = {
+    "chosen": 12,
+    "rule": "the smallest value reaching 300 usable examples that fits the 7 GB cap; if none reaches 300, the highest tested "
+            "that fits. The honesty rule is unchanged: a card cites every gold turn, an example with more gold turns than "
+            "MAX_GOLD is dropped, never shortened. 25% abstained cap, seed 13, no new invented data.",
+    "measured_on_cpu": {  # usable = fits MAX_LEN 2048 tokens (Qwen3.5-4B tokenizer); synthetic share and abstained share of usable
+        "4": {"built": 128, "usable": 128, "qmsum": 69, "invented": 59, "synthetic_share": 0.461, "abstained_share": 0.25,
+              "longest_tokens": 1601, "mean_tokens": 638},
+        "6": {"built": 144, "usable": 144, "qmsum": 85, "invented": 59, "synthetic_share": 0.410, "abstained_share": 0.25,
+              "longest_tokens": 1939, "mean_tokens": 729},
+        "8": {"built": 177, "usable": 173, "qmsum": 113, "invented": 60, "synthetic_share": 0.347, "abstained_share": 0.254,
+              "longest_tokens": 2225, "mean_tokens": 862},
+        "12": {"built": 237, "usable": 218, "qmsum": 157, "invented": 61, "synthetic_share": 0.280, "abstained_share": 0.271,
+               "longest_tokens": 3112, "mean_tokens": 1068},
+    },
+    "citation_limit_in_schema": "none: Finding.evidence is an unbounded list",
+    "estimate_not_measured": "Time per step grows about with tokens per batch, so about 1.7x the 4-gold set's mean (1068 against 638). "
+                             "The largest memory item is the output logits, about vocabulary 152k x tokens x batch 2 x 4 bytes: "
+                             "2.5 GB at 2048 tokens, 3.8 GB at 3112. The 3 GB of 4-bit weights plus that is why MAX_LEN stays 2048: "
+                             "the 19 examples over it (at 12) are skipped by training, which is why usable is below built. "
+                             "Nothing here was run on the GPU; the first training step over 7 GB stops the run.",
+    "reached_300": False,
+    "note": "No value reaches 300. The probe trains on the first rows, not the longest, so its peak memory may understate the run's.",
+}
 SPLIT_NOTE = "Retrieval for both sides is the product's (configs/retrieval.json), computed once and shared."
 
 
@@ -101,7 +126,7 @@ def training_summary(stats: Counter) -> dict[str, Any]:
         "abstained_dropped_by_cap": stats["train_abstained_dropped_by_cap"],
         "dropped": {k: v for k, v in stats.items() if k.startswith("dropped_")},
         "built_before_cap_and_split_by_source_mode_status": built,
-        "max_gold": MAX_GOLD, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
+        "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
         "under_minimum": n < MIN_EXAMPLES, "minimum": MIN_EXAMPLES,
     }
 
@@ -283,6 +308,7 @@ def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = prin
         say("retrieving once for both sides")
         selection = select_evidence([s for v in sets.values() for s in v], Embedder(EMBED_MODEL), config)
         unload_ollama(EMBED_MODEL)
+        folder.mkdir(parents=True, exist_ok=True)
         write_atomic(sel_path, json.dumps(selection))
     for side, adapter in (("prompted", None), ("adapter", str(root_models(root)))):
         client = RecordingHF(base, adapter)
@@ -430,9 +456,13 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     folder = run_dir(root, prompt_version, info["adapter_hash"])
     sets = eval_scenarios(root)
     own = sets["scenarios"]
-    preds = {side: _complete_rows(own, _read_rows(folder / f"{side}.scenarios.rows.jsonl"), side) for side in ("prompted", "adapter")}
-    items = [pg.Item(f"{side}|{p.scenario_id}|{k}", f.statement, tuple((e.speaker, e.quote) for e in f.evidence))
-             for side, rows in preds.items() for p in rows if p.card for k, f in enumerate(p.card.findings)]
+    def rows_of(source: str, scs: list[Scenario]) -> dict[str, list[Prediction]]:
+        return {side: _complete_rows(scs, _read_rows(folder / f"{side}.{source}.rows.jsonl"), side) for side in ("prompted", "adapter")}
+
+    by_source = {"scenarios": rows_of("scenarios", own), "qmsum": rows_of("qmsum", sets["qmsum"])}
+    items = [pg.Item(f"{source}|{side}|{p.scenario_id}|{k}", f.statement, tuple((e.speaker, e.quote) for e in f.evidence))
+             for source, sides in by_source.items() for side, rows in sides.items() for p in rows if p.card
+             for k, f in enumerate(p.card.findings)]
     llm = llm or pg.CountedClaude()
     if guard is None:
         from contextlens.experiments.judge_calibrate import UsageGuard
@@ -447,11 +477,12 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     out = pg.grade_single(items, llm, store, concurrency=concurrency or pg.DEFAULT_CONCURRENCY, should_stop=guard.check)
     if out.stop_reason or pg.ungraded(items, store):
         raise RuntimeError(f"judging stopped ({out.stop_reason}); {len(pg.ungraded(items, store))} claims ungraded; rerun to resume")
-    judged = {side: [_with_verdicts(side, p, store) for p in rows] for side, rows in preds.items()}
+    judged = {source: {side: [_with_verdicts(f"{source}|{side}", p, store) for p in rows] for side, rows in sides.items()}
+              for source, sides in by_source.items()}
     _, dhash = load_verified("scenarios", SPLIT, root)
-    qmsum = qmsum_figures(sets["qmsum"], {s: _read_rows(folder / f"{s}.qmsum.rows.jsonl") for s in ("prompted", "adapter")})
+    qmsum = qmsum_figures(sets["qmsum"], judged["qmsum"])
     models = {"writer": BASE_MODEL, "adapter": ADAPTER_REL.as_posix(), "judge": llm.model, "embedder": EMBED_MODEL}
-    return build_record(root=root, scenarios=own, dataset_hash=dhash, preds=judged,
+    return build_record(root=root, scenarios=own, dataset_hash=dhash, preds=judged["scenarios"],
                         extra_config={"claude_calls": getattr(llm, "calls_made", 0) - before}, models=models,
                         prompt_version=prompt_version, training=info, qmsum=qmsum)
 
@@ -472,15 +503,14 @@ def _with_verdicts(side: str, p: Prediction, store: Any) -> Prediction:
 
 
 def qmsum_figures(scs: list[Scenario], rows: dict[str, list[Prediction]]) -> dict[str, Any]:
-    """Counts and rates that need no judge, from the QMSum rows: no text."""
-    out: dict[str, Any] = {"n": len(scs), "subset": QMSUM_SUBSET, "judged": False}
+    """Figures from the QMSum rows, with the judge's verdicts filled in: numbers only, no text."""
+    out: dict[str, Any] = {"n": len(scs), "subset": QMSUM_SUBSET, "judged": True}
     for side, preds in rows.items():
         paired = pair_rows(scs, _complete_rows(scs, preds, side))
         m = recompute_metrics(scs, [p for _, p in paired])
-        out[side] = {k: m.get(k) for k in ("schema_valid_rate", "abstain_when_insufficient", "answer_when_answerable",
-                                           "latency_p50_ms", "latency_p95_ms")}
-        out[side]["per_mode"] = {mode: {k: v for k, v in d.items() if k not in ("grounded_rate", "unsupported_claim_rate")}
-                                 for mode, d in per_mode(paired).items()}
+        out[side] = {k: m.get(k) for k in (*HEADLINE, "latency_p50_ms", "latency_p95_ms")}
+        out[side]["unsupported_claims"] = unsupported_count([p for _, p in paired])
+        out[side]["per_mode"] = per_mode(paired)
         out[side]["status"] = dict(Counter(p.card.status for _, p in paired if p.card))
     return out
 
