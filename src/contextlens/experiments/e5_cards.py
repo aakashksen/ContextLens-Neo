@@ -51,7 +51,7 @@ ADAPTER_REL = Path("models/e5-adapter")  # git-ignored
 PARTIAL_REL = Path("results/partial/e5")  # git-ignored
 QMSUM_SUBSET, QMSUM_N, SUBSET_SEED = "e5-qmsum-100", 100, "e5-v1"
 ABSTAIN_CAP, CAP_SEED, MIN_EXAMPLES = 0.25, 13, 300
-EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 2048, 4, 3
+EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 1408, 4, 3
 DEADLINE_S, REPLY_TOKENS = 300.0, 700  # a local 4-bit model is slow; both sides get the same generous limits
 MODES = ("recall", "clarify", "respond")
 HEADLINE = ("grounded_rate", "unsupported_claim_rate", "schema_valid_rate", "abstain_when_insufficient",
@@ -85,7 +85,7 @@ MAX_GOLD_CHOICE = {
     "rule": "the smallest value reaching 300 usable examples that fits the 7 GB cap; if none reaches 300, the highest tested "
             "that fits. The honesty rule is unchanged: a card cites every gold turn, an example with more gold turns than "
             "MAX_GOLD is dropped, never shortened. 25% abstained cap, seed 13, no new invented data.",
-    "measured_on_cpu": {  # examples over MAX_LEN 2048 tokens (Qwen3.5-4B tokenizer) are removed BEFORE the 25% abstained cap, so these are the set that trains
+    "measured_on_cpu": {  # examples over 2048 tokens (Qwen3.5-4B tokenizer; MAX_LEN is now 1408, see MEMORY_CHOICE) are removed BEFORE the 25% abstained cap, so these are the set that trains
         "4": {"built": 128, "usable": 128, "qmsum": 69, "invented": 59, "synthetic_share": 0.461, "abstained_share": 0.25,
               "longest_tokens": 1601, "mean_tokens": 638},
         "6": {"built": 144, "usable": 144, "qmsum": 85, "invented": 59, "synthetic_share": 0.410, "abstained_share": 0.25,
@@ -96,13 +96,33 @@ MAX_GOLD_CHOICE = {
                "longest_tokens": 1965, "mean_tokens": 952},
     },
     "citation_limit_in_schema": "none: Finding.evidence is an unbounded list",
-    "estimate_not_measured": "Time per step grows about with tokens per batch, so about 1.5x the 4-gold set's mean (952 against 638). "
-                             "The largest memory item is the output logits, about vocabulary 152k x tokens x batch 2 x 4 bytes: "
-                             "2.5 GB at 2048 tokens. The 3 GB of 4-bit weights plus that is why MAX_LEN stays 2048: "
-                             "longer examples are removed before the abstained cap, so the cap applies to the set that trains. "
-                             "Nothing here was run on the GPU; the first training step over 7 GB stops the run.",
+    "estimate_not_measured": "Superseded by MEMORY_CHOICE: the 2048 cap measured 9.70 GB on the first probe, not under 7 GB.",
     "reached_300": False,
     "note": "No value reaches 300. The probe trains on the first rows, not the longest, so its peak memory may understate the run's.",
+}
+MEMORY_CHOICE = {
+    "problem": "the first probe at MAX_LEN 2048, batch 2, full logits peaked at 9.70 GB, over the 7.0 GB limit",
+    "chosen": "MAX_LEN 1408 with both savers: micro-batch 1 with gradients added over the 2 rows of a step, and the loss "
+              "computed from the card's tokens only (hidden states sliced before the LM head). No example is shortened; "
+              "longer ones are dropped before the 25% abstained cap. Limit and NaN guard unchanged.",
+    "tool": "tools/e5_memory_diag.py (synthetic rows of an exact length built from real ones, inside the tool only)",
+    "peak_gb_and_s_per_step_by_input_tokens": {  # savers: base = batch 2 full logits; A = batch 1 x 2 accumulated; B = card-only loss
+        "512": {"base": [7.51, 6.4], "A": [6.01, 3.3], "B": [5.35, 2.7], "A+B": [4.95, 3.2]},
+        "1024": {"base": [10.67, 38.0], "A": [7.59, 13.7], "B": [6.91, 85.2], "A+B": [5.71, 5.9]},
+        "1536": {"base": [13.84, 46.2], "A": [9.17, 23.0], "B": [9.52, 31.8], "A+B": [7.01, 52.9]},
+        "2048": {"base": [9.70, None], "A+B": [6.89, 52.3]},  # base: the failed probe; A and B not measured at 2048
+    },
+    "worst_real_rows_with_A+B": {"1887 tokens, 788 card": 7.21, "1534 tokens, 757 card": 7.01, "1383 tokens, 710 card": 6.83},
+    "reading": "The card's length matters as much as the input's (logits of the card span), so a cap on total tokens is the "
+               "only knob: the synthetic table is not a bound. Peak was then measured on the real rows with A+B: 2048 and "
+               "1536 each hold a row over 7.0 GB; 1408 holds none (worst 6.83).",
+    "examples_kept_by_cap": {  # after the 25% abstained cap, which runs after the length filter
+        "512": {"kept": 65, "answered": 56, "abstained": 9}, "1024": {"kept": 92, "answered": 69, "abstained": 23},
+        "1408": {"kept": 160, "answered": 120, "abstained": 40}, "1536": {"kept": 180, "answered": 135, "abstained": 45},
+        "2048": {"kept": 212, "answered": 159, "abstained": 53},
+    },
+    "note": "Seconds per step jumped to 30 to 85 s in several runs with an allocated peak of 6.9 to 7.2 GB (Windows shared-memory "
+            "spill, since other use of the 8 GB card and the allocator's reserve sit on top of the allocated peak); not at 5.7 GB.",
 }
 SPLIT_NOTE = "Retrieval for both sides is the product's (configs/retrieval.json), computed once and shared."
 
@@ -127,7 +147,7 @@ def training_summary(stats: Counter) -> dict[str, Any]:
         "dropped_too_long": stats["train_dropped_too_long"],
         "dropped": {k: v for k, v in stats.items() if k.startswith("dropped_")},
         "built_before_cap_and_split_by_source_mode_status": built,
-        "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
+        "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "memory_choice": MEMORY_CHOICE, "max_len": MAX_LEN, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
         "under_minimum": n < MIN_EXAMPLES, "minimum": MIN_EXAMPLES,
     }
 

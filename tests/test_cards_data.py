@@ -254,6 +254,24 @@ def test_nan_guard_still_stops_an_accumulating_step(data, tmp_path, monkeypatch)
         run_steps(_tiny_model(tok), tok, ex, max_len=4096, steps=1, batch_size=2, micro_batch=1, card_loss_only=True)
 
 
+def test_train_uses_the_memory_savers_and_the_chosen_cap(tmp_path, monkeypatch):
+    import transformers
+
+    from contextlens.cards import train_lora as tl
+    from contextlens.experiments import e5_cards as e5
+
+    seen = {}
+    dummy = type("M", (), {"save_pretrained": lambda self, d: None})()
+    monkeypatch.setattr(tl, "_load_4bit", lambda m: dummy)
+    monkeypatch.setattr(tl, "attach_lora", lambda m: m)
+    monkeypatch.setattr(tl, "load_examples", lambda *a, **k: [])
+    monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda *a, **k: None)
+    monkeypatch.setattr(tl, "run_steps", lambda *a, **k: seen.update(k) or seen.update(max_len=a[3]) or [0.5])
+    tl.train(tmp_path / "out", steps=1, max_len=e5.MAX_LEN)
+    assert seen["micro_batch"] == 1 and seen["card_loss_only"] is True and seen["vram_limit_gb"] == tl.VRAM_LIMIT_GB
+    assert seen["max_len"] == e5.MAX_LEN == 1408  # measured: the longest examples it keeps peak at 6.83 GB, under 7.0
+
+
 @pytest.mark.real
 def test_real_model_loads_under_peft_and_vram_limit():
     from contextlens.cards.train_lora import train

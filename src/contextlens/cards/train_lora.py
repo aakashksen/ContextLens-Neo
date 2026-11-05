@@ -155,13 +155,13 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
     tok = AutoTokenizer.from_pretrained(base)
     t1 = time.perf_counter()
     losses = run_steps(model, tok, load_examples("train", cards_dir, include_scenarios), max_len, steps,
-                       vram_limit_gb=VRAM_LIMIT_GB)
+                       vram_limit_gb=VRAM_LIMIT_GB, micro_batch=1, card_loss_only=True)
     t2 = time.perf_counter()
     peak_gb = check_vram()
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir)
     meta = {"base_model": base, "fallback_used": base == FALLBACK, "fallback_reason": reason,
             "peak_vram_gb": round(peak_gb, 3), "steps": steps, "final_loss": losses[-1], "losses": losses,
-            "load_s": round(t1 - t0, 2), "train_s": round(t2 - t1, 2)}
+            "max_len": max_len, "micro_batch": 1, "card_loss_only": True, "load_s": round(t1 - t0, 2), "train_s": round(t2 - t1, 2)}
     (out_dir / "train_meta.json").write_text(json.dumps(meta, indent=1) + "\n", encoding="utf-8")
     return meta
