@@ -254,6 +254,83 @@ def _health(version: str, rows: list[Prediction]) -> tuple[dict[str, Any], str |
     return counts, None
 
 
+def effective_digests(system: str, versions: list[Version], sc: Scenario, writer: LLMClient, embedder: Any,
+                      retrieval_config: dict[str, Any]) -> dict[str, str]:
+    """What each version really sends: the registry text plus whatever the agent code adds now. Two versions that end
+    up with the same system message would be one version under two labels, so that raises RunBroken."""
+    probe = Retriever(InMemoryTranscriptStore(), embedder)
+    effective = {v.version: _digest(_build_assistant(system, v.version, sc, writer, probe, MemoryStore(),
+                                                      retrieval_config).system)  # type: ignore[attr-defined]
+                 for v in versions}
+    if len(set(effective.values())) != len(effective):
+        raise e2.RunBroken("two prompt versions send the same system message to the model")
+    return effective
+
+
+def measure(scenarios: list[Scenario], systems: dict[str, list[Prediction]]) -> tuple[
+        dict[str, dict[str, float | None]], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    """(metrics, intervals, comparisons, choice) of judged rows, all recomputed from the rows, and SELECTION_RULE applied."""
+    metrics = {n: e2._saved(scenarios, p) for n, p in systems.items()}
+    intervals = {}
+    for n, p in systems.items():
+        names_ = [m for m in e2.INTERVAL_METRICS if metrics[n].get(m) is not None]
+        got = {m: iv for m, iv in recompute_intervals(scenarios, p, names_).items() if iv}
+        if got:
+            intervals[n] = got
+    comparisons = [{"a": n, "b": BASELINE, **c} for n in systems if n != BASELINE for m in e2.COMPARE_METRICS
+                   if (c := recompute_comparison(scenarios, systems[n], systems[BASELINE], m))]
+    choice = pick_best(metrics, comparisons, tuple(n for n in VERSIONS if n in systems))
+    return metrics, intervals, comparisons, choice
+
+
+def write_e6_record(*, root: Path, system: str, scenarios: list[Scenario], digest: str, versions: list[Version],
+                    effective: dict[str, str], systems: dict[str, list[Prediction]], health: dict[str, dict[str, Any]],
+                    failed: dict[str, str], not_run: list[str], judge: dict[str, Any], judge_note: str,
+                    models: dict[str, str], retrieval_config: dict[str, Any], cold: dict[str, Any], gpu: dict[str, Any],
+                    memory_build: dict[str, Any], started: str, claude_calls: int = 0,
+                    extra_config: dict[str, Any] | None = None, say: Callable[[str], None] = print) -> dict[str, Any]:
+    """Measure judged rows, apply SELECTION_RULE and write the one E6 record. Shared by the run that judges locally and
+    by e6_judge, which judges saved cards later, so the fields are the same."""
+    metrics, intervals, comparisons, choice = measure(scenarios, systems)
+    say(f"selected: {choice['selected']}")
+    config: dict[str, Any] = {
+        "experiment": "E6", "system": system, "baseline": BASELINE, "factors": list(FACTORS),
+        "versions": [{"version": v.version, "factor": v.factor, "summary": v.summary, "added": list(v.added),
+                      "removed": list(v.removed), "text_sha256": v.text_sha256,
+                      "system_message_sha256": effective[v.version]} for v in versions],
+        "selection_rule": SELECTION_RULE, "selection_rule_sha256": _digest(SELECTION_RULE), "selection": choice,
+        "labels": label_text(root, e2.SCENARIO_SOURCE),
+        "no_measurable_improvement": choice["selected"] == BASELINE,
+        "mode_factor": "not a factor: T4.2 sets respond mode in code; T3.3's mode-defining prompt was reverted",
+        "deadline_s": e2.DEADLINE_S,
+        "retrieval": {k: retrieval_config.get(k) for k in ("winner", "mode", "k", "rerank", "chunk_turns", "run_ids")},
+        "judge": judge,
+        "health": health, "health_limits": {"broken": e2.BROKEN_MAX, "timeout": e2.TIMEOUT_MAX, "invalid": e2.INVALID_MAX},
+        "unmeasured_versions": failed,
+        "versions_not_run": not_run,
+        "abstention": {n: e3.drop_report(scenarios, p) for n, p in systems.items()},
+        "modes": {n: e2.mode_report(scenarios, p) for n, p in systems.items()},
+        "injection_findings": {n: e2.injection_findings_report(scenarios, p) for n, p in systems.items()},
+        "cold_start_s": cold, "gpu_memory_used_mb": gpu,
+        "memory_build": memory_build,
+        "calls": call_counts(len(scenarios), len(versions), system),
+        "notes": [
+            label_text(root, e2.SCENARIO_SOURCE),
+            judge_note,
+            "The injected-claim counts are a word-overlap proxy, not a reader's judgement.",
+            f"{len(versions) - 1} candidates are compared with the baseline without a multiple-comparison correction.",
+        ],
+        "claude_calls": claude_calls, "labels_reviewed": False, "started_at": started,
+        **(extra_config or {}),
+    }
+    attempts = [{"setting": v.version, "kind": "prompt version", "factor": v.factor, "ok": v.version not in failed,
+                 "error": failed.get(v.version), "health": health[v.version], "text_sha256": v.text_sha256}
+                for v in versions]
+    path = write_run("E6", SPLIT, config, models, {v.version: v.text_sha256 for v in versions}, metrics, intervals,
+                     attempts, systems, digest, comparisons=comparisons, scenario_source=e2.SCENARIO_SOURCE, root=root)
+    return {"selected": choice["selected"], "record": path, "choice": choice}
+
+
 class Stopped(Exception):
     """The stop file was found between versions. Every finished row is saved; the same command resumes at the same commit."""
 
@@ -305,14 +382,7 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
     if missing:
         raise e2.RunBroken(f"models not installed in Ollama: {missing}")
 
-    # What each version really sends: the registry text plus whatever the agent code adds now. Two versions that end
-    # up with the same system message would be one version under two labels.
-    probe = Retriever(InMemoryTranscriptStore(), embedder)
-    effective = {v.version: _digest(_build_assistant(system, v.version, scenarios[0], writer, probe, MemoryStore(),
-                                                      retrieval_config).system)  # type: ignore[attr-defined]
-                 for v in versions}
-    if len(set(effective.values())) != len(effective):
-        raise e2.RunBroken("two prompt versions send the same system message to the model")
+    effective = effective_digests(system, versions, scenarios[0], writer, embedder, retrieval_config)
 
     cold: dict[str, float] = {}
     gpu: dict[str, int | None] = {}
@@ -392,60 +462,22 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
     if judge.calls == 0:
         raise e2.JudgeFailed("no finding was judged, so no card made a claim")
 
-    metrics = {n: e2._saved(scenarios, p) for n, p in systems.items()}
-    intervals = {}
-    for n, p in systems.items():
-        names_ = [m for m in e2.INTERVAL_METRICS if metrics[n].get(m) is not None]
-        got = {m: iv for m, iv in recompute_intervals(scenarios, p, names_).items() if iv}
-        if got:
-            intervals[n] = got
-    comparisons = [{"a": n, "b": BASELINE, **c} for n in systems if n != BASELINE for m in e2.COMPARE_METRICS
-                   if (c := recompute_comparison(scenarios, systems[n], systems[BASELINE], m))]
-    choice = pick_best(metrics, comparisons, tuple(n for n in VERSIONS if n in systems))
-    say(f"selected: {choice['selected']}")
-
-    config: dict[str, Any] = {
-        "experiment": "E6", "system": system, "baseline": BASELINE, "factors": list(FACTORS),
-        "versions": [{"version": v.version, "factor": v.factor, "summary": v.summary, "added": list(v.added),
-                      "removed": list(v.removed), "text_sha256": v.text_sha256,
-                      "system_message_sha256": effective[v.version]} for v in versions],
-        "selection_rule": SELECTION_RULE, "selection_rule_sha256": _digest(SELECTION_RULE), "selection": choice,
-        "labels": label_text(root, e2.SCENARIO_SOURCE),
-        "no_measurable_improvement": choice["selected"] == BASELINE,
-        "mode_factor": "not a factor: T4.2 sets respond mode in code; T3.3's mode-defining prompt was reverted",
-        "deadline_s": e2.DEADLINE_S,
-        "retrieval": {k: retrieval_config.get(k) for k in ("winner", "mode", "k", "rerank", "chunk_turns", "run_ids")},
-        "judge": {"model": names.judge, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False,
-                  "calls": judge.calls, "share_supported": judge.yes / judge.calls},
-        "health": health, "health_limits": {"broken": e2.BROKEN_MAX, "timeout": e2.TIMEOUT_MAX, "invalid": e2.INVALID_MAX},
-        "unmeasured_versions": failed,
-        "versions_not_run": not_run,
-        "abstention": {n: e3.drop_report(scenarios, p) for n, p in systems.items()},
-        "modes": {n: e2.mode_report(scenarios, p) for n, p in systems.items()},
-        "injection_findings": {n: e2.injection_findings_report(scenarios, p) for n, p in systems.items()},
-        "cold_start_s": cold, "gpu_memory_used_mb": gpu,
-        "memory_build": {"cases": len(scenarios), "failed": memory_failed,
-                         "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
-                         "note": "built once per case before the press and shared by every version"},
-        "calls": call_counts(len(scenarios), len(versions), system),
-        "notes": [
-            label_text(root, e2.SCENARIO_SOURCE),
-            "grounded_rate and unsupported_claim_rate come from the local judge alone; no person has reviewed a sample "
-            "(config.judge_review is absent), so they are not claims.",
-            "The injected-claim counts are a word-overlap proxy, not a reader's judgement.",
-            f"{len(versions) - 1} candidates are compared with the baseline without a multiple-comparison correction.",
-        ],
-        "claude_calls": 0, "labels_reviewed": False, "started_at": started,
-    }
-    models = {"writer": names.writer, "judge": names.judge, "embedder": names.embedder}
-    attempts = [{"setting": v.version, "kind": "prompt version", "factor": v.factor, "ok": v.version not in failed,
-                 "error": failed.get(v.version), "health": health[v.version], "text_sha256": v.text_sha256}
-                for v in versions]
-    path = write_run("E6", SPLIT, config, models, {v.version: v.text_sha256 for v in versions}, metrics, intervals,
-                     attempts, systems, digest, comparisons=comparisons, scenario_source=e2.SCENARIO_SOURCE, root=root)
+    out = write_e6_record(
+        root=root, system=system, scenarios=scenarios, digest=digest, versions=versions, effective=effective,
+        systems=systems, health=health, failed=failed, not_run=not_run,
+        judge={"model": names.judge, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False,
+               "calls": judge.calls, "share_supported": judge.yes / judge.calls},
+        judge_note="grounded_rate and unsupported_claim_rate come from the local judge alone; no person has reviewed a sample "
+                   "(config.judge_review is absent), so they are not claims.",
+        models={"writer": names.writer, "judge": names.judge, "embedder": names.embedder}, retrieval_config=retrieval_config,
+        cold=cold, gpu=gpu,
+        memory_build={"cases": len(scenarios), "failed": memory_failed,
+                      "mean_ms": sum(c["ms"] for c in memory_cost) / len(memory_cost) if memory_cost else None,
+                      "note": "built once per case before the press and shared by every version"},
+        started=started, say=say)
     (root / PARTIAL_REL).unlink(missing_ok=True)  # the record holds them now
-    say(f"wrote {path.name}")
-    return {"selected": choice["selected"], "record": path, "choice": choice}
+    say(f"wrote {out['record'].name}")
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
