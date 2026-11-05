@@ -7,7 +7,6 @@ is filled in later in the background (`speaker_updates`). Without a backend ever
 
 import os
 import threading
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
