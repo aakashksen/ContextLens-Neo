@@ -89,7 +89,7 @@ def test_the_setting_is_read_from_the_environment_and_a_bad_value_is_refused(mon
 def test_team_shipping_changed_builds_the_arm_the_experiment_measured_and_the_default_is_unchanged(monkeypatch):
     from contextlens.agents.consistency_check import PromptedChecker
     from contextlens.experiments import team_attempt as ta
-    from test_e3 import NoEmbed as E3NoEmbed, scenario, store_of, turn
+    from test_e3 import NoEmbed as E3NoEmbed, scenario, turn
 
     assert production.DEFAULT_ASSISTANT == "team" and "team_shipping_changed" in production.ASSISTANTS
     monkeypatch.setenv("CONTEXTLENS_ASSISTANT", "team_shipping_changed")
