@@ -547,3 +547,37 @@ def test_several_meetings_check_writes_no_run_record(repo: Path) -> None:
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert doc["not_a_record"] is True and doc["n"] == 4 and doc["meetings"] == ["m1", "m2"]
     assert "shortest" in out.name and not (repo / "results/runs").exists()
+
+
+def test_rerun_segment_records_before_and_after_for_the_segment_and_the_token_count(repo: Path) -> None:
+    base = run(repo)
+    SPEEDS.clear()
+    path = e7.rerun_segment(
+        root=repo, speech=ScriptedSpeech([aligned_script("m1")]), backend=TruthBackend(), embedder=NoEmbed(),
+        make_assistant=make_assistant, extractor=FirstTurnExtractor(),
+        models={"llm": "qwen3.5:4b-q4_K_M"}, prompt_versions={"team": "v1"}, baseline_id=base.stem,
+        changes=["cap the context the memory agent reads"], step_ms=10_000, ran_alone=True,
+        speech_address="127.0.0.1:50052", device_probe=ALL_CUDA, say=lambda m: None)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    cfg = rec["config"]
+    assert SPEEDS == [1.0] and cfg["phase"] == "rerun_segment" and cfg["systems"] == ["clean"] and set(rec["metrics"]) == {"clean"}
+    assert cfg["baseline_run_id"] == base.stem and cfg["changes"] == ["cap the context the memory agent reads"]
+    assert cfg["bottlenecks"] == json.loads(base.read_text(encoding="utf-8"))["config"]["bottlenecks"]
+    assert set(cfg["before_after"]) == {"memory_ms", "assistance_ms", "total", "quality"}
+    assert cfg["before_after"]["quality"]["tokens_per_card"] == {"before": 50, "after": 50}
+    assert cfg["before_after"]["total"]["p95"]["before"] is not None and cfg["before_after"]["total"]["p95"]["after"] is not None
+    assert cfg["realtime_segment"]["meeting"] == "m1" and rec["n"] == 4
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+    with pytest.raises(ValueError, match="not an E7 baseline"):
+        e7.rerun_segment(root=repo, speech=ScriptedSpeech([]), backend=TruthBackend(), embedder=NoEmbed(),
+                         make_assistant=make_assistant, extractor=None, models={}, prompt_versions={},
+                         baseline_id=path.stem, changes=["again"], ran_alone=True, speech_address="x",
+                         device_probe=ALL_CUDA, say=lambda m: None)
+
+
+def test_the_cli_refuses_a_rerun_without_the_metrics_port_and_a_sped_up_shortest_run(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("CONTEXTLENS_METRICS_PORT", raising=False)
+    assert e7.main(["rerun-segment", "--baseline", "x", "--change", "c", "--alone"]) == 2
+    assert "CONTEXTLENS_METRICS_PORT" in capsys.readouterr().err
+    assert e7.main(["run", "--alone", "--shortest", "5", "--speedup", "4"]) == 2
+    assert "real time" in capsys.readouterr().err

@@ -569,6 +569,119 @@ def _summary(values: list[int] | list[float]) -> dict[str, float | int | None]:
             "p95": percentile(list(values), 95) if values else None}
 
 
+def clean_cards(scenarios: list[Scenario], embedder: Any, make_assistant: MakeAssistant, extractor: Extractor | None,
+                telemetry: Telemetry | None, say: Callable[[str], None] = print) -> list[Prediction]:
+    """The questions asked on the clean transcript alone (no audio), each at its own cut, in the scenarios' order.
+    This is the cheap part of a rerun: it gives the tokens per card and the recall that go beside the segment."""
+    done: dict[str, Prediction] = {}
+    for meeting in dict.fromkeys(s.conversation.id for s in scenarios):
+        mine = sorted((s for s in scenarios if s.conversation.id == meeting), key=lambda s: s.request.as_of_seq)
+        turns = max((s.conversation.turns for s in mine), key=len)
+        session, prev = Session("clean", meeting, embedder, make_assistant, extractor, telemetry), -1
+        for sc in mine:
+            session.ingest([t for t in turns if prev < t.seq <= sc.request.as_of_seq])
+            prev = sc.request.as_of_seq
+            card, stages, errored = session.press(sc.request)
+            done[sc.id] = Prediction(scenario_id=sc.id, card=card, ranked_turn_ids=_ids(card), stage_latency_ms=stages,
+                                     errored=errored)
+            say(f"  {sc.id} (clean)")
+        if session.traced:
+            session.traced.flush()
+    return [done[s.id] for s in scenarios]
+
+
+def rerun_segment(
+    *, root: Path = ROOT, speech: SpeechService, backend: WindowBackend, embedder: Any, make_assistant: MakeAssistant,
+    extractor: Extractor | None, models: dict[str, str], prompt_versions: dict[str, str], baseline_id: str,
+    changes: list[str], telemetry: Telemetry | None = None, audio_dir: Path | None = None, segment_ms: int = SEGMENT_MS,
+    step_ms: int = STEP_MS, settle_s: float = 10.0, say: Callable[[str], None] = print, ran_alone: bool,
+    speech_address: str, device_probe: Callable[[], dict[str, str | None]],
+    gpu_peak: Callable[[], dict[str, Any] | None] = lambda: None,
+) -> Path:
+    """After the fixes: replay only the baseline's real-time segment (same meeting, same presses) and the questions on
+    the clean transcript, and write a record with the two bottleneck stages, the token count and recall before and
+    after. It has the `clean` system only, since the speed-up runs and the speech numbers are not repeated."""
+    if not [c for c in changes if c.strip()]:
+        raise ValueError("a rerun must list what changed")
+    baseline = json.loads((root / "results/runs" / f"{baseline_id}.json").read_text(encoding="utf-8"))
+    if baseline["experiment"] != "E7" or baseline["config"].get("phase") != "baseline":
+        raise ValueError(f"{baseline_id} is not an E7 baseline record")
+    before_seg = baseline["config"].get("realtime_segment")
+    if not before_seg:
+        raise ValueError(f"{baseline_id} has no real-time segment to compare with")
+    manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
+    if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
+        raise RuntimeError("the AMI manifest must be committed before the run")
+    scenarios, digest = _load_dev(root)
+    if baseline["dataset_hash"] != digest:
+        raise ValueError("the baseline was run on different scenarios")
+    audio = audio_dir or root / AUDIO_REL
+    meeting = before_seg["meeting"]
+    mine = [s for s in scenarios if s.conversation.id == meeting]
+    if not (audio / f"{meeting}.wav").is_file():
+        raise FileNotFoundError(f"no audio for {meeting}")
+    _, reviewed = load_questions(root)
+    started = datetime.now(timezone.utc).isoformat()
+    say(f"real-time segment: {meeting} at 1.0")
+    backends: set[str | None] = set()
+    scs = segment_scenarios(mine, segment_ms, step_ms)
+    got, st, lags = play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, 1.0, None,
+                                 settle_s, step_ms, say, backends)
+    segment = segment_summary(meeting, scs, got, st, lags, segment_ms)
+    say("questions on the clean transcript (token count)")
+    preds = clean_cards(scenarios, embedder, make_assistant, extractor, telemetry, say)
+    metrics = {k: v for k, v in recompute_metrics(scenarios, preds, KS).items()
+               if base_name(k) in SAVED and ("[" not in k or "[stage=" in k)}
+    intervals = {k: iv for k, iv in recompute_intervals(scenarios, preds, ["recall@5"]).items() if iv}
+    named = baseline["config"]["bottlenecks"]
+    stages = [b["stage"] for b in named]
+    before = {**before_seg["press_latency_ms"], **{k: baseline["metrics"]["clean"].get(k) for k in ("recall@5", "tokens_per_card")}}
+    after = {**segment["press_latency_ms"], **{k: metrics.get(k) for k in ("recall@5", "tokens_per_card")}}
+    devices = stage_devices({"whisper": _one(backends), **device_probe()}, say)
+    config: dict[str, Any] = {
+        "experiment": "E7", "phase": "rerun_segment", "systems": ["clean"], "baseline_run_id": baseline_id,
+        "changes": changes, "bottlenecks": named, "before_after": before_after(before, after, stages),
+        "realtime_segment": segment, "baseline_realtime_segment": before_seg, "step_ms": step_ms, "speedup": 1.0,
+        "obs_profile": telemetry is not None, "latency_basis": "real_time",
+        "audio_source": audio_source(audio), "speech_address": speech_address, "devices": devices,
+        "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"], "ran_alone": ran_alone,
+        "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
+        "gpu_peak": gpu_peak(), "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
+    }
+    attempts = [{"setting": "clean", "ok": True, "errored_presses": sum(p.errored for p in preds)}]
+    return write_run("E7", SPLIT, config, models, prompt_versions, {"clean": metrics},
+                     {"clean": intervals} if intervals else {}, attempts, {"clean": preds}, digest,
+                     scenario_source=SOURCE, root=root)
+
+
+def play_meeting(speech: SpeechService, backend: WindowBackend, embedder: Any, make_assistant: MakeAssistant,
+                 extractor: Extractor | None, audio: Path, meeting: str, scs: list[Scenario], speed: float,
+                 tele: Telemetry | None, settle_s: float, step_ms: int, say: Callable[[str], None],
+                 whisper_backends: set[str | None]):
+    """One meeting's audio through speech at `speed`, then the three-way replay up to its last cut."""
+    pcm = read_wav(audio / f"{meeting}.wav")
+    cut = max(cut_ms(s) for s in scs)
+    stream_pcm = pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
+    info: dict[str, Any] = {}
+    segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s, info=info))
+    whisper_backends.add(info.get("compute_backend"))
+    got, st = replay_meeting(
+        scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
+        make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
+    st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
+    return got, st, lags
+
+
+def segment_summary(meeting: str, scs: list[Scenario], got: dict[str, dict[str, Prediction]], st: dict[str, Any],
+                    lags: list[int], segment_ms: int) -> dict[str, Any]:
+    seg_metrics = recompute_metrics(scs, [got["asr_pipeline"][s.id] for s in scs], KS)
+    return {"meeting": meeting, "speedup": 1.0, "audio_s": st["audio_s"], "presses": len(scs),
+            "basis": f"the first {segment_ms // 1000} s of the meeting; each of its questions pressed at every tick",
+            "asr_lag_ms": _summary(lags), "diarization_run_ms": _summary(st["diar_ms"]),
+            "asr_real_time_factor": st["asr_wall_s"] / max(1e-9, st["audio_s"]),
+            "press_latency_ms": {k: v for k, v in seg_metrics.items() if k.startswith("latency_p")}}
+
+
 def run_e7(
     *, root: Path = ROOT, speech: SpeechService, backend: WindowBackend, embedder: Any,
     make_assistant: MakeAssistant, extractor: Extractor | None, models: dict[str, str],
@@ -641,17 +754,8 @@ def run_e7(
     whisper_backends: set[str | None] = set()
 
     def play(meeting: str, scs: list[Scenario], speed: float, tele: Telemetry | None):
-        pcm = read_wav(audio / f"{meeting}.wav")
-        cut = max(cut_ms(s) for s in scs)
-        stream_pcm = pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
-        info: dict[str, Any] = {}
-        segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s, info=info))
-        whisper_backends.add(info.get("compute_backend"))
-        got, st = replay_meeting(
-            scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
-            make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
-        st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
-        return got, st, lags
+        return play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, speed, tele,
+                            settle_s, step_ms, say, whisper_backends)
 
     for n, (meeting, scs) in enumerate(by_meeting.items(), 1):
         say(f"{meeting}: {len(scs)} questions ({n}/{len(by_meeting)})")
@@ -664,12 +768,7 @@ def run_e7(
         say(f"real-time segment: {realtime_meeting} at 1.0")
         scs = segment_scenarios(by_meeting[realtime_meeting], segment_ms, step_ms)
         got, st, lags = play(realtime_meeting, scs, 1.0, None)  # not in Prometheus: it would count these presses twice
-        seg_metrics = recompute_metrics(scs, [got["asr_pipeline"][s.id] for s in scs], KS)
-        segment = {"meeting": realtime_meeting, "speedup": 1.0, "audio_s": st["audio_s"], "presses": len(scs),
-                   "basis": f"the first {segment_ms // 1000} s of the meeting; each of its questions pressed at every tick",
-                   "asr_lag_ms": _summary(lags), "diarization_run_ms": _summary(st["diar_ms"]),
-                   "asr_real_time_factor": st["asr_wall_s"] / max(1e-9, st["audio_s"]),
-                   "press_latency_ms": {k: v for k, v in seg_metrics.items() if k.startswith("latency_p")}}
+        segment = segment_summary(realtime_meeting, scs, got, st, lags, segment_ms)
     preds = {name: [rows[name][s.id] for s in scenarios] for name in SYSTEMS}
     # The speaker model names speakers speaker_1, speaker_2, ..., so comparing its names with AMI's says nothing;
     # `der` (which matches the names first) is its measure.
@@ -753,6 +852,14 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--shortest", type=int, metavar="N",
                    help="the fallback when speech cannot keep up at 4x: only the N shortest meetings, in real time; "
                         "writes no run record (too few questions for check_run --min-n 30)")
+    rr = sub.add_parser("rerun-segment", help="after the fixes: only the real-time segment and the token count, "
+                                              "beside a baseline's")
+    rr.add_argument("--baseline", required=True, metavar="BASELINE_RUN_ID")
+    rr.add_argument("--change", action="append", default=[], required=True, help="what was changed (repeat for several)")
+    rr.add_argument("--speech-address", default=GPU_SPEECH_ADDRESS)
+    rr_alone = rr.add_mutually_exclusive_group(required=True)
+    rr_alone.add_argument("--alone", action="store_true")
+    rr_alone.add_argument("--not-alone", action="store_true")
     d = sub.add_parser("ready", help="can speech keep up with sped-up audio? writes results/local/e7-readiness-*.json")
     d.add_argument("--meeting", required=True, help="a dev meeting whose first minutes are streamed")
     d.add_argument("--speedup", type=float, default=READY_SPEEDUP)
@@ -788,10 +895,12 @@ def _ready(args: argparse.Namespace) -> int:
 def _run_real(args: argparse.Namespace) -> int:
     """The real parts, as the live backend builds them. Unloads the Ollama models before returning, so the GPU
     turn can be released. A full run needs the metrics port, since its record says the obs profile was on."""
-    if args.shortest and (args.speedup != 1.0 or args.realtime_meeting or args.only_meeting):
+    rerun_only = args.cmd == "rerun-segment"
+    shortest, only_meeting = getattr(args, "shortest", None), getattr(args, "only_meeting", None)
+    if shortest and (args.speedup != 1.0 or args.realtime_meeting or only_meeting):
         print("--shortest runs in real time on its own", file=sys.stderr)
         return 2
-    if not (args.only_meeting or args.shortest) and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
+    if not (only_meeting or shortest) and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
         print("set CONTEXTLENS_METRICS_PORT (see docs/run-everything.md, Metrics) so E7 runs with the obs profile on",
               file=sys.stderr)
         return 2
@@ -812,18 +921,23 @@ def _run_real(args: argparse.Namespace) -> int:
     def make(store: InMemoryTranscriptStore, retriever: Retriever, memory: MemoryStore) -> Assistant:
         return production.TeamPerPress(store, retriever, memory, llms, production.DEADLINE_S)
 
+    shared: dict[str, Any] = dict(
+        speech=GrpcSpeech(args.speech_address), backend=backend, embedder=embedder, make_assistant=make,
+        extractor=production.MemoryExtractor(llms["memory"]), telemetry=telemetry,
+        models={"llm": production.MODEL, "embedder": "nomic-embed-text",
+                "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
+        prompt_versions={"team": production.PROMPT_VERSION}, ran_alone=args.alone, speech_address=args.speech_address,
+        gpu_peak=sampler.stop,
+        device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
+                              "llm": ollama_device(production.MODEL, _get_json)})  # fmt: skip
     try:
-        path = run_e7(
-            speech=GrpcSpeech(args.speech_address), backend=backend, embedder=embedder, make_assistant=make,
-            extractor=production.MemoryExtractor(llms["memory"]), telemetry=telemetry,
-            models={"llm": production.MODEL, "embedder": "nomic-embed-text",
-                    "speech": "whisper.cpp ggml-tiny.en", "diarizer": PyannoteBackend.MODEL},
-            prompt_versions={"team": production.PROMPT_VERSION}, rerun_of=args.rerun, changes=args.change,
-            speedup=args.speedup, realtime_meeting=args.realtime_meeting, ran_alone=args.alone,
-            only_meeting=args.only_meeting, speech_address=args.speech_address, gpu_peak=sampler.stop,
-            only_meetings=shortest_meetings(ROOT / AUDIO_REL, meetings_needed(), args.shortest) if args.shortest else None,
-            device_probe=lambda: {"pyannote": backend.device, "embeddings": ollama_device(embedder.model, _get_json),
-                                  "llm": ollama_device(production.MODEL, _get_json)})
+        if rerun_only:
+            path = rerun_segment(baseline_id=args.baseline, changes=args.change, **shared)
+        else:
+            path = run_e7(
+                rerun_of=args.rerun, changes=args.change, speedup=args.speedup, realtime_meeting=args.realtime_meeting,
+                only_meeting=only_meeting, **shared,
+                only_meetings=shortest_meetings(ROOT / AUDIO_REL, meetings_needed(), shortest) if shortest else None)
     finally:
         for model in (production.MODEL, embedder.model):
             unload_ollama(model, production.OLLAMA_URL)
