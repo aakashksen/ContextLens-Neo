@@ -31,7 +31,7 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
 SHUTDOWN_FLUSH_S = 5.0
-ASSISTANTS = ("team", "single")
+ASSISTANTS = ("team", "single", "team_shipping_changed")
 DEFAULT_ASSISTANT = "team"
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
@@ -41,7 +41,7 @@ def database_url() -> str:
 
 
 def assistant_kind() -> str:
-    """CONTEXTLENS_ASSISTANT picks the system behind the button: `team` (the default) or `single`."""
+    """CONTEXTLENS_ASSISTANT picks the system behind the button: `team` (the default), `single`, or `team_shipping_changed`."""
     kind = os.environ.get("CONTEXTLENS_ASSISTANT", DEFAULT_ASSISTANT)
     if kind not in ASSISTANTS:
         raise ValueError(f"CONTEXTLENS_ASSISTANT must be one of {ASSISTANTS}, got {kind!r}")
@@ -86,10 +86,21 @@ class _TeamPerPress:
                  deadline_s: float) -> None:  # fmt: skip
         self.store, self.retriever, self.memory, self.llms, self.deadline_s = store, retriever, memory, llms, deadline_s
 
-    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+    memory_gap_abstains = False
+
+    def team(self, req: ButtonRequest, ctx: Context) -> TeamAssistant:
         checker = PromptedChecker(self.llms["consistency"])
         tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id, checker)
-        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s).answer(req, ctx)
+        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s, memory_gap_abstains=self.memory_gap_abstains)
+
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        return self.team(req, ctx).answer(req, ctx)
+
+
+class _TeamChangedPerPress(_TeamPerPress):
+    """The arm T9.1 measures (entry 51): the team above with a card that abstains when memory looked and found nothing."""
+
+    memory_gap_abstains = True
 
 
 class _SinglePerPress(_TeamPerPress):
@@ -109,7 +120,7 @@ def build_services(
         raise ValueError(f"assistant must be one of {ASSISTANTS}, got {assistant!r}")
     retriever, memory = Retriever(store, embedder), MemoryStore()
     telemetry = telemetry or Telemetry()
-    per_press = _SinglePerPress if assistant == "single" else _TeamPerPress
+    per_press = {"single": _SinglePerPress, "team_shipping_changed": _TeamChangedPerPress}.get(assistant, _TeamPerPress)
     inner: Assistant = per_press(store, retriever, memory, llms, deadline_s)
     traced, scenes = TracedAssistant(inner, telemetry), SceneStore()
 
