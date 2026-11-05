@@ -2,7 +2,7 @@
 
 One system, one writer model, the whole dev split, and the same cases for every prompt. The system is a named setting:
 `single` (the default: E3's written rule selects it) or `retrieval_memory` (E2's choice, where the weak spots that
-motivated this experiment were seen); the record names it in `config.system`. The baseline is prompt version v1. Every
+motivated this experiment were seen), or the follow-up `team_shipping_changed`; the record names it in `config.system`. The baseline is prompt version v1. Every
 other version changes exactly one factor of it, and says which in its `factor.json` (see `declared_versions`). Nothing
 else is varied: the memory notes are built once per case and shared by all versions, and the judge is the one E2 used.
 If the team attempt later changes which system E3 selects, only the chosen prompt and v1 are rerun on that system.
@@ -27,7 +27,10 @@ from typing import Any
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import recompute_comparison, recompute_intervals
 from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, is_dirty, label_text, split_hash, write_run
+from contextlens.agents.consistency_check import PromptedChecker
+from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.single import SingleAgent
+from contextlens.agents.specialist import MAX_STEPS
 from contextlens.agents.tools import Tools
 from contextlens.experiments import e2_context as e2
 from contextlens.experiments import e3_team as e3
@@ -170,6 +173,8 @@ def pick_best(metrics: dict[str, dict[str, float | None]], comparisons: list[dic
 
 SPLIT = "dev"
 SYSTEMS = ("single", "retrieval_memory")  # what the prompt is tried on; the record names the one it ran on
+FOLLOW_UP_SYSTEM = "team_shipping_changed"  # the plan's one follow-up: v1 and the chosen version, once, on the shipping team
+ALL_SYSTEMS = (*SYSTEMS, FOLLOW_UP_SYSTEM)
 DEFAULT_SYSTEM = "single"  # E3's written rule selects it; `retrieval_memory` was E2's choice and stays selectable
 PARTIAL_REL = Path("results/partial/e6-rows.jsonl")  # git-ignored; one line per finished card
 STOP_REL = Path("results/partial/e6-stop")  # git-ignored; if it exists the run stops cleanly after the current version
@@ -177,6 +182,8 @@ CALLS_PER_CARD_WORST = {
     "retrieval_memory": 4,  # the card and its schema retry, then the suggestion and its schema retry (respond mode only)
     # one model call per step and a retry for each, then the suggestion and its retry
     "single": 2 * inspect.signature(SingleAgent).parameters["max_steps"].default + 2,
+    # two specialists and one follow-up, each up to MAX_STEPS steps with a retry per step, then the card and the suggestion with a retry each
+    FOLLOW_UP_SYSTEM: 3 * 2 * MAX_STEPS + 4,
 }
 
 
@@ -205,6 +212,10 @@ def _build_assistant(system: str, v: str, sc: Scenario, writer: LLMClient, retri
     if system == "single":
         tools = Tools(retriever.store, retriever, memory, sc.request.as_of_seq, sc.conversation.id)
         return SingleAgent(writer, tools, v, deadline_s=e2.DEADLINE_S)
+    if system == FOLLOW_UP_SYSTEM:  # team_attempt's build: a PromptedChecker on the writer and memory_gap_abstains on (entry 51)
+        tools = Tools(retriever.store, retriever, memory, sc.request.as_of_seq, sc.conversation.id, PromptedChecker(writer))
+        return TeamAssistant({"memory": writer, "consistency": writer, "assistance": writer}, tools, v,
+                             deadline_s=e2.DEADLINE_S, memory_gap_abstains=True)
     return e2.RetrievalMemoryAssistant(writer, retriever, memory, v, config=retrieval_config, deadline_s=e2.DEADLINE_S)
 
 
@@ -254,13 +265,20 @@ def _health(version: str, rows: list[Prediction]) -> tuple[dict[str, Any], str |
     return counts, None
 
 
+def _system_message(a: Any) -> str:
+    """The system message the assistant sends; the team sends one per specialist, and both carry the version's text."""
+    if isinstance(a, TeamAssistant):
+        return "\n\n".join(a._specs[n][1] for n in ("memory", "consistency"))
+    return a.system  # type: ignore[no-any-return]
+
+
 def effective_digests(system: str, versions: list[Version], sc: Scenario, writer: LLMClient, embedder: Any,
                       retrieval_config: dict[str, Any]) -> dict[str, str]:
     """What each version really sends: the registry text plus whatever the agent code adds now. Two versions that end
     up with the same system message would be one version under two labels, so that raises RunBroken."""
     probe = Retriever(InMemoryTranscriptStore(), embedder)
-    effective = {v.version: _digest(_build_assistant(system, v.version, sc, writer, probe, MemoryStore(),
-                                                      retrieval_config).system)  # type: ignore[attr-defined]
+    effective = {v.version: _digest(_system_message(_build_assistant(system, v.version, sc, writer, probe, MemoryStore(),
+                                                                     retrieval_config)))
                  for v in versions}
     if len(set(effective.values())) != len(effective):
         raise e2.RunBroken("two prompt versions send the same system message to the model")
@@ -356,8 +374,8 @@ def _run(root: Path, system: str, writer: LLMClient, judge_llm: LLMClient, embed
          retrieval_config: dict[str, Any], gpu_mb: Callable[[], int | None], say: Callable[[str], None],
          only: tuple[str, ...] | None = None, generate_only: bool = False) -> dict[str, Any]:
     started = datetime.now(timezone.utc).isoformat()
-    if system not in SYSTEMS:
-        raise e2.RunBroken(f"unknown system {system!r}; expected one of {SYSTEMS}")
+    if system not in ALL_SYSTEMS:
+        raise e2.RunBroken(f"unknown system {system!r}; expected one of {ALL_SYSTEMS}")
     if is_dirty(root):
         raise e2.RunBroken("the working tree has uncommitted changes; commit first, or the record cannot be written")
     if system == "retrieval_memory" and (retrieval_config.get("rerank") or retrieval_config.get("chunk_turns", 1) != 1):
@@ -486,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
     from contextlens.llm.client import Embedder, OllamaClient
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--system", choices=SYSTEMS, default=DEFAULT_SYSTEM, help="what the prompt versions run on")
+    ap.add_argument("--system", choices=ALL_SYSTEMS, default=DEFAULT_SYSTEM, help="what the prompt versions run on")
     ap.add_argument("--versions", nargs="+", help="run only these, in RUN_ORDER; the record lists the rest as not run")
     ap.add_argument("--generate-only", action="store_true", help="write and save every card, then stop before judging")
     args = ap.parse_args(argv)
