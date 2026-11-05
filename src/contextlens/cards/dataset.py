@@ -27,6 +27,7 @@ import json
 import random
 import re
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -249,8 +250,14 @@ def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> Non
 
 
 def _cap_train(by_file: dict[str, dict[str, list[Example]]], abstain_cap: float, cap_seed: int,
-               stats: Counter) -> None:
-    """Thin abstained train examples over the combined train examples of every source; val is not touched."""
+               stats: Counter, fits: Callable[[Example], bool] | None = None) -> None:
+    """Thin abstained train examples over the combined train examples of every source; val is not touched. With `fits`,
+    train examples it rejects (too long to train on) are removed first, so the cap applies to the set that trains."""
+    if fits is not None:
+        for by_split in by_file.values():
+            kept = [e for e in by_split["train"] if fits(e)]
+            stats["train_dropped_too_long"] += len(by_split["train"]) - len(kept)
+            by_split["train"] = kept
     train = [e for by_split in by_file.values() for e in by_split["train"]]
     kept = {e.id for e in cap_abstained(train, abstain_cap, cap_seed, stats)}
     for by_split in by_file.values():
@@ -270,7 +277,7 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
                    out_dir: Path | None = None, train_scenarios: Path | None = None,
                    held_out_dir: Path = SCENARIOS_DIR, stats: Counter | None = None,
                    abstain_cap: float | None = None, cap_seed: int = 0,
-                   convert_consistent: bool = False) -> dict[str, int]:
+                   convert_consistent: bool = False, fits: Callable[[Example], bool] | None = None) -> dict[str, int]:
     """Examples from QMSum conversations in the manifest's `train` split, divided by conversation into train and val.
     With `train_scenarios` (a directory holding `train.jsonl`), examples from that invented set are added too, after
     it is checked against the dev and test scenarios in `held_out_dir`. Returns counts per split; writes
@@ -279,7 +286,8 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
     `scenario_set_absent` = 1. With `abstain_cap` (e.g. 0.25), abstained train examples (all sources together, never val)
     are thinned by `cap_abstained` with `cap_seed`, and `stats` gets the `train_*` final size, class, source and
     synthetic-share entries. With `convert_consistent`, a `consistent` scenario with two gold turns becomes an answered
-    clarify card saying the statements agree (counted as `converted_consistent`); without it such scenarios are dropped."""
+    clarify card saying the statements agree (counted as `converted_consistent`); without it such scenarios are dropped.
+    With `fits` (and `abstain_cap`), train examples it rejects are dropped before the cap (`train_dropped_too_long`)."""
     stats = stats if stats is not None else Counter()
     splits = json.loads((splits_dir / "qmsum.json").read_text(encoding="utf-8"))["splits"]
     allowed = set(splits["train"])
@@ -303,7 +311,7 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
                 by_split[split].append(ex)
         by_file["qmsum" if source == "qmsum" else "scenarios"] = by_split
     if abstain_cap is not None:
-        _cap_train(by_file, abstain_cap, cap_seed, stats)
+        _cap_train(by_file, abstain_cap, cap_seed, stats, fits)
     if out_dir is not None:
         _write_examples(out_dir, by_file)
     return {split: sum(len(v[split]) for v in by_file.values()) for split in ("train", "val")}

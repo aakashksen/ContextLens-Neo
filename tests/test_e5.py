@@ -88,6 +88,26 @@ def test_max_gold_is_12_and_a_card_cites_every_gold_turn_or_the_example_is_dropp
     assert stats["dropped_answer_not_citable"] == 1
 
 
+def test_the_abstain_cap_is_applied_after_the_length_filter() -> None:
+    def ex(i: str, status: str) -> ds.Example:
+        card = (Card(mode="recall", status="abstained", findings=[], missing=["q"]) if status == "abstained" else
+                Card(mode="recall", status="answered", findings=[Finding(
+                    agent="a", kind="recall", statement="s", confidence=1.0,
+                    evidence=[EvidenceRef(turn_id="c:t0", quote="q", speaker="A", start_ms=0)])]))
+        return ds.Example(id=i, source="qmsum", split="train", conversation_id=i, messages=[], completion=card.model_dump_json())
+
+    answered = [ex(f"a{i}", "answered") for i in range(8)] + [ex(f"long{i}", "answered") for i in range(4)]
+    abstained = [ex(f"x{i}", "abstained") for i in range(4)]
+    by_file = {"qmsum": {"train": [*answered, *abstained], "val": []}}
+    stats: Counter = Counter()
+    ds._cap_train(by_file, 0.25, 13, stats, fits=lambda e: not e.id.startswith("long"))
+    kept = by_file["qmsum"]["train"]
+    assert not any(e.id.startswith("long") for e in kept) and stats["train_dropped_too_long"] == 4
+    n_abs = sum(e.id.startswith("x") for e in kept)
+    assert len(kept) == 8 + n_abs and n_abs / len(kept) <= 0.25 and n_abs == 2  # 8 answered fit, so 2 of 10 may abstain
+    assert stats["train_final_size"] == len(kept)
+
+
 def test_training_summary_reports_mix_and_flags_a_small_set() -> None:
     st = Counter({"train_final_size": 120, "train_class_answered": 90, "train_class_abstained": 30, "train_source_qmsum": 100,
                   "train_source_scenarios_train": 20, "train_synthetic_share": 20 / 120, "converted_consistent": 5})

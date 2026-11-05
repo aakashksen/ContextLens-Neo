@@ -85,21 +85,21 @@ MAX_GOLD_CHOICE = {
     "rule": "the smallest value reaching 300 usable examples that fits the 7 GB cap; if none reaches 300, the highest tested "
             "that fits. The honesty rule is unchanged: a card cites every gold turn, an example with more gold turns than "
             "MAX_GOLD is dropped, never shortened. 25% abstained cap, seed 13, no new invented data.",
-    "measured_on_cpu": {  # usable = fits MAX_LEN 2048 tokens (Qwen3.5-4B tokenizer); synthetic share and abstained share of usable
+    "measured_on_cpu": {  # examples over MAX_LEN 2048 tokens (Qwen3.5-4B tokenizer) are removed BEFORE the 25% abstained cap, so these are the set that trains
         "4": {"built": 128, "usable": 128, "qmsum": 69, "invented": 59, "synthetic_share": 0.461, "abstained_share": 0.25,
               "longest_tokens": 1601, "mean_tokens": 638},
         "6": {"built": 144, "usable": 144, "qmsum": 85, "invented": 59, "synthetic_share": 0.410, "abstained_share": 0.25,
               "longest_tokens": 1939, "mean_tokens": 729},
-        "8": {"built": 177, "usable": 173, "qmsum": 113, "invented": 60, "synthetic_share": 0.347, "abstained_share": 0.254,
-              "longest_tokens": 2225, "mean_tokens": 862},
-        "12": {"built": 237, "usable": 218, "qmsum": 157, "invented": 61, "synthetic_share": 0.280, "abstained_share": 0.271,
-               "longest_tokens": 3112, "mean_tokens": 1068},
+        "8": {"built": 172, "usable": 172, "qmsum": 112, "invented": 60, "synthetic_share": 0.349, "abstained_share": 0.25,
+              "longest_tokens": 1965, "mean_tokens": 831},
+        "12": {"built": 212, "usable": 212, "qmsum": 152, "invented": 60, "synthetic_share": 0.283, "abstained_share": 0.25,
+               "longest_tokens": 1965, "mean_tokens": 952},
     },
     "citation_limit_in_schema": "none: Finding.evidence is an unbounded list",
-    "estimate_not_measured": "Time per step grows about with tokens per batch, so about 1.7x the 4-gold set's mean (1068 against 638). "
+    "estimate_not_measured": "Time per step grows about with tokens per batch, so about 1.5x the 4-gold set's mean (952 against 638). "
                              "The largest memory item is the output logits, about vocabulary 152k x tokens x batch 2 x 4 bytes: "
-                             "2.5 GB at 2048 tokens, 3.8 GB at 3112. The 3 GB of 4-bit weights plus that is why MAX_LEN stays 2048: "
-                             "the 19 examples over it (at 12) are skipped by training, which is why usable is below built. "
+                             "2.5 GB at 2048 tokens. The 3 GB of 4-bit weights plus that is why MAX_LEN stays 2048: "
+                             "longer examples are removed before the abstained cap, so the cap applies to the set that trains. "
                              "Nothing here was run on the GPU; the first training step over 7 GB stops the run.",
     "reached_300": False,
     "note": "No value reaches 300. The probe trains on the first rows, not the longest, so its peak memory may understate the run's.",
@@ -124,6 +124,7 @@ def training_summary(stats: Counter) -> dict[str, Any]:
         "synthetic_share": stats["train_synthetic_share"],
         "converted_consistent": stats["converted_consistent"],
         "abstained_dropped_by_cap": stats["train_abstained_dropped_by_cap"],
+        "dropped_too_long": stats["train_dropped_too_long"],
         "dropped": {k: v for k, v in stats.items() if k.startswith("dropped_")},
         "built_before_cap_and_split_by_source_mode_status": built,
         "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
@@ -135,10 +136,16 @@ def build_training(root: Path, cards_dir: Path) -> dict[str, Any]:
     """QMSum train plus the invented train-only set, consistent cases made into clarify cards, 25% abstained cap."""
     if not (root / "datasets/scenarios_train/train.jsonl").is_file():
         raise RuntimeError("the invented train-only set (datasets/scenarios_train) does not exist; E5 needs it")
+    from transformers import AutoTokenizer
+
+    from contextlens.cards.train_lora import tokenize_example
+
+    tok = AutoTokenizer.from_pretrained(BASE_MODEL)  # the tokenizer only, no model
     stats: Counter = Counter()
     build_examples(raw_root=root / "datasets/raw", splits_dir=root / "datasets/splits", out_dir=cards_dir,
                    train_scenarios=root / "datasets/scenarios_train", held_out_dir=root / "datasets/scenarios",
-                   stats=stats, abstain_cap=ABSTAIN_CAP, cap_seed=CAP_SEED, convert_consistent=True)
+                   stats=stats, abstain_cap=ABSTAIN_CAP, cap_seed=CAP_SEED, convert_consistent=True,
+                   fits=lambda e: tokenize_example(tok, e, MAX_LEN) is not None)
     return training_summary(stats)
 
 
