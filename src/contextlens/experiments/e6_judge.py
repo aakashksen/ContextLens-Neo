@@ -73,6 +73,24 @@ def card_code_changed(root: Path, commit: str) -> list[str]:
     return [ln for ln in out.stdout.splitlines() if ln.strip()]
 
 
+def all_saved_rows(path: Path, commit: str, system: str, ids: set[str]) -> dict[str, dict[str, Prediction]]:
+    """Every saved row of this commit and system by version and case, broken ones included, the last line of a case winning.
+    A run that was not interrupted keeps a broken row and `_health` counts it; dropping it here would flatter the version.
+    `e6._saved_rows`, which drops broken rows so a resume retries them, is unchanged."""
+    have: dict[str, dict[str, Prediction]] = {}
+    if not path.exists():
+        return have
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            e = json.loads(line)
+            row = Prediction.model_validate(e["row"])
+            if (e["commit"], e["system"]) == (commit, system) and row.scenario_id in ids:
+                have.setdefault(e["version"], {})[row.scenario_id] = row
+        except (ValueError, KeyError, TypeError):
+            continue
+    return have
+
+
 def claim_id(system: str, version: str, scenario_id: str, i: int) -> str:
     return f"{system}/{version}/{scenario_id}/{i}"
 
@@ -146,7 +164,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, system: str = e6.DEFAULT_S
         raise Refused("the dev scenario file does not match its manifest")
     scenarios = load_scenarios(e6.SPLIT, root / SCENARIO_SOURCES[e2.SCENARIO_SOURCE][1])
     ids = [s.id for s in scenarios]
-    saved = e6._saved_rows(rows_path, commit, system, set(ids))
+    saved = all_saved_rows(rows_path, commit, system, set(ids))
     versions = [v for v in e6.declared_versions() if v.version in saved]
     if not versions or versions[0].version != e6.BASELINE:
         raise Refused(f"{rows_path} holds no saved cards of {e6.BASELINE} for commit {commit[:12]} on {system}")

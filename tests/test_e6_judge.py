@@ -216,3 +216,39 @@ def test_the_shipping_team_follow_up_builds_and_its_saved_cards_are_judged(
     assert check("E6", root=repo, min_n=len(_cases()), split="dev") == []
     with pytest.raises(e6.e2.RunBroken, match="unknown system"):
         _go(repo, system="team")
+
+
+def _mark_broken(path: Path, version: str, case: str) -> dict:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for n, ln in enumerate(lines):
+        e = json.loads(ln)
+        if e["version"] == version and e["row"]["scenario_id"] == case:
+            e["row"]["errored"] = True
+            e["row"]["card"] = {"mode": "recall", "status": "abstained", "findings": [], "missing": ["model call failed: boom"]}
+            lines[n] = json.dumps(e)
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return e
+    raise AssertionError("row not found")
+
+
+def test_a_broken_saved_row_is_kept_counted_and_not_retried(generated, tmp_path: Path) -> None:
+    repo, commit = generated
+    path = repo / e6.PARTIAL_REL
+    _mark_broken(path, "v6", "r0")
+    assert "r0" not in e6._saved_rows(path, commit, "single", {s.id for s in _cases()})["v6"]  # a resume still retries it
+    rec = json.loads(_judge(repo, commit, tmp_path)["record"].read_text(encoding="utf-8"))
+    assert rec["config"]["health"]["v6"]["broken"] == 1 and rec["config"]["health"]["v6"]["n"] == len(_cases())
+    assert rec["n"] == len(_cases()) and check("E6", root=repo, min_n=len(_cases()), split="dev") == []
+
+
+def test_the_last_saved_row_of_a_case_is_the_one_judged(generated, tmp_path: Path) -> None:
+    repo, commit = generated
+    path = repo / e6.PARTIAL_REL
+    ok_line = path.read_text(encoding="utf-8").splitlines()
+    first = _mark_broken(path, "v6", "r0")
+    good = next(json.loads(ln) for ln in ok_line if json.loads(ln)["version"] == "v6" and json.loads(ln)["row"]["scenario_id"] == "r0")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(good) + "\n")  # a retry saved after the broken one
+    assert first["row"]["errored"]
+    rec = json.loads(_judge(repo, commit, tmp_path)["record"].read_text(encoding="utf-8"))
+    assert rec["config"]["health"]["v6"]["broken"] == 0
