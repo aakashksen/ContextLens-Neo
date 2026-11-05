@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import errno
 import json
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import requests
 
 from contextlens.cards.dataset import CARDS_DIR, Example, load_examples
+from contextlens.train_guard import require_finite
 
 if TYPE_CHECKING:
     import torch
@@ -87,10 +89,10 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
         batch = collate([rows[(step * batch_size + k) % len(rows)] for k in range(batch_size)], tok.pad_token_id)
         batch = {k: v.to(model.device) for k, v in batch.items()}
         loss = model(**batch).loss
+        losses.append(require_finite(loss.item(), f"step {step}"))  # before backward: a bad loss never updates the weights
         loss.backward()
         opt.step()
         opt.zero_grad()
-        losses.append(loss.item())
         if vram_limit_gb is not None:
             check_vram(vram_limit_gb)
     return losses
@@ -107,7 +109,8 @@ def _load_4bit(model_id: str) -> Any:
     return prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
 
-def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARDS_DIR) -> dict[str, Any]:
+def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARDS_DIR,
+          include_scenarios: bool = False) -> dict[str, Any]:
     """Needs a GPU turn. Tries PRIMARY; if loading or PEFT fails with an architecture error (see
     is_architecture_error), uses FALLBACK and records the exact error in train_meta.json; any other failure is
     raised. Exceeding the VRAM limit raises at the first step over it: the model class is not changed silently."""
@@ -116,6 +119,7 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
     import torch
 
     base, reason = PRIMARY, None
+    t0 = time.perf_counter()
     try:
         model = attach_lora(_load_4bit(base))
     except Exception as e:
@@ -125,12 +129,15 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
         torch.cuda.empty_cache()
         model = attach_lora(_load_4bit(base))
     tok = AutoTokenizer.from_pretrained(base)
-    losses = run_steps(model, tok, load_examples("train", cards_dir), max_len, steps,
+    t1 = time.perf_counter()
+    losses = run_steps(model, tok, load_examples("train", cards_dir, include_scenarios), max_len, steps,
                        vram_limit_gb=VRAM_LIMIT_GB)
+    t2 = time.perf_counter()
     peak_gb = check_vram()
     out_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out_dir)
     meta = {"base_model": base, "fallback_used": base == FALLBACK, "fallback_reason": reason,
-            "peak_vram_gb": round(peak_gb, 3), "steps": steps, "final_loss": losses[-1]}
+            "peak_vram_gb": round(peak_gb, 3), "steps": steps, "final_loss": losses[-1], "losses": losses,
+            "load_s": round(t1 - t0, 2), "train_s": round(t2 - t1, 2)}
     (out_dir / "train_meta.json").write_text(json.dumps(meta, indent=1) + "\n", encoding="utf-8")
     return meta

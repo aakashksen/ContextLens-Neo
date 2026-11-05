@@ -475,6 +475,9 @@ class SingleAgent:
 class _OneShot:
     """A baseline: pick turns by a fixed rule, ask once, guard. `max_tokens` bounds the transcript text shown."""
 
+    reply_tokens = 700
+    call_timeout_s = 10.0
+
     def __init__(
         self, llm: LLMClient, prompt_version: str, max_tokens: int = 3000, deadline_s: float = 8.0
     ) -> None:
@@ -492,6 +495,12 @@ class _OneShot:
         """Extra data appended to the user message, already escaped; none by default."""
         return ""
 
+    def _messages(self, turns: list[Turn], req: ButtonRequest, ctx: Context) -> list[dict]:
+        return [
+            {"role": "system", "content": self.system},
+            {"role": "user", "content": _user_message(turns, req) + self._note(req, ctx)},
+        ]
+
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         start = time.perf_counter()
         end = start + self.deadline_s
@@ -504,13 +513,10 @@ class _OneShot:
             return _abstained(f"store failed: {type(exc).__name__}")
         if not turns:
             return _abstained("the conversation has no turns yet")
-        messages = [
-            {"role": "system", "content": self.system},
-            {"role": "user", "content": _user_message(turns, req) + self._note(req, ctx)},
-        ]
+        messages = self._messages(turns, req, ctx)
         remaining = end - time.perf_counter()
         call = functools.partial(
-            self.llm.complete, messages, schema=Card, max_tokens=700, timeout_s=min(10.0, max(remaining, 0.0))
+            self.llm.complete, messages, schema=Card, max_tokens=self.reply_tokens, timeout_s=min(self.call_timeout_s, max(remaining, 0.0))
         )
         t0 = time.perf_counter()
         card: Card | None = None
