@@ -56,8 +56,11 @@ class HFClient(_Base):
                                                enable_thinking=False)
         ids = self._tok(prompt, return_tensors="pt", add_special_tokens=False).to(self._model.device)
         sample = {"do_sample": True, "temperature": temperature} if temperature > 0 else {"do_sample": False}
+        self._model.eval()
+        if getattr(self._model, "is_gradient_checkpointing", False):  # a training setting must not leak into generation
+            self._model.gradient_checkpointing_disable()
         with torch.no_grad():
-            out = self._model.generate(**ids, max_new_tokens=max_tokens, max_time=timeout_s,
+            out = self._model.generate(**ids, max_new_tokens=max_tokens, max_time=timeout_s, use_cache=True,
                                        pad_token_id=self._tok.pad_token_id, **sample)
         new = out[0][ids["input_ids"].shape[1]:]
         return self._tok.decode(new, skip_special_tokens=True), int(ids["input_ids"].shape[1]), int(new.shape[0])

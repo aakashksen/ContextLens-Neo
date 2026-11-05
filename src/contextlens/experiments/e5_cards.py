@@ -2,7 +2,10 @@
 
 Stages (each its own command; only `--probe`, `--train` and `--write` hold the GPU):
   --make-subset                     CPU: fix the QMSum dev subset (ids only) before anything runs.
-  --probe --prompt-version V        GPU: a short timed run of HFClient and of training; prints the projected time.
+  --make-fallback-subset            CPU: fix the fallback subset (60 scenarios, 50 QMSum; ids only) before any card is written.
+  --speed-check --prompt-version V  GPU: 3 base-side cards; prints seconds per card and tokens per second.
+  (--write and --judge take --fallback to use that subset; the default is all 248 cases.)
+  --probe --prompt-version V       GPU: a short timed run of HFClient and of training; prints the projected time.
   --train [--small-ok]              GPU: build the training set, train, save the adapter under models/, hash it.
   --write --prompt-version V        GPU: write the dev cards, base model with prompt V, then the adapter. Judges nothing.
   --judge --prompt-version V        no GPU: Haiku through `claude -p` judges every claim, one per call; then the record.
@@ -52,7 +55,15 @@ PARTIAL_REL = Path("results/partial/e5")  # git-ignored
 QMSUM_SUBSET, QMSUM_N, SUBSET_SEED = "e5-qmsum-100", 100, "e5-v1"
 ABSTAIN_CAP, CAP_SEED, MIN_EXAMPLES = 0.25, 13, 300
 EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 1408, 4, 3
-DEADLINE_S, REPLY_TOKENS = 300.0, 700  # a local 4-bit model is slow; both sides get the same generous limits
+# A local 4-bit model is slow; both sides get the same generous limits. 800 new tokens: the longest of the 212 training
+# cards is 788 tokens and one cut short is invalid JSON, which costs a retry; the probe's replies were 200 to 350 tokens.
+DEADLINE_S, REPLY_TOKENS = 300.0, 800
+FALLBACK = "e5-fallback"
+FALLBACK_SEED, FALLBACK_SCENARIOS, FALLBACK_QMSUM = "e5-fallback-v1", 60, 50
+FALLBACK_REASON = ("Card writing measured 70 s per card on the probe (about 4 tokens per second, reference linear attention "
+                   "on Windows), so the full run of 248 cases on two sides is about 9.7 h of GPU time. The coordinator decided "
+                   "on a smaller fixed subset, chosen by seed before any card was written: 60 invented dev scenarios and 50 "
+                   "QMSum dev cases. The default stays all 248.")
 MODES = ("recall", "clarify", "respond")
 HEADLINE = ("grounded_rate", "unsupported_claim_rate", "schema_valid_rate", "abstain_when_insufficient",
             "answer_when_answerable")
@@ -260,10 +271,12 @@ class RecordingHF(HFClient):
     def __init__(self, *a: Any, **kw: Any) -> None:
         super().__init__(*a, **kw)
         self.raws: list[str] = []
+        self.gen: list[tuple[int, float]] = []  # (new tokens, seconds) of every generation
 
     def _raw(self, *a: Any, **kw: Any):
         res = super()._raw(*a, **kw)
         self.raws.append(res.text)
+        self.gen.append((res.completion_tokens, res.latency_ms / 1000))
         return res
 
 
@@ -298,8 +311,8 @@ def _read_rows(path: Path) -> list[Prediction]:
     return out
 
 
-def run_dir(root: Path, prompt_version: str, adapter_sha: str) -> Path:
-    return root / PARTIAL_REL / f"{prompt_version}-{adapter_sha[:12]}"
+def run_dir(root: Path, prompt_version: str, adapter_sha: str, fallback: bool = False) -> Path:
+    return root / PARTIAL_REL / f"{prompt_version}-{adapter_sha[:12]}{'-fallback' if fallback else ''}"
 
 
 def eval_scenarios(root: Path) -> dict[str, list[Scenario]]:
@@ -320,13 +333,59 @@ def make_subset(root: Path) -> Path:
     return path
 
 
-def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = print) -> Path:
+def make_fallback_subset(root: Path) -> Path:
+    """Fix the fallback subset (ids only) before any card is written: 60 of the dev scenarios, 50 of the 100 QMSum cases."""
+    sets = eval_scenarios(root)
+    manifest = {"name": FALLBACK, "split": SPLIT, "seed": FALLBACK_SEED,
+                "scenarios": choose_subset(sets["scenarios"], FALLBACK_SCENARIOS, FALLBACK_SEED),
+                "qmsum": choose_subset(sets["qmsum"], FALLBACK_QMSUM, FALLBACK_SEED),
+                "rule": "proportional by (category, origin), hash order with the seed; the QMSum ids are drawn from e5-qmsum-100",
+                "reason": FALLBACK_REASON}
+    path = root / "datasets/splits/subsets" / f"{FALLBACK}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(path, json.dumps(manifest, indent=1) + "\n")
+    return path
+
+
+def fallback_sets(root: Path, sets: dict[str, list[Scenario]]) -> tuple[dict[str, list[Scenario]], dict[str, Any]]:
+    m = json.loads((root / "datasets/splits/subsets" / f"{FALLBACK}.json").read_text(encoding="utf-8"))
+    keep = {"scenarios": set(m["scenarios"]), "qmsum": set(m["qmsum"])}
+    out = {k: [s for s in v if s.id in keep[k]] for k, v in sets.items()}
+    info = {"name": m["name"], "seed": m["seed"], "n": {k: len(v) for k, v in out.items()}, "rule": m.get("rule"),
+            "reason": m["reason"], "full_run_cases": {k: len(v) for k, v in sets.items()}}
+    return out, info
+
+
+def run_speed_check(root: Path, prompt_version: str, say: Callable[[str], None] = print) -> dict[str, float]:
+    """GPU: load the base model and write 3 cards (no adapter, no training). Prints seconds per card and tokens per second."""
+    from contextlens.llm.client import unload_ollama
+
+    scs = eval_scenarios(root)["scenarios"][:3]
+    selection = select_evidence(scs, Embedder(EMBED_MODEL), load_retrieval_config())
+    unload_ollama(EMBED_MODEL)
+    client = RecordingHF(BASE_MODEL)
+    try:
+        client.load()
+        rows = write_side("prompted", scs, client, selection, prompt_version, root / PARTIAL_REL / "speed.rows.jsonl", say)
+    finally:
+        client.unload()
+    tokens, gen_s = sum(t for t, _ in client.gen), sum(s for _, s in client.gen)
+    out = {"cards": len(rows), "tokens": tokens,
+           "s_per_card": sum(p.stage_latency_ms.get("total", 0) for p in rows) / len(rows) / 1000,
+           "tokens_per_s": tokens / gen_s if gen_s else 0.0}
+    say(f"speed: {out['s_per_card']:.1f} s per card, {out['tokens_per_s']:.1f} tokens per second ({tokens} tokens, {len(rows)} cards)")
+    return out
+
+
+def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = print, *, fallback: bool = False) -> Path:
     from contextlens.llm.client import unload_ollama
 
     info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
     base = info["train_meta"]["base_model"]
-    folder = run_dir(root, prompt_version, info["adapter_hash"])
+    folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)
+    if fallback:
+        sets, _ = fallback_sets(root, sets)
     config = load_retrieval_config()
     sel_path = folder / "selection.json"
     if sel_path.is_file():
@@ -474,14 +533,17 @@ def build_record(*, root: Path, scenarios: list[Scenario], dataset_hash: str, pr
 # ---------------------------------------------------------------- judging
 
 def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = print, *, llm: Any = None,
-              guard: Any = None, concurrency: int | None = None) -> Path:
+              guard: Any = None, concurrency: int | None = None, fallback: bool = False) -> Path:
     from contextlens.experiments import parallel_grader as pg
     from contextlens.experiments.judge_check import preflight
     from contextlens.llm.client import CLAUDE_CALL_CAP, CLAUDE_CALLS_PATH
 
     info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
-    folder = run_dir(root, prompt_version, info["adapter_hash"])
+    folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)
+    subset = None
+    if fallback:
+        sets, subset = fallback_sets(root, sets)
     own = sets["scenarios"]
     def rows_of(source: str, scs: list[Scenario]) -> dict[str, list[Prediction]]:
         return {side: _complete_rows(scs, _read_rows(folder / f"{side}.{source}.rows.jsonl"), side) for side in ("prompted", "adapter")}
@@ -510,7 +572,7 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     qmsum = qmsum_figures(sets["qmsum"], judged["qmsum"])
     models = {"writer": BASE_MODEL, "adapter": ADAPTER_REL.as_posix(), "judge": llm.model, "embedder": EMBED_MODEL}
     return build_record(root=root, scenarios=own, dataset_hash=dhash, preds=judged["scenarios"],
-                        extra_config={"claude_calls": getattr(llm, "calls_made", 0) - before}, models=models,
+                        extra_config={"claude_calls": getattr(llm, "calls_made", 0) - before, **({"subset": subset} if subset else {})}, models=models,
                         prompt_version=prompt_version, training=info, qmsum=qmsum)
 
 
@@ -545,23 +607,28 @@ def qmsum_figures(scs: list[Scenario], rows: dict[str, list[Prediction]]) -> dic
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     stage = ap.add_mutually_exclusive_group(required=True)
-    for flag in ("make-subset", "probe", "train", "write", "judge"):
+    for flag in ("make-subset", "make-fallback-subset", "speed-check", "probe", "train", "write", "judge"):
         stage.add_argument(f"--{flag}", action="store_true")
+    ap.add_argument("--fallback", action="store_true", help="write or judge only the fallback subset (60 scenarios, 50 QMSum)")
     ap.add_argument("--prompt-version", help="the best E6 prompt version; required by probe, write and judge")
     ap.add_argument("--small-ok", action="store_true", help="train even though the set is under 300 examples")
     a = ap.parse_args(argv)
-    if (a.probe or a.write or a.judge) and not a.prompt_version:
+    if (a.probe or a.write or a.judge or a.speed_check) and not a.prompt_version:
         ap.error("--prompt-version is required")
     if a.make_subset:
         print(make_subset(ROOT))
+    elif a.make_fallback_subset:
+        print(make_fallback_subset(ROOT))
+    elif a.speed_check:
+        run_speed_check(ROOT, a.prompt_version)
     elif a.probe:
         run_probe(ROOT, a.prompt_version)
     elif a.train:
         run_train(data_root(), small_ok=a.small_ok)
     elif a.write:
-        print(run_write(ROOT, a.prompt_version))
+        print(run_write(ROOT, a.prompt_version, fallback=a.fallback))
     else:
-        print(run_judge(ROOT, a.prompt_version))
+        print(run_judge(ROOT, a.prompt_version, fallback=a.fallback))
     return 0
 
 

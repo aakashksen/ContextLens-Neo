@@ -389,3 +389,114 @@ def test_judge_refuses_when_cards_are_missing(repo: Path, tmp_path: Path, monkey
     monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": load_scenarios("dev", repo / "datasets/scenarios"), "qmsum": []})
     with pytest.raises(RuntimeError, match="run --write first"):
         e5.run_judge(repo, "v1", say=lambda *_: None, llm=FakeHaiku(1), guard=SimpleNamespace(start=lambda: 0.0, check=lambda: None))
+
+
+# ---- the fallback subset, the speed check, and the generation settings ----
+
+def _many(prefix: str, n: int) -> list[Scenario]:
+    return [_sc(f"{prefix}{i}", ["contradiction", "consistent", None][i % 3], question="q?" if i % 3 == 2 else None,
+                gold=[0, 1] if i % 3 != 2 else None) for i in range(n)]
+
+
+def test_fallback_manifest_is_seeded_ids_only_and_inside_the_dev_sets(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    own, q100 = _many("d", 148), _many("q", 100)
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": own, "qmsum": q100})
+    path = e5.make_fallback_subset(repo)
+    m = json.loads(path.read_text(encoding="utf-8"))
+    assert len(m["scenarios"]) == 60 and len(m["qmsum"]) == 50
+    assert set(m["scenarios"]) <= {s.id for s in own} and set(m["qmsum"]) <= {s.id for s in q100}
+    assert m["seed"] and "70 s per card" in m["reason"] and "9.7 h" in m["reason"] and "coordinator" in m["reason"]
+    assert "text" not in json.dumps(m).replace("context", "")  # ids and the reason only
+    first = path.read_text(encoding="utf-8")
+    assert e5.make_fallback_subset(repo).read_text(encoding="utf-8") == first  # same seed, same ids
+
+
+def test_fallback_write_covers_only_the_manifest_and_the_record_says_why(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import contextlens.experiments.judge_check as jc
+    import contextlens.llm.client as client_mod
+    from contextlens.data.scenarios import load_scenarios
+
+    shared = tmp_path / "shared"
+    adapter = _adapter(shared / "models/e5-adapter")
+    (adapter / "e5_training.json").write_text(json.dumps(_training(adapter)), encoding="utf-8")
+    own = load_scenarios("dev", repo / "datasets/scenarios")
+    qm = [_sc("q1", None, question="When?", gold=[1]), _sc("q2", "contradiction", gold=[0, 2])]
+    man = repo / "datasets/splits/subsets" / "e5-fallback.json"
+    man.parent.mkdir(parents=True, exist_ok=True)
+    keep_own = [s.id for s in own][:3]
+    man.write_text(json.dumps({"name": "e5-fallback", "seed": "x", "scenarios": keep_own, "qmsum": ["q1"],
+                               "reason": "70 s per card"}), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "subset")
+    FakeHF.log, FakeHF.generated = [], 0
+    FakeHF.turns = {t.id: t for s in [*own, *qm] for t in s.conversation.turns}
+    monkeypatch.setattr(e5, "data_root", lambda: shared)
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": own, "qmsum": qm})
+    monkeypatch.setattr(e5, "RecordingHF", FakeHF)
+    monkeypatch.setattr(e5, "select_evidence",
+                        lambda scs, emb, cfg: {s.id: [(s.conversation.turns[1].id, 0.5), (s.conversation.turns[2].id, 0.4)] for s in scs})
+    monkeypatch.setattr(client_mod, "unload_ollama", lambda *a, **k: None)
+    monkeypatch.setattr(jc, "preflight", lambda *a, **k: 0)
+    folder = e5.run_write(repo, "v1", say=lambda *_: None, fallback=True)
+    assert folder.name.endswith("-fallback") and FakeHF.generated == 2 * (3 + 1)
+    series.RESAMPLES = 50
+    try:
+        path = e5.run_judge(repo, "v1", say=lambda *_: None, llm=FakeHaiku(50), fallback=True, concurrency=1,
+                            guard=SimpleNamespace(start=lambda: 0.0, check=lambda: None))
+    finally:
+        series.RESAMPLES = 10_000
+    cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
+    assert cfg["subset"]["name"] == "e5-fallback" and cfg["subset"]["n"] == {"scenarios": 3, "qmsum": 1}
+    assert "70 s per card" in cfg["subset"]["reason"] and cfg["per_source"]["scenarios"]["n"] == 3
+
+
+def test_speed_check_writes_three_base_cards_and_reports_rates(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.data.scenarios import load_scenarios
+
+    own = load_scenarios("dev", repo / "datasets/scenarios")
+    FakeHF.log, FakeHF.generated = [], 0
+    FakeHF.turns = {t.id: t for s in own for t in s.conversation.turns}
+    monkeypatch.setattr(e5, "data_root", lambda: tmp_path / "shared")
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": own, "qmsum": []})
+    monkeypatch.setattr(e5, "RecordingHF", FakeHF)
+    monkeypatch.setattr(e5, "select_evidence",
+                        lambda scs, emb, cfg: {s.id: [(s.conversation.turns[1].id, 0.5)] for s in scs})
+    import contextlens.llm.client as client_mod
+    monkeypatch.setattr(client_mod, "unload_ollama", lambda *a, **k: None)
+    lines: list[str] = []
+    out = e5.run_speed_check(repo, "v1", say=lines.append)
+    assert FakeHF.generated == 3 and FakeHF.log == [("load", None), ("unload", None)]  # base side only
+    assert out["cards"] == 3 and out["tokens"] == 15 and out["s_per_card"] >= 0 and out["tokens_per_s"] > 0
+    assert any("s per card" in x and "tokens per second" in x for x in lines)
+
+
+def test_generation_uses_the_cache_in_eval_mode_without_gradients() -> None:
+    torch = pytest.importorskip("torch")
+    seen = {}
+
+    class Tok:
+        pad_token_id = 0
+        def apply_chat_template(self, m, **kw): return "p"
+        def __call__(self, text, **kw):
+            return SimpleNamespace(to=lambda dev: {"input_ids": torch.tensor([[1, 2]])})
+        def decode(self, ids, **kw): return "x"
+
+    class Model:
+        device = "cpu"
+        training = True
+        is_gradient_checkpointing = True
+        def eval(self): self.training = False
+        def gradient_checkpointing_disable(self): self.is_gradient_checkpointing = False
+        def generate(self, **kw):
+            seen.update(kw, training=self.training, grad=torch.is_grad_enabled(), gc=self.is_gradient_checkpointing)
+            return torch.tensor([[1, 2, 3]])
+
+    client = HFClient("m")
+    client._model, client._tok = Model(), Tok()
+    client._generate([{"role": "user", "content": "x"}], 123, 0.0, 5.0)
+    assert seen["use_cache"] is True and seen["training"] is False and seen["grad"] is False and seen["gc"] is False
+    assert seen["max_new_tokens"] == 123 and seen["do_sample"] is False  # decoding settings are the caller's
+
+
+def test_card_reply_limit_fits_the_longest_training_card() -> None:
+    assert e5.REPLY_TOKENS == 800  # the longest of the 212 training cards is 788 tokens; a cut card is invalid and costs a retry
