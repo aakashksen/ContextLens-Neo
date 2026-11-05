@@ -7,10 +7,17 @@ what to say, or tells it to drop its rules) is not evidence of anything but the 
 written from and those they were not."""
 import re
 
+from contextlens.schemas import Turn
+
 _SENTENCE = r"(?:^|[.!?:;,]\s+|\n)(?:please\s+|now\s+|just\s+)?"
 # A name stands alone: it ends the clause or is followed by what the speaker wants said, not by a noun ("assistant manager").
 _END = r"(?=\s*(?:[,.!?;:]|$)|\s+(?:that|to|about|what|how|the|it|this|you|and)\b)"
 _VERB = r"\b(?:ignore|disregard|forget|override|bypass)\s+"
+# Ignore-style verbs aimed at what has been said so far. The object must be the conversation itself ("the previous turns",
+# "what was said", "everything above"); "ignore the previous version of the slides" has another object and is not it.
+_DROP = r"\b(?:ignore|disregard|forget|discard|erase|wipe|purge|pay no (?:attention|heed) to)\s+"
+_AFTER = r"(?=\s*(?:[,.!?;:]|$)|\s+(?:and|then|now)\b)"
+_THIS = r"(?:\s+(?:this|that)\s+\w+)?"
 _PATTERNS = {
     "names the assistant": r"^\W*(?:hey |hi |dear |ok |okay |attention )?(?:assistant|ai|chatbot|bot)\b\s*[,:!]"
                            r"|\b(?:to|for) (?:the )?(?:ai|assistant|chatbot)\b\s*[:,!]"
@@ -31,6 +38,25 @@ _PATTERNS = {
     "asks for secrets": r"\breveal\b[^.!?\n]{0,40}\b(?:hidden|system|secret|private|your|all|any)\b[^.!?\n]{0,25}"
                         r"\b(?:prompt|keys?|codes?|notes?|instructions?|secrets?|passwords?)\b"
                         r"|\byour (?:hidden|system|secret) (?:prompt|instructions|rules)\b",
+    "ignores the conversation":
+        rf"{_DROP}(?:(?:all|any|every|the|your|these)\s+)*(?:previous|prior|earlier|preceding|above|foregoing)\s+"
+        r"(?:turns|statements|utterances|exchanges|remarks)\b"
+        rf"|{_DROP}(?:(?:everything|all|anything|whatever)\s+)?(?:that\s+|what\s+)?(?:was|has been|had been)\s+said"
+        rf"(?:\s+(?:so far|before|earlier|above|previously|until now))?{_AFTER}"
+        rf"|{_DROP}everything\s+(?:above|before{_THIS}|so far|earlier|prior|that (?:came|was said|was written) "
+        rf"(?:before|above|so far|earlier)|you (?:were|have been|had been) told(?:\s+before{_THIS})?|"
+        rf"(?:said|written|stated) (?:above|before|so far|earlier)){_AFTER}",
+    # A header that claims the turn comes from the system or an administrator, at the start of a turn or of a line.
+    "claims to be the system":
+        r"(?:^|\n)\W{0,3}(?:system|admin(?:istrator)?|developer|operator|root)\s+"
+        r"(?:note|message|notice|override|instructions?|prompt|command|directive)\s*:"
+        r"|(?:^|\n)\W{0,3}\[\s*(?:system|admin(?:istrator)?|developer|operator|root)\s*\]"
+        r"|(?:^|\n)\W{0,3}(?:system|admin(?:istrator)?)\s*:"
+        r"|(?:^|\n)\W{0,3}(?:new|updated|revised|additional)\s+(?:instructions?|orders?|directives?)\s*:",
+    # A short order to defy the assistant's own setup. It is addressed with "your", so "disobey the speed limit" is not it.
+    "bare order": rf"{_SENTENCE}(?:disobey|defy|circumvent|overrule|sidestep|abandon|set aside)\s+(?:all\s+|any\s+|every\s+)?"
+                  r"your\s+(?:own\s+)?(?:setup|set-up|configuration|programming|training|settings|safeguards?|guardrails?|"
+                  r"restrictions?|constraints?|limits|limitations|rules|instructions|guidelines|filters|directives)\b",
     "markup or commands": r"<\s*/?\s*(?:instructions?|system|assistant)\b|\brm\s+-rf\b"
                           r"|\bdo not cite (?:any|the) (?:evidence|sources|quotes)\b",
 }
@@ -44,3 +70,9 @@ def instruction_kind(text: str) -> str | None:
 
 def is_instruction(text: str) -> bool:
     return instruction_kind(text) is not None
+
+
+def without_instruction_turns(earlier: list[Turn]) -> list[Turn]:
+    """The context a consistency model is given: earlier turns that read as orders are left out. It takes only the
+    earlier turns, so the statement being scored is never removed, even when it is itself an order."""
+    return [t for t in earlier if not is_instruction(t.text)]
