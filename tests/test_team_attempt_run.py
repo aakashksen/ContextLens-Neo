@@ -14,6 +14,7 @@ from contextlens.data.extra_cases import SHAPES
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval import series
 from contextlens.eval.check_run import check
+from contextlens.eval.records import head_commit
 from contextlens.experiments import e2_context as e2
 from contextlens.experiments import team_attempt as ta
 from contextlens.experiments.e2_context import RunBroken
@@ -268,7 +269,41 @@ def test_an_interrupted_run_resumes_at_the_same_commit_without_redoing_saved_row
     writer = Writer()
     paths = go(repo, writer)
     seen = json.dumps(writer.calls)
-    assert len(paths) == 2 and not (repo / ta.PARTIAL_REL).exists()
+    assert len(paths) == 2 and (repo / ta.PARTIAL_REL).exists()  # entry 49: the partial rows are kept
     assert not any(f'"{sid}:' in seen or f"{sid}:t" in seen for sid in finished)  # a finished case was not run again
     assert all(f'"{sid}:' in seen or f"{sid}:t" in seen for sid in broken)  # a broken row was run again
     assert check(ta.EXPERIMENT, root=repo, min_n=100, split="dev") == []
+
+
+def test_the_arm_of_entry_51_has_the_checker_and_the_switch_and_the_other_four_are_built_as_before():
+    args = (EXTRA[0], Scripted(), HashEmbedder(), RETRIEVAL, MemoryStore())
+    built = {n: ta.make_assistant(n, *args) for n in (*ta.RUN_SYSTEMS, ta.SHIPPING_CHANGED)}
+    assert ta.SHIPPING_CHANGED == "team_shipping_changed" and ta.RUN_SYSTEMS == (*ta.SYSTEMS, "team_shipping")
+    arm = built[ta.SHIPPING_CHANGED]
+    assert isinstance(arm, TeamAssistant) and isinstance(arm.tools.checker, PromptedChecker) and arm.memory_gap_abstains is True
+    assert arm.deadline_s == built["team"].deadline_s == 8.0
+    assert arm._specs["consistency"][1:] == built["team_shipping"]._specs["consistency"][1:]  # same prompt and tools as team_shipping
+    assert isinstance(built["single"], SingleAgent) and built["single"].tools.checker is None
+    assert (built["team"].memory_gap_abstains, built["team"].tools.checker) == (False, None)
+    assert (built["team_changed"].memory_gap_abstains, built["team_changed"].tools.checker) == (True, None)
+    ship = built["team_shipping"]
+    assert (ship.memory_gap_abstains, isinstance(ship.tools.checker, PromptedChecker)) == (False, True)
+
+
+def test_finishing_a_run_keeps_the_partial_rows_and_a_later_commit_does_not_reuse_them(repo):
+    go(repo)
+    kept = [json.loads(x) for x in (repo / ta.PARTIAL_REL).read_text(encoding="utf-8").splitlines()]
+    commit = head_commit(repo)
+    assert len(kept) == (148 + 108) * len(ta.RUN_SYSTEMS) and {e["commit"] for e in kept} == {commit}
+    again = Writer()  # same commit: every row is reused, so no case is run again and no memory is built
+    assert len(go(repo, again)) == 2 and again.calls == [] and check(ta.EXPERIMENT, root=repo, min_n=100, split="dev") == []
+    assert len((repo / ta.PARTIAL_REL).read_text(encoding="utf-8").splitlines()) == len(kept)  # nothing was added or removed
+    (repo / "note.txt").write_text("a new commit", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "next")
+    later = Writer()
+    assert len(go(repo, later)) == 2 and later.calls  # the kept rows belong to the old commit
+    seen = json.dumps(later.calls)
+    assert all(f"{s.id}:" in seen for s in EXTRA[:3])
+    assert {e["commit"] for e in (json.loads(x) for x in (repo / ta.PARTIAL_REL).read_text(encoding="utf-8").splitlines())} \
+        == {commit, head_commit(repo)}

@@ -1,1 +1,3 @@
 datasets/scenarios_extra/*.jsonl -text
+tests/fixtures/guard_dev_set.jsonl -text
+datasets/guard_blind/*.jsonl -text

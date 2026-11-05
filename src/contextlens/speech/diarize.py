@@ -11,12 +11,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from contextlens.device import resolve_device
 from contextlens.schemas import Turn
 from contextlens.speech.client import Segment
 
 SAMPLE_RATE = 16000
 BYTES_PER_MS = SAMPLE_RATE * 2 // 1000
 KEEP_MS = 120_000
+PYANNOTE_NEEDS_MB = 2000  # a budget, not a measurement
 
 
 class SpeakerBackend(Protocol):
@@ -46,7 +48,7 @@ def hf_token(dotenv: Path | None = None) -> str:
 
 
 class PyannoteBackend:
-    """pyannote/speaker-diarization-3.1 on the CPU, given the audio as an in-memory waveform (nothing is written)."""
+    """pyannote/speaker-diarization-3.1 on the GPU when it has room (else the CPU, with a warning), given the audio as an in-memory waveform (nothing is written)."""
 
     MODEL = "pyannote/speaker-diarization-3.1"
 
@@ -68,6 +70,8 @@ class PyannoteBackend:
             ) from None
         if self._pipeline is None:
             raise RuntimeError("pyannote could not load its pipeline; check that the model terms were accepted")
+        self.device = resolve_device(PYANNOTE_NEEDS_MB)
+        self._pipeline.to(torch.device(self.device))
 
     def spans(self, pcm: bytes) -> list[tuple[int, int, str]]:
         torch = self._torch

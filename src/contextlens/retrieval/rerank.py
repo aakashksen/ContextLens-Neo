@@ -1,11 +1,13 @@
 import logging
 from collections.abc import Callable
 
+from contextlens.device import loaded_device, resolve_device
 from contextlens.retrieval.hybrid import ScoredTurn
 
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
+NEEDS_MB = 500  # a budget, not a measurement
 
 
 class NoReranker:
@@ -22,11 +24,12 @@ class Reranker:
         self._loader = loader or self._load_cross_encoder
         self._model: object | None = None
         self.fallback_reason: str | None = None
+        self.device = "not loaded"  # where the model actually runs, once loaded
 
     def _load_cross_encoder(self):
         from sentence_transformers import CrossEncoder
 
-        return CrossEncoder(self.model_name)
+        return CrossEncoder(self.model_name, device=resolve_device(NEEDS_MB))
 
     def rerank(self, query: str, candidates: list[ScoredTurn], k: int) -> list[ScoredTurn]:
         if not candidates:
@@ -34,6 +37,7 @@ class Reranker:
         if self._model is None and self.fallback_reason is None:
             try:
                 self._model = self._loader()
+                self.device = loaded_device(self._model)
             except Exception as e:
                 self.fallback_reason = str(e)
                 log.warning("reranker %s failed to load, keeping input order: %s", self.model_name, e)

@@ -1,0 +1,180 @@
+{
+ "run_id": "JC-20261104T175008137622Z",
+ "experiment": "JC",
+ "git_commit": "65b659041a4aac8e8e74140d4381c323e5019590",
+ "dirty": false,
+ "dataset_hash": "27febb4633b0606f64b63060dcff0b4e914f2c28e4811edd0899d8a8a91289aa",
+ "split": "dev",
+ "scenario_source": "scenarios_extra",
+ "config": {
+  "experiment": "JC",
+  "mode": "all_claims",
+  "provisional": true,
+  "commit_of_rows": "65b659041a4aac8e8e74140d4381c323e5019590",
+  "set": "new",
+  "judge": {
+   "model": "gemma4:e4b-it-qat",
+   "rubric_version": "e2-v1",
+   "same_model_and_prompt_as_writer": false
+  },
+  "cloud_grader": {
+   "model": "sonnet",
+   "role": "grades every claim of the named systems, blind to the local verdict, the writing system and the experiment"
+  },
+  "source_runs": [
+   "E3TS-20261104T173526710888Z"
+  ],
+  "systems": [
+   "team_shipping_changed"
+  ],
+  "this_record_covers": {
+   "set": "new",
+   "systems": [
+    "team_shipping_changed"
+   ]
+  },
+  "scores": {
+   "team_shipping_changed": {
+    "covers": {
+     "sets": [
+      "new"
+     ],
+     "records": [
+      "E3TS-20261104T173526710888Z"
+     ]
+    },
+    "old": null,
+    "new": {
+     "cases": 108,
+     "claims": 155,
+     "grounded_rate": 0.9548387096774194,
+     "answer_when_answerable": 1.0,
+     "abstain_when_insufficient": 0.6296296296296297,
+     "cloud_grounded_rate": 0.7935483870967742,
+     "judge_agreement": 0.8387096774193549,
+     "judge_kappa": 0.307664820439521,
+     "written_score_local": 0.7922341696535244,
+     "written_score_cloud": 0.7115890083632019
+    },
+    "both": null
+   }
+  },
+  "scores_note": "written score = mean(grounded rate, min(answer_when_answerable, abstain_when_insufficient)), as in docs/DECISIONS.md. 'local' takes the grounded rate from the local judge's verdicts and 'cloud' from the cloud grader's, on the same claims; the answer and abstain rates come from the cards and do not depend on a judge. old = the 148 dev cases of `scenarios`, new = the 108 dev cases of `scenarios_extra`, both = the two together.",
+  "coverage": {
+   "records": {
+    "E3TS-20261104T173526710888Z": {
+     "source": "scenarios_extra",
+     "set": "new",
+     "systems_graded": [
+      "team_shipping_changed"
+     ],
+     "systems_not_graded": []
+    }
+   },
+   "claims": {
+    "team_shipping_changed/new": 155
+   }
+  },
+  "claude_calls": 155,
+  "claude_calls_note": "asks made for this set's claims, one call each; the client may retry a reply that is not valid JSON, so calls used are between claude_calls and twice that. The whole run made 155 asks; the other set's record holds the rest.",
+  "shared_counter_before": 1706,
+  "shared_counter_after": 1861,
+  "started_at": "2026-11-04T17:37:48.452863+00:00",
+  "notes": [
+   "Provisional: no claim comes from this record alone.",
+   "Every claim of each named system in this set was graded; no sample was drawn.",
+   "If the cloud grader also wrote some of the graded answers, its verdicts on those may favour its own wording."
+  ]
+ },
+ "models": {
+  "judge": "gemma4:e4b-it-qat",
+  "cloud_grader": "sonnet"
+ },
+ "prompt_versions": {
+  "judge_rubric": "e2-v1"
+ },
+ "n": 108,
+ "metrics": {
+  "team_shipping_changed": {
+   "abstain_when_insufficient": 0.6296296296296297,
+   "answer_when_answerable": 1.0,
+   "grounded_rate": 0.9548387096774194,
+   "cloud_grounded_rate": 0.7935483870967742,
+   "grounded_gap": 0.16129032258064513,
+   "judge_agreement": 0.8387096774193549,
+   "judge_kappa": 0.307664820439521,
+   "gemma_yes_cloud_no": 0.16129032258064516,
+   "gemma_no_cloud_yes": 0.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.6296296296296297,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "grounded_rate[category=insufficient_evidence]": 0.851063829787234,
+   "cloud_grounded_rate[category=insufficient_evidence]": 0.6595744680851063,
+   "grounded_gap[category=insufficient_evidence]": 0.19148936170212771,
+   "judge_agreement[category=insufficient_evidence]": 0.8085106382978723,
+   "judge_kappa[category=insufficient_evidence]": 0.5064177362893816,
+   "gemma_yes_cloud_no[category=insufficient_evidence]": 0.19148936170212766,
+   "gemma_no_cloud_yes[category=insufficient_evidence]": 0.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 1.0,
+   "cloud_grounded_rate[category=recall]": 0.8518518518518519,
+   "grounded_gap[category=recall]": 0.14814814814814814,
+   "judge_agreement[category=recall]": 0.8518518518518519,
+   "judge_kappa[category=recall]": 0.0,
+   "gemma_yes_cloud_no[category=recall]": 0.14814814814814814,
+   "gemma_no_cloud_yes[category=recall]": 0.0,
+   "abstain_when_insufficient[origin=synthetic]": 0.6296296296296297,
+   "answer_when_answerable[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.9548387096774194,
+   "cloud_grounded_rate[origin=synthetic]": 0.7935483870967742,
+   "grounded_gap[origin=synthetic]": 0.16129032258064513,
+   "judge_agreement[origin=synthetic]": 0.8387096774193549,
+   "judge_kappa[origin=synthetic]": 0.307664820439521,
+   "gemma_yes_cloud_no[origin=synthetic]": 0.16129032258064516,
+   "gemma_no_cloud_yes[origin=synthetic]": 0.0
+  }
+ },
+ "intervals": {
+  "team_shipping_changed": {
+   "grounded_rate": [
+    0.9221537444591338,
+    0.984618320610687
+   ],
+   "cloud_grounded_rate": [
+    0.7151898734177216,
+    0.867141292442497
+   ],
+   "grounded_gap": [
+    0.09659090909090906,
+    0.23270440251572333
+   ],
+   "judge_agreement": [
+    0.7672955974842768,
+    0.9034090909090909
+   ],
+   "judge_kappa": [
+    0.13842786729098777,
+    0.4836486726065475
+   ]
+  }
+ },
+ "comparisons": [],
+ "supersedes": [],
+ "attempts": [
+  {
+   "setting": "cloud_grader",
+   "kind": "grading",
+   "ok": true,
+   "error": null,
+   "asks": 155
+  }
+ ],
+ "claude_calls": 155,
+ "labels_reviewed": false,
+ "label_source": "unreviewed_extra",
+ "predictions": {
+  "team_shipping_changed": "results/runs/JC-20261104T175008137622Z.team_shipping_changed.predictions.jsonl"
+ },
+ "started_at": "2026-11-04T17:37:48.452863+00:00",
+ "finished_at": "2026-11-04T17:50:08.137622+00:00"
+}

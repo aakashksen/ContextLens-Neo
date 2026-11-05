@@ -128,6 +128,12 @@ def test_build_qmsum_dev_keeps_only_dev_conversations_with_gold(tmp_path: Path) 
     assert manifest["splits"]["dev"]["ids"] == ["qmsum-val-0-q1"] and manifest["splits"]["dev"]["n"] == 1
 
 
+def test_records_state_the_device_each_model_ran_on(repo: Path) -> None:
+    e1.run_e1(root=repo, embedder=HashEmbedder(), reranker=make_reranker(), probe_devices=lambda: {"embedder": "gpu"})
+    for p in (repo / "results/runs").glob("E1-*.json"):
+        assert json.loads(p.read_text(encoding="utf-8"))["config"]["devices"] == {"reranker": "unknown", "embedder": "gpu"}
+
+
 def test_the_run_writes_valid_records_and_a_config(repo: Path) -> None:
     result = e1.run_e1(root=repo, embedder=HashEmbedder(), reranker=make_reranker())
     assert result["winner"] in e1.SYSTEMS and result["complete"]
