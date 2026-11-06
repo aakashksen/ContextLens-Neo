@@ -1,5 +1,5 @@
 """T9.1's precondition (the coordinator, 2026-11-06): `team_shipping_changed` with retrieval before the memory model call
-(the fix in `agents/specialist.py`), once, on the new dev cases (`scenarios_extra`, 108), under entry 51's rules, then
+and the specialists' sub-deadline (both from `api/production.py`'s `TEAM_SETTINGS`), once, on the new dev cases (`scenarios_extra`, 108), under entry 51's rules, then
 compared with the earlier arm's rows by one judge.
 
 Two stages. The first holds the GPU and judges nothing; the second runs after the GPU is released.
@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from contextlens.api import production
 from contextlens.eval.records import ROOT, head_commit, is_dirty, label_text, load_verified, write_run
 from contextlens.eval.row_report import row_report
 from contextlens.experiments import e2_context as e2
@@ -45,18 +46,22 @@ from contextlens.replay.runner import Prediction
 
 EXPERIMENT = "E3TP"
 SOURCE = "scenarios_extra"
-ARM = "team_shipping_changed_prefetch"
+ARM = "team_shipping_changed_prefetch_subdeadline"
 EARLIER_RECORD, EARLIER_ARM = "E3TS-20261104T173526710888Z", ta.SHIPPING_CHANGED
 PARTIAL_REL = Path("results/partial/e3tp-rows.jsonl")  # git-ignored; one line per finished row, keyed by commit
 OUT_REL = Path("results/e3tp-judge")
 SONNET = e2.CLOUD_MODEL
-CHANGE = ("retrieval before the memory model call: the memory specialist's first search is run on the question and shown to "
-          "the model as its own first tool step, so it needs one model call less. Everything else is `team_shipping_changed`.")
+CHANGE = ("both fixes of the shipped team, taken from api/production.py's constants: retrieval before the memory model call (the "
+          "memory specialist's first search is run on the question and shown to the model as its own first tool step, so it "
+          "needs one model call less) and a sub-deadline for the memory and consistency specialists' first pass, so assistance "
+          "always has the rest of the deadline. Everything else is `team_shipping_changed`.")
 
 
 def make_assistant(sc, writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any], memory: MemoryStore):
     team = ta.make_assistant(ta.SHIPPING_CHANGED, sc, writer, embedder, retrieval_config, memory)
-    team.prefetch_memory = True  # type: ignore[attr-defined]
+    team.deadline_s = production.DEADLINE_S
+    for name, value in production.TEAM_SETTINGS.items():  # fix 1 and fix 2, from the shipped team's own settings
+        setattr(team, name, value)
     return team
 
 
