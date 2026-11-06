@@ -1,6 +1,7 @@
 """The tool loop a specialist (memory or consistency) runs. It keeps its own messages and returns findings."""
 
 import functools
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -65,18 +66,43 @@ def _call_tool(tools: Tools, allowed: set[str], step: _Step) -> Any:
         return {"error": f"bad arguments: {exc}"}
 
 
+PREFETCH_K = 8
+
+
+def _prefetched_search(tools: Tools, question: str, end: float, run: _Run) -> list[dict]:
+    """The messages for a search the specialist did not have to ask for, or none if it failed or ran out of time."""
+    args = {"query": question, "k": PREFETCH_K}
+    t0 = time.perf_counter()
+    try:
+        out = _bounded(functools.partial(tools.search_transcript, **args), end - t0 + MARGIN_S)
+    except _Abandoned:
+        run.abandoned += 1
+        return []
+    except Exception:
+        return []
+    finally:
+        run.tools_ms += (time.perf_counter() - t0) * 1000
+    shown = {"tool": "search_transcript", "args": {"query": escape(question), "k": PREFETCH_K}}
+    return [{"role": "assistant", "content": json.dumps(shown)}, {"role": "user", "content": tool_result_block(out)}]
+
+
 def run_specialist(
     *, name: str, kind: Literal["recall", "consistency"], system: str, tool_names: list[str], llm: LLMClient,
     tools: Tools, ctx: Context, req: ButtonRequest, turns: list[Turn], end: float, run: _Run,
-    request: str | None = None,
+    request: str | None = None, prefetch: bool = False,
 ) -> Outcome:  # fmt: skip
     """One specialist's pass. Its findings are checked here, so nothing unchecked reaches the shared store.
-    `request` is a follow-up from the assistance agent; it is model text, so it is escaped."""
+    `request` is a follow-up from the assistance agent; it is model text, so it is escaped.
+    `prefetch` runs one search on the question before the first model call and shows the model its result as if it had
+    asked (a first tool step it no longer has to spend a model call on). It does nothing for a follow-up or when there is
+    no question, and a search that fails is skipped so the model can use its own tools."""
     user = _user_message(fit_turns(turns, CONTEXT_TOKENS), req)
     if request:
         user += f"\nFollow-up request from the assistance agent: {escape(request)}"
     messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     allowed = {*tool_names}
+    if prefetch and not request and req.question and "search_transcript" in allowed:
+        messages += _prefetched_search(tools, req.question, end, run)
     raw: list[Finding] | None = None
     why = "step limit reached"
     for _ in range(MAX_STEPS):

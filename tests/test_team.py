@@ -348,3 +348,60 @@ def test_an_unexpected_error_while_finishing_the_card_abstains_and_names_the_err
     assert card.status == "abstained" and not card.findings
     assert any("assistance: failed: ValueError" in m for m in card.missing)
     assert "secret transcript text" not in repr(card.missing)
+
+
+# -- retrieval before the memory specialist's first model call ----------------------------------------------------------
+
+ZEBRA = [turn(1, "Old zebra remark", "Ravi"), turn(2, "The deadline is Monday", "Ravi"),
+         turn(3, "We moved the deadline to Wednesday", "Sue"), turn(4, "ok"), turn(5, "right"), turn(6, "sure"),
+         turn(7, "What was the deadline?")]  # fmt: skip
+ZQ = "Which zebra remark was made?"
+CONZ = done(finding("consistency", "t3", "moved the deadline to Wednesday", "Sue moved it"))
+
+
+def test_prefetch_gives_the_memory_specialist_the_search_result_in_its_first_call():
+    mem = done(finding("memory", "t2", "The deadline is Monday", "Ravi said Monday"))
+    ls = llms([mem], [CONZ], [PLAN])
+    team, ctx, _ = build(ls, turns=ZEBRA, prefetch_memory=True)
+    card = team.answer(req(7, ZQ), ctx)
+    assert card.status == "answered" and len(ls["memory"].calls) == 1  # one model call, no tool round trip
+    first = "\n".join(m["content"] for m in ls["memory"].calls[0])
+    assert TOOL_OPEN in first and "zebra" in first and '"tool": "search_transcript"' in first
+    for other in ("consistency", "assistance"):  # the other agents see nothing of it
+        seen = "\n".join(m["content"] for c in ls[other].calls for m in c)
+        assert TOOL_OPEN not in seen and "search_transcript\"" not in seen
+
+
+def test_without_prefetch_the_memory_specialist_starts_without_a_tool_result():
+    ls = llms([MEM], [CONZ], [PLAN])
+    team, ctx, _ = build(ls, turns=ZEBRA)
+    team.answer(req(7, ZQ), ctx)
+    assert TOOL_OPEN not in "\n".join(m["content"] for m in ls["memory"].calls[0])
+
+
+def test_a_failing_prefetch_leaves_the_model_to_use_its_own_tools_and_adds_no_note():
+    class Broken(Retriever):
+        def search(self, *a, **k):
+            raise RuntimeError("embedder down")
+
+    mem = done(finding("memory", "t2", "The deadline is Monday", "Ravi said Monday"))
+    ls = llms([mem], [CONZ], [PLAN])
+    team, ctx, store = build(ls, turns=ZEBRA, prefetch_memory=True)
+    team.tools.retriever = Broken(store, NoEmbed())
+    card = team.answer(req(7, ZQ), ctx)
+    assert card.status == "answered" and not card.missing
+    assert TOOL_OPEN not in "\n".join(m["content"] for m in ls["memory"].calls[0])
+
+
+def test_a_followup_to_memory_is_not_prefetched_and_a_missing_question_is_not_searched():
+    mem = done(finding("memory", "t2", "The deadline is Monday", "Ravi said Monday"))
+    ls = llms([mem, mem], [CONZ], [ask("memory", "look for the zebra"), PLAN])
+    team, ctx, _ = build(ls, turns=ZEBRA, prefetch_memory=True)
+    team.answer(req(7, ZQ), ctx)
+    assert len(ls["memory"].calls) == 2
+    assert TOOL_OPEN in "\n".join(m["content"] for m in ls["memory"].calls[0])
+    assert TOOL_OPEN not in "\n".join(m["content"] for m in ls["memory"].calls[1])
+    ls = llms([MEM], [CONZ], [PLAN])
+    team, ctx, _ = build(ls, turns=ZEBRA, prefetch_memory=True)
+    team.answer(ButtonRequest(conversation_id="c1", as_of_seq=7, question=None), ctx)
+    assert TOOL_OPEN not in "\n".join(m["content"] for m in ls["memory"].calls[0])

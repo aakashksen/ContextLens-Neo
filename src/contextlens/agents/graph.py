@@ -64,9 +64,10 @@ class TeamAssistant:
     def __init__(
         self, llm_by_agent: dict[str, LLMClient], tools: Tools, prompt_version: str,
         deadline_s: float = 8.0, max_followups: int = 1, memory_gap_abstains: bool = False,
+        prefetch_memory: bool = False,
     ) -> None:  # fmt: skip
         self.llms, self.tools, self.deadline_s, self.max_followups = llm_by_agent, tools, deadline_s, max_followups
-        self.memory_gap_abstains = memory_gap_abstains
+        self.memory_gap_abstains, self.prefetch_memory = memory_gap_abstains, prefetch_memory
         has_checker = tools.checker is not None
         self._specs = {
             "memory": (memory_agent.KIND, memory_agent.system(prompt_version), memory_agent.TOOLS),
@@ -125,7 +126,7 @@ class TeamAssistant:
             out = run_specialist(
                 name=name, kind=kind, system=system, tool_names=tool_names, llm=self.llms[name],
                 tools=self.tools, ctx=job.ctx, req=job.req, turns=job.turns, end=job.end,
-                run=job.runs[name], request=request,
+                run=job.runs[name], request=request, prefetch=name == "memory" and self.prefetch_memory,
             )  # fmt: skip
         except Exception as exc:  # one agent breaking must not take the others down
             out = Outcome(notes=[f"{name}: failed: {type(exc).__name__}"], degraded=True)

@@ -84,3 +84,12 @@ def test_the_setting_is_read_from_the_environment_and_a_bad_value_is_refused(mon
         production.assistant_kind()
     with pytest.raises(ValueError, match="assistant must be"):
         _build({}, assistant="both")
+
+
+def test_the_shipped_team_searches_before_the_memory_specialist_asks(monkeypatch):
+    monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
+    llms = {"memory": FakeLLM([{"tool": "final", "findings": [_evidence("memory")]}] * 3),
+            "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
+            "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
+    _press(_build(llms))
+    assert len(llms["memory"].calls) == 1 and '"tool": "search_transcript"' in str(llms["memory"].calls[0])

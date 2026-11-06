@@ -97,7 +97,7 @@ class TeamPerPress:
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         checker = PromptedChecker(self.llms["consistency"])
         tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id, checker)
-        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s).answer(req, ctx)
+        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s, prefetch_memory=True).answer(req, ctx)
 
 
 class _SinglePerPress(TeamPerPress):
