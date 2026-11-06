@@ -874,7 +874,9 @@ def run_e7(
         partial.put(stage, encode_play(got, st, lags, sorted(whisper_backends - before, key=str)))
         return got, st, lags
 
-    for n, (meeting, scs) in enumerate(by_meeting.items(), 1):
+    order = shortest_meetings(audio, list(by_meeting), len(by_meeting))  # the same key as --shortest; the segment follows
+    for n, meeting in enumerate(order, 1):
+        scs = by_meeting[meeting]
         say(f"{meeting}: {len(scs)} questions ({n}/{len(by_meeting)})")
         got, stats[meeting], lags = play(meeting, meeting, scs, speedup, telemetry)
         asr_lags += lags
@@ -931,6 +933,7 @@ def run_e7(
         },
         "per_meeting": {m: {k: v for k, v in s.items() if k != "diar_ms"} for m, s in stats.items()},
         "gpu_peak": gpu_peak(), "subset": subset,
+        "processing_order": order,
         "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
         "resumed_stages": partial.resumed,
     }

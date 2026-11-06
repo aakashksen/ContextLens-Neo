@@ -705,3 +705,12 @@ def test_clean_cards_take_a_finished_meeting_from_the_saved_rows(repo: Path) -> 
     again = e7.PartialRows(repo, settings)
     preds = e7.clean_cards(scs, NoEmbed(), counting, None, None, lambda m: None, again)
     assert calls == ["m1", "m1", "m2", "m2"] and again.resumed == ["clean:m1"] and len(preds) == 4
+
+
+def test_meetings_run_shortest_first_and_the_order_is_recorded(repo: Path) -> None:
+    write_silence(repo / e7.AUDIO_REL / "m1.wav", 30)  # m2 is 24 s: it goes first; the segment comes after all meetings
+    SPEEDS.clear()
+    rec = json.loads(run_with(repo, ScriptedSpeech([merged_script("m2"), aligned_script("m1"), aligned_script("m1")]))
+                     .read_text(encoding="utf-8"))
+    assert rec["config"]["processing_order"] == ["m2", "m1"] and rec["n"] == 4
+    assert SPEEDS == [1000.0, 1000.0, 1.0]

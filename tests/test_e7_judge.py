@@ -87,3 +87,15 @@ def test_the_guard_is_required_unless_turned_off(root: Path):
 def test_a_missing_record_is_refused(root: Path):
     with pytest.raises(Refused, match="no run record"):
         e7_judge.judge("E7-9", llm=Fake(), root=root, guard=guard(), say=lambda m: None, sleep=lambda s: None)
+
+
+def test_the_cli_stops_at_95_percent_weekly_usage_by_default(monkeypatch):
+    seen = {}
+
+    def fake_judge(run_id, *, guard, **kw):
+        seen["limit"] = guard.limit
+        return Path("x")
+
+    monkeypatch.setattr(e7_judge, "judge", fake_judge)
+    monkeypatch.setattr(e7_judge.pg, "CountedClaude", lambda: None)
+    assert e7_judge.main(["E7-1"]) == 0 and seen["limit"] == 95.0
