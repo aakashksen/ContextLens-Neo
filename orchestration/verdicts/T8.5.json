@@ -1,0 +1,26 @@
+{
+ "task": "T8.5",
+ "commit": "b6accf6f2e44b617aef0e7b6bdb3a10fc227fa0b",
+ "verdict": "FAIL",
+ "checks": [
+  {"item": "HEAD equals commit, tree clean", "result": "pass", "evidence": "git rev-parse HEAD = b6accf6f...; git status clean outside orchestration"},
+  {"item": "check_run E7 --min-n 30 --split dev --all", "result": "pass", "evidence": "prints 'E7 ok' (n=33, three systems, rows recompute incl. wer/der)"},
+  {"item": "Top two bottlenecks fixed, realtime segment + token count rerun, before and after", "result": "fail", "evidence": "No second E7 record in results/runs; the record's config.bottlenecks only names memory_ms (p95 8220) and consistency_ms (p95 8007.8). rerun code exists in e7_realtime.py (~line 687) but was never run. The PLAN 'Do' item is not done."},
+  {"item": "Real pyannote, Ollama and production backend used", "result": "pass", "evidence": "record models: pyannote/speaker-diarization-3.1, qwen3.5:4b via Ollama; devices all cuda, stages_not_on_cuda empty; log shows speaker runs and Ollama timeouts at 127.0.0.1:11434"},
+  {"item": "4x keep-up check", "result": "pass", "evidence": "readiness json 20261106T034331: first-third p50 212 ms, last-third 116 ms, final lag 164 ms, keeps_up true. Log: 4x speech wall 251 s for 960 s audio up to 597 s for 2343 s, i.e. about 0.25 of audio time"},
+  {"item": "Real-time segment is only source of speech/speaker timings and press-to-card by stage", "result": "partial", "evidence": "config.realtime_segment (ES2003a first 598 s, 1x, 24 presses, clean system) has asr_lag p50 338/p95 1863 ms, diarization_run p50 4388/p95 4576 ms, and press_latency_ms by stage (p50 4564.5, p95 8022.7). pipeline_timing is null. The top-level metrics latency by stage (p50 8027, p95 8407) comes from the 4x part presses (LLM timing, not speed-dependent) and is labelled 'sped_up'."},
+  {"item": "Record states unreviewed labels and Haiku calibration failure", "result": "pass", "evidence": "record labels_reviewed=false, label_source=ami_rule; results/e7-judge/*.json note says Haiku failed the written calibration (entry 56) and rates are Haiku's, not ground truth. Judge grounded rates clean 0.439, oracle 0.25, pipeline 0.129."},
+  {"item": "Audio stated honestly", "result": "pass", "evidence": "config.audio_source.method='rebuilt from segmented utterances' with note that gaps are digital silence and latency and DER may be easier; per-speaker tracks, same-speaker overlap replaced, cross-speaker overlap summed. Streamed audio is NOT the original headset recording."}
+ ],
+ "own_tests": [
+  {"input": "count presses whose memory_ms or consistency_ms >= 8000 in each predictions file", "result": "clean 8/33, asr_oracle_speakers 10/33, asr_pipeline 8/33"},
+  {"input": "count cards whose 'missing' mentions llm error/deadline/timed out", "result": "clean 25/33, oracle 18/33, pipeline 21/33 (eg 'memory: llm error: request to .../api/chat failed: timed out', 'memory: deadline reached'); but rows have errored=false and attempts show errored_presses 0, and latency_note is null, so the record does not state that deadline/timeouts cut cards"},
+  {"input": "compare WER/DER on realtime segment vs 4x for same audio", "result": "Not possible from the record: realtime_segment has no wer or der. WER 0.559 is identical for oracle and pipeline (same transcripts, as expected), whole-corpus at 4x only; per-meeting wer not reported. Whisper is ggml-tiny.en (the smallest), which on rebuilt per-speaker-summed audio with overlap explains a high WER; but a 4x-vs-1x measurement-bug check is not in the record. Real-time ASR rtf is 1.02 (barely keeps up) and the 4x ES2003a segment count was 191 (full run) vs 79 (first 598 s) so not directly comparable."}
+ ],
+ "failures": [
+  "PLAN T8.5 'Do': 'Optimize the top two bottlenecks, then rerun and report before and after' (and the person's direction: rerun only the real-time segment and the token count) has not been done. No optimization commit, no rerun record. The task is not complete without it.",
+  "Deadline cuts are not stated: 18 to 25 of 33 cards per system carry llm timeout / 'deadline reached' in missing, 8-10 of 33 have a stage at >=8000 ms, p50 total is 8027 ms (at the 8 s deadline), yet latency_note is null and errored_presses is 0. Latency at the deadline is a ceiling, not a measurement, and quality numbers (recall, abstain, judge) are confounded by LLM timeouts. The record needs to state this.",
+  "No WER/DER check of whether tiny.en, the rebuild, or 4x streaming degrades speech (realtime_segment has no wer/der; the coordinator's question 1 cannot be answered from the record). WER 0.559 and DER 0.725 are reported without this control."
+ ],
+ "notes": "The pytest run of tests/test_e7.py was started in the background but I did not wait for its completion; check_run passes. Hand-off: the bottleneck rerun must run on the real-time segment with press timeouts reported; the two bottlenecks by the record's numbers are memory_ms (real-time p50 3991, p95 8002; 4x-part p50 6.8 s) and consistency_ms (p50 2288, p95 8007 at real-time; p50 3.8 s at 4x), assistance is under 1.4 s. Verifier did not run E7 or use GPU/Ollama/claude -p."
+}
