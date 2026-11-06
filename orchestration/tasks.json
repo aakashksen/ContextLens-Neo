@@ -549,7 +549,14 @@
         "{py} -m pytest tests/test_e5.py -q",
         "{py} -m contextlens.eval.check_run E5 --min-n 50 --split dev"
       ],
-      "status": "pending"
+      "status": "done",
+      "started_at": "2026-11-06T22:32:10+00:00",
+      "verified": {
+        "commit": "0e130576fb8bf5a57fe982e179bfdff4ab11a91b",
+        "passed": true,
+        "at": "2026-11-06T22:34:03+00:00"
+      },
+      "done_at": "2026-11-06T22:41:44+00:00"
     },
     {
       "id": "T8.0",
