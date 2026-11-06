@@ -245,6 +245,18 @@ def run_part(root: Path, commit: str, part: str, system: str, scenarios: list[Sc
     return e2.run_system(system, scenarios, make, e2.STREAK_LOCAL, say=say, have=have, on_row=save)
 
 
+def progress_log(root: Path, stage: str, commit: str, say: Callable[[str], None] = print) -> Callable[[str], None]:
+    """`say` that also appends each line, timestamped and flushed to disk, to results/logs/e8-<stage>-<commit>.log (git-ignored),
+    so a stopped run shows how far it got."""
+    path = root / "results/logs" / f"e8-{stage}-{commit[:12]}.log"
+
+    def log(text: str) -> None:
+        e2._append_durable(path, f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')} {text}")
+        say(text)
+
+    return log
+
+
 def run_rows(root: Path, commit: str, part: str, system: str, scenarios: list[Scenario], make_row: Callable[[Scenario], Prediction],
              say: Callable[[str], None]) -> list[Prediction]:
     """Like run_part for rows that are not cards (ranked turns, a bare label): one row per case, saved the moment it exists."""
@@ -310,6 +322,8 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
         raise e2.RunBroken("run_conditions is required: say what else was running while latency was measured")
     freeze = require_ready(root, override_note)
     commit = head_commit(root)
+    say = progress_log(root, "write", commit, say)
+    say(f"write started at {commit[:12]}; freeze, clean tree and first-run checks passed")
     cfg = e2.load_retrieval_config(root / freeze["retrieval"]["path"])
     loaded = {src: load_verified(src, SPLIT, root) for src in ("scenarios", "qmsum", "decode")}
     cards, lme = split_cards(loaded["scenarios"][0])
@@ -326,14 +340,17 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
         for system in (PRIMARY, SINGLE):
             counts[system] = len(run_part(root, commit, "cards", system, cards, lambda sc, system=system: e6._build_assistant(
                 system, PROMPT, sc, writer, e6._retriever(sc, embedder), memories.get(sc.id, MemoryStore()), cfg), say))
+        say("trained-team stage: the writer is unloaded, the adapter loads")
         ctl.unload(names.writer)  # the adapter needs the GPU the writer held
         hf = make_hf_writer(freeze["trained"]["adapter"])
         trained = make_checker("trained", freeze["trained"]["checker"])
         counts[TRAINED_TEAM] = len(run_part(root, commit, "cards", TRAINED_TEAM, cards, lambda sc: build_team_trained(
             sc, hf, trained, embedder, memories.get(sc.id, MemoryStore())), say))
+        say("search stage")
         for source, scs in (("qmsum", loaded["qmsum"][0]), (LME, lme)):
             counts[f"search:{source}"] = len(run_rows(
                 root, commit, f"search:{source}", SEARCH_SYSTEM, scs, lambda sc: search_rows([sc], embedder, cfg, say)[0], say))
+        say("detector stage")
         for source, scs in (("scenarios", cards), ("decode", loaded["decode"][0])):
             predict = e4.predict_scenarios if source == "scenarios" else e4.predict_decode
             for name in ("trained", freeze["detectors"][source]):
@@ -477,6 +494,10 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
         raise Refused("the working tree has uncommitted changes; commit first, or the record cannot be written")
     freeze = committed_freeze(root)
     commit = j6.resolve_commit(root, from_commit)
+    say = progress_log(root, "judge", commit, say)
+    say(f"judge started at {commit[:12]}")
+    if is_dirty(root):  # the log itself must not block the record that write_run writes after all the grading
+        raise Refused("the working tree has uncommitted changes after the log was opened; ignore results/logs/ or commit first")
     require_first_test_run(root, commit, override_note)
     changed = j6.card_code_changed(root, commit)
     if changed:

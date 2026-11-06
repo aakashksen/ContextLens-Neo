@@ -274,7 +274,7 @@ def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
     (models / "w.bin").write_bytes(b"x")
     freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5)
     e8.write_freeze(root, freeze)
-    (root / ".gitignore").write_text("results/partial/\ndatasets/raw/\n", encoding="utf-8")
+    (root / ".gitignore").write_text("results/partial/\nresults/logs/\ndatasets/raw/\n", encoding="utf-8")
     _git(root, "init", "-q")
     _commit_all(root)
     commit = e8.head_commit(root)
@@ -382,3 +382,95 @@ def test_refuses_when_the_manifest_is_not_committed_with_the_config(repo: Path, 
 def test_product_prompt_is_v3_and_the_default_assistant_is_unchanged() -> None:
     assert production.PROMPT_VERSION == "v3" == e8.PROMPT  # E8 measures the prompt the product ships
     assert production.DEFAULT_ASSISTANT == "team"
+
+
+# ---------------------------------------------------------------- no lost work (the person, via the coordinator, 2026-11-06)
+
+class _Abstains:
+    def answer(self, req, ctx):  # noqa: ANN001
+        from contextlens.schemas import Card
+
+        return Card(mode="recall", status="abstained", findings=[], missing=["no"])
+
+
+def test_card_rows_are_saved_as_they_finish_so_an_interrupted_run_resumes(repo: Path) -> None:
+    commit = e8.head_commit(repo)
+    scs = [_scenario(f"k{i}") for i in range(4)]
+    made: list[str] = []
+
+    def make_then_die(sc: Scenario):
+        if sc.id == "k2":
+            raise KeyboardInterrupt  # the machine is stopped in the middle
+        made.append(sc.id)
+        return _Abstains()
+
+    with pytest.raises(KeyboardInterrupt):
+        e8.run_part(repo, commit, "cards", e8.SINGLE, scs, make_then_die, lambda t: None)
+    saved = e8.all_saved(repo / e8.ROWS_REL, commit, "cards", e8.SINGLE, {s.id for s in scs})
+    assert sorted(saved) == ["k0", "k1"]  # on disk before the run ended
+    made.clear()
+    rows = e8.run_part(repo, commit, "cards", e8.SINGLE, scs, lambda sc: (made.append(sc.id), _Abstains())[1], lambda t: None)
+    assert made == ["k2", "k3"] and [r.scenario_id for r in rows] == ["k0", "k1", "k2", "k3"]  # finished rows are not run again
+
+
+def test_search_and_detector_rows_are_saved_as_they_finish(repo: Path) -> None:
+    commit = e8.head_commit(repo)
+    scs = [_scenario(f"s{i}") for i in range(3)]
+
+    def die_on_second(sc: Scenario) -> Prediction:
+        if sc.id == "s1":
+            raise KeyboardInterrupt
+        return Prediction(scenario_id=sc.id, label="consistent")
+
+    for part, system in (("search:qmsum", e8.SEARCH_SYSTEM), ("detector:decode", "trained"), ("detector:scenarios", "prompted")):
+        with pytest.raises(KeyboardInterrupt):
+            e8.run_rows(repo, commit, part, system, scs, die_on_second, lambda t: None)
+        assert sorted(e8.all_saved(repo / e8.ROWS_REL, commit, part, system, {s.id for s in scs})) == ["s0"]
+
+
+def test_judge_refuses_a_dirty_tree_before_any_call(judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = judged_repo
+    (root / "stray.txt").write_text("uncommitted", encoding="utf-8")
+    haiku, sonnet = FakeClaude("h"), FakeClaude("s")
+    with pytest.raises(Refused, match="uncommitted"):
+        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+                     counter_path=tmp_path / "c.json", say=lambda t: None)
+    assert haiku.n == 0 and sonnet.n == 0
+    assert not (root / e8.JUDGE_DIR_REL).exists()
+
+
+def test_write_refuses_a_dirty_tree_before_a_log_a_model_or_a_row(repo: Path) -> None:
+    _freeze_file(repo)
+    with pytest.raises(Refused, match="uncommitted"):
+        e8.run_write(root=repo, writer=None, embedder=None, ctl=None, make_hf_writer=None, make_checker=None,  # type: ignore[arg-type]
+                     run_conditions="nothing else")
+    assert not (repo / "results").exists()
+
+
+def test_progress_goes_to_a_log_under_results_logs_that_git_ignores(repo: Path) -> None:
+    seen: list[str] = []
+    say = e8.progress_log(repo, "write", "abc123456789def", seen.append)
+    say("cards/single: 10/136")
+    say("search:qmsum/hybrid_t1: 3 rows")
+    path = repo / "results/logs/e8-write-abc123456789.log"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and lines[0].endswith("cards/single: 10/136") and lines[0][:4].isdigit()  # a timestamp first
+    assert seen == ["cards/single: 10/136", "search:qmsum/hybrid_t1: 3 rows"]  # still shown on the console
+    assert "results/logs/" in (Path(e8.ROOT) / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_judge_stops_before_any_call_if_its_own_log_would_dirty_the_tree(judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = judged_repo  # the rows belong to `commit`; the commit made here only changes .gitignore
+    (root / ".gitignore").write_text("results/partial/\ndatasets/raw/\n", encoding="utf-8")  # logs are not ignored here
+    _commit_all(root)
+    haiku = FakeClaude("h")
+    with pytest.raises(Refused, match="uncommitted"):
+        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=FakeClaude("s"),
+                     guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
+    assert haiku.n == 0
