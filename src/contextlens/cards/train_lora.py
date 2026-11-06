@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from contextlens.llm.client import REPO_ROOT
 from contextlens.cards.dataset import CARDS_DIR, Example, load_examples
 from contextlens.train_guard import require_finite
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 PRIMARY = "Qwen/Qwen3.5-4B"
 FALLBACK = "Qwen/Qwen3-4B"
-VRAM_LIMIT_GB = 7.0
+VRAM_LIMIT_GB = 5.5  # the 8 GB card has about 5.7 GB really free (Windows holds about 2 GB); more spills into shared memory
 TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
@@ -82,13 +83,24 @@ def card_loss(model: Any, input_ids: torch.Tensor, labels: torch.Tensor) -> torc
     return F.cross_entropy(logits.reshape(-1, logits.size(-1)), labels[:, -n:].reshape(-1))
 
 
+def _log_step(path: Path, step: int, loss: float, seconds: float) -> None:
+    import torch
+
+    peak = torch.cuda.max_memory_allocated() / 1024**3 if torch.cuda.is_available() else 0.0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"step": step, "loss": loss, "seconds": round(seconds, 2), "peak_gb": round(peak, 3)}) + "\n")
+        f.flush()
+
+
 def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps: int, batch_size: int = 2,
               lr: float = 2e-4, vram_limit_gb: float | None = None, micro_batch: int | None = None,
-              card_loss_only: bool = False) -> list[float]:
+              card_loss_only: bool = False, log_path: Path | None = None) -> list[float]:
     """Plain loop: AdamW over the LoRA parameters only. Returns the loss at each step. With `vram_limit_gb`, the
     peak memory is checked after every step, so a run over the limit stops at the first step. A step uses `batch_size`
     rows; with a smaller `micro_batch` they go through the model in pieces and the gradients add up, which gives
-    the same update with less memory. `card_loss_only` computes the loss with `card_loss` and needs `micro_batch` 1."""
+    the same update with less memory. `card_loss_only` computes the loss with `card_loss` and needs `micro_batch` 1.
+    With `log_path`, one JSON line per step (step, loss, seconds, peak GB) is appended and flushed."""
     import torch
 
     micro = micro_batch or batch_size
@@ -103,6 +115,7 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
     model.train()
     losses = []
     for step in range(steps):
+        t0 = time.perf_counter()
         picked = [rows[(step * batch_size + k) % len(rows)] for k in range(batch_size)]
         total = 0.0
         for i in range(0, batch_size, micro):
@@ -117,6 +130,8 @@ def run_steps(model: Any, tok: Any, examples: list[Example], max_len: int, steps
         losses.append(total)
         opt.step()
         opt.zero_grad()
+        if log_path is not None:
+            _log_step(log_path, step + 1, losses[-1], time.perf_counter() - t0)
         if vram_limit_gb is not None:
             check_vram(vram_limit_gb)
     return losses
@@ -155,7 +170,8 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
     tok = AutoTokenizer.from_pretrained(base)
     t1 = time.perf_counter()
     losses = run_steps(model, tok, load_examples("train", cards_dir, include_scenarios), max_len, steps,
-                       vram_limit_gb=VRAM_LIMIT_GB, micro_batch=1, card_loss_only=True)
+                       vram_limit_gb=VRAM_LIMIT_GB, micro_batch=1, card_loss_only=True,
+                       log_path=REPO_ROOT / "results/logs" / f"train-{out_dir.name}.log")
     t2 = time.perf_counter()
     peak_gb = check_vram()
     out_dir.mkdir(parents=True, exist_ok=True)

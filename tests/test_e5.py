@@ -500,3 +500,33 @@ def test_generation_uses_the_cache_in_eval_mode_without_gradients() -> None:
 
 def test_card_reply_limit_fits_the_longest_training_card() -> None:
     assert e5.REPLY_TOKENS == 800  # the longest of the 212 training cards is 788 tokens; a cut card is invalid and costs a retry
+
+
+def test_speed_check_ignores_cards_saved_by_an_earlier_run(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.data.scenarios import load_scenarios
+    import contextlens.llm.client as client_mod
+
+    own = load_scenarios("dev", repo / "datasets/scenarios")
+    FakeHF.log, FakeHF.generated = [], 0
+    FakeHF.turns = {t.id: t for s in own for t in s.conversation.turns}
+    for name, val in (("data_root", lambda: tmp_path / "shared"), ("eval_scenarios", lambda root: {"scenarios": own, "qmsum": []}),
+                      ("RecordingHF", FakeHF), ("select_evidence", lambda scs, emb, cfg: {s.id: [(s.conversation.turns[1].id, 0.5)] for s in scs})):
+        monkeypatch.setattr(e5, name, val)
+    monkeypatch.setattr(client_mod, "unload_ollama", lambda *a, **k: None)
+    first = e5.run_speed_check(repo, "v1", say=lambda *_: None)
+    second = e5.run_speed_check(repo, "v1", say=lambda *_: None)  # the saved rows from the first run must not be reused
+    assert FakeHF.generated == 6 and second["tokens"] == 15 == first["tokens"]
+
+
+def test_speed_check_fails_when_no_token_was_counted(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import contextlens.llm.client as client_mod
+    from contextlens.data.scenarios import load_scenarios
+
+    own = load_scenarios("dev", repo / "datasets/scenarios")
+    monkeypatch.setattr(e5, "eval_scenarios", lambda root: {"scenarios": own, "qmsum": []})
+    monkeypatch.setattr(e5, "RecordingHF", FakeHF)
+    monkeypatch.setattr(e5, "select_evidence", lambda scs, emb, cfg: {})
+    monkeypatch.setattr(e5, "write_side", lambda *a, **k: [])
+    monkeypatch.setattr(client_mod, "unload_ollama", lambda *a, **k: None)
+    with pytest.raises(RuntimeError, match="no generated tokens"):
+        e5.run_speed_check(repo, "v1", say=lambda *_: None)

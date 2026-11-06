@@ -54,7 +54,7 @@ ADAPTER_REL = Path("models/e5-adapter")  # git-ignored
 PARTIAL_REL = Path("results/partial/e5")  # git-ignored
 QMSUM_SUBSET, QMSUM_N, SUBSET_SEED = "e5-qmsum-100", 100, "e5-v1"
 ABSTAIN_CAP, CAP_SEED, MIN_EXAMPLES = 0.25, 13, 300
-EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 1408, 4, 3
+EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 917, 4, 3
 # A local 4-bit model is slow; both sides get the same generous limits. 800 new tokens: the longest of the 212 training
 # cards is 788 tokens and one cut short is invalid JSON, which costs a retry; the probe's replies were 200 to 350 tokens.
 DEADLINE_S, REPLY_TOKENS = 300.0, 800
@@ -113,9 +113,23 @@ MAX_GOLD_CHOICE = {
 }
 MEMORY_CHOICE = {
     "problem": "the first probe at MAX_LEN 2048, batch 2, full logits peaked at 9.70 GB, over the 7.0 GB limit",
-    "chosen": "MAX_LEN 1408 with both savers: micro-batch 1 with gradients added over the 2 rows of a step, and the loss "
-              "computed from the card's tokens only (hidden states sliced before the LM head). No example is shortened; "
-              "longer ones are dropped before the 25% abstained cap. Limit and NaN guard unchanged.",
+    "chosen": "MAX_LEN 917 with both savers (micro-batch 1 with gradients added over the 2 rows of a step; loss from the "
+              "card's tokens only) and the limit lowered from 7.0 to 5.5 GB: a 3.5-hour training run at 1408 was stopped, "
+              "because the card really has about 5.7 GB free (Windows holds about 2 GB), so long rows spilled into shared "
+              "memory. No example is shortened; longer ones are dropped before the 25% abstained cap. NaN guard unchanged.",
+    "revision": {
+        "from": "MAX_LEN 1408 under a 7.0 GB limit (160 examples)",
+        "rule": "the largest cap whose worst real row peaks under 5.5 GB. Per-row peaks come from one forward and backward of "
+                "each of the 212 rows with both savers (tools/e5_memory_diag.py's method), plus 0.24 GB for the optimizer, "
+                "which the three worst rows measured in full steps added each time.",
+        "worst_row_kept": "721 tokens (274 card): 5.18 GB + 0.24 = 5.42 GB; the next row, 918 tokens, is 5.44 + 0.24 = 5.68 GB",
+        "kept": {"cap": 917, "before_abstain_cap": 100, "kept": 82, "answered": 62, "abstained": 20, "abstained_share": 0.244,
+                 "dropped_too_long": 154, "dropped_by_abstain_cap": 61, "cap_seed": 13},
+        "smaller_model_estimate": "NOT RUN, an estimate from config.json files only (Qwen3.5-2B: hidden 2048, 24 layers; "
+                                  "0.8B: hidden 1024, 24 layers; same 248k vocabulary; downloads 4.55 GB and 1.75 GB, not in the "
+                                  "cache): all 212 rows would stay under 5.5 GB, training about 14 min (2B) or 8 min (0.8B), "
+                                  "against 5.5 min for the 82 examples on the 4B. The fit behind it is rough (rms 0.35 GB).",
+    },
     "tool": "tools/e5_memory_diag.py (synthetic rows of an exact length built from real ones, inside the tool only)",
     "peak_gb_and_s_per_step_by_input_tokens": {  # savers: base = batch 2 full logits; A = batch 1 x 2 accumulated; B = card-only loss
         "512": {"base": [7.51, 6.4], "A": [6.01, 3.3], "B": [5.35, 2.7], "A+B": [4.95, 3.2]},
@@ -125,10 +139,10 @@ MEMORY_CHOICE = {
     },
     "worst_real_rows_with_A+B": {"1887 tokens, 788 card": 7.21, "1534 tokens, 757 card": 7.01, "1383 tokens, 710 card": 6.83},
     "reading": "The card's length matters as much as the input's (logits of the card span), so a cap on total tokens is the "
-               "only knob: the synthetic table is not a bound. Peak was then measured on the real rows with A+B: 2048 and "
-               "1536 each hold a row over 7.0 GB; 1408 holds none (worst 6.83).",
+               "only knob: the synthetic table is not a bound. The table is from the first 7.0 GB limit; see revision.",
     "examples_kept_by_cap": {  # after the 25% abstained cap, which runs after the length filter
-        "512": {"kept": 65, "answered": 56, "abstained": 9}, "1024": {"kept": 92, "answered": 69, "abstained": 23},
+        "512": {"kept": 65, "answered": 56, "abstained": 9}, "917": {"kept": 82, "answered": 62, "abstained": 20},
+        "1024": {"kept": 92, "answered": 69, "abstained": 23},
         "1408": {"kept": 160, "answered": 120, "abstained": 40}, "1536": {"kept": 180, "answered": 135, "abstained": 45},
         "2048": {"kept": 212, "answered": 159, "abstained": 53},
     },
@@ -364,12 +378,16 @@ def run_speed_check(root: Path, prompt_version: str, say: Callable[[str], None] 
     selection = select_evidence(scs, Embedder(EMBED_MODEL), load_retrieval_config())
     unload_ollama(EMBED_MODEL)
     client = RecordingHF(BASE_MODEL)
+    rows_path = root / PARTIAL_REL / "speed.rows.jsonl"
+    rows_path.unlink(missing_ok=True)  # write_side resumes from saved rows; a speed check must always write fresh cards
     try:
         client.load()
-        rows = write_side("prompted", scs, client, selection, prompt_version, root / PARTIAL_REL / "speed.rows.jsonl", say)
+        rows = write_side("prompted", scs, client, selection, prompt_version, rows_path, say)
     finally:
         client.unload()
     tokens, gen_s = sum(t for t, _ in client.gen), sum(s for _, s in client.gen)
+    if not rows or tokens == 0:
+        raise RuntimeError(f"speed check counted no generated tokens ({len(rows)} cards); nothing was measured")
     out = {"cards": len(rows), "tokens": tokens,
            "s_per_card": sum(p.stage_latency_ms.get("total", 0) for p in rows) / len(rows) / 1000,
            "tokens_per_s": tokens / gen_s if gen_s else 0.0}
