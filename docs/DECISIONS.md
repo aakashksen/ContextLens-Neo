@@ -541,3 +541,11 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Default unchanged:** `DEFAULT_ASSISTANT` stays `team`, and a test pins it. Which system ships stays the person's decision.
 - **Considered:** a separate boolean setting (a second knob and an invalid mix with `single`); changing the default (not ours to decide).
 - **Would change if:** the person picks a different shipping system.
+
+## 58. E6 selects prompt v3; the judges split on `single` (2026-11-05, T7.1, the coordinator's decision)
+- **Run:** 4 versions on `single` (v1, v3, v4, v6, the person's trim; v2, v5 and v7 not run), dev, 148 cases each, generated at `80f1ba8`, judged later by Haiku (entry 56). Record `E6-20261105T223904724358Z`. Then v1 and v3 once on `team_shipping_changed`, no rewriting or tuning: record `E6-20261106T000633991380Z`.
+- **Chosen:** v3, by `SELECTION_RULE` as fixed before the run, under the named dev judge. On `single`, v4 and v6 each show a measurable loss and do not qualify.
+- **Judges disagree on `single`:** Sonnet, grading every claim of v1 and v3 on the same rows, selects v1, because v3's gain is not measurable under it. Sonnet points the same way on every measure (grounded 0.887 against 0.844; abstention and answer rates equal or higher) but does not confirm the gain. The report says exactly this. On `team_shipping_changed` both judges select v3.
+- **Considered and lost:** keeping v1 everywhere as "no confirmed improvement". It is more cautious, but it would override the rule written before the run.
+- **Also:** T6.2 and T7.2 use v3. Bullet 2's count is 4 versions compared. The number-rule fix `c1e2fc5` is in both runs. One v6 row on `single` is broken and is kept and counted, as an uninterrupted run would; the team run has 6 broken v1 rows and 1 broken v3 row, counted the same way.
+- **Would change it:** a person's sample siding with Sonnet on the disputed claims.
