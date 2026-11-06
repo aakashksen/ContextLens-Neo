@@ -84,3 +84,29 @@ def test_the_setting_is_read_from_the_environment_and_a_bad_value_is_refused(mon
         production.assistant_kind()
     with pytest.raises(ValueError, match="assistant must be"):
         _build({}, assistant="both")
+
+
+def test_team_shipping_changed_builds_the_arm_the_experiment_measured_and_the_default_is_unchanged(monkeypatch):
+    from contextlens.agents.consistency_check import PromptedChecker
+    from contextlens.experiments import team_attempt as ta
+    from test_e3 import NoEmbed as E3NoEmbed, scenario, turn
+
+    assert production.DEFAULT_ASSISTANT == "team" and "team_shipping_changed" in production.ASSISTANTS
+    monkeypatch.setenv("CONTEXTLENS_ASSISTANT", "team_shipping_changed")
+    assert production.assistant_kind() == "team_shipping_changed"
+
+    llm = FakeLLM([])
+    llms = {"memory": llm, "consistency": llm, "assistance": llm}
+    prod = _build(llms, assistant=production.assistant_kind())
+    req = ButtonRequest(conversation_id="c1", as_of_seq=0, question="When is the deadline?")
+    built = prod.traced.inner.team(req, Context(store=prod.services.store, as_of_seq=0))
+
+    sc = scenario([turn(0, QUOTE)], question="When is the deadline?")
+    arm = ta.make_assistant(ta.SHIPPING_CHANGED, sc, llm, E3NoEmbed(), {}, production.MemoryStore())
+    assert isinstance(built, TeamAssistant) and isinstance(arm, TeamAssistant)
+    assert type(built.tools.checker) is type(arm.tools.checker) is PromptedChecker
+    assert built.memory_gap_abstains is arm.memory_gap_abstains is True
+    assert built.deadline_s == arm.deadline_s == production.DEADLINE_S
+
+    plain = _build(llms, assistant="team").traced.inner.team(req, Context(store=prod.services.store, as_of_seq=0))
+    assert plain.memory_gap_abstains is False

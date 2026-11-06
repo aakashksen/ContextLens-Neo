@@ -535,3 +535,9 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Chosen:** Haiku for dev judging (E6, E5, E7). Sonnet also grades E6's chosen version and its baseline. Sonnet is the second named figure on final numbers. Each record and the report state the failure, and the report says the explanation is a reading, not proof. Batch mode was not calibrated, so judging stays at one claim per call.
 - **Lost:** local judging (the person ruled it out); Sonnet for all judging (more of the weekly limit).
 - **Would change it if:** Haiku and Sonnet choose differently on E6, which goes to the coordinator before anything depends on it. The 90% weekly usage stop stays.
+
+## 57. `team_shipping_changed` as a third product setting (2026-11-05, final-stretch build, no plan task)
+- **Chosen:** `CONTEXTLENS_ASSISTANT=team_shipping_changed` builds the team with a `PromptedChecker` and `memory_gap_abstains=True`, the arm of entry 51 that T9.1 uses as primary, so the primary is a system the product can build. A test builds it beside `experiments/team_attempt.make_assistant` and compares checker class, flag and deadline.
+- **Default unchanged:** `DEFAULT_ASSISTANT` stays `team`, and a test pins it. Which system ships stays the person's decision.
+- **Considered:** a separate boolean setting (a second knob and an invalid mix with `single`); changing the default (not ours to decide).
+- **Would change if:** the person picks a different shipping system.
