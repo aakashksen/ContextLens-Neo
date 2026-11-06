@@ -177,7 +177,7 @@ def test_freeze_fixes_the_sonnet_sample_the_seed_and_the_weekly_stop(repo: Path,
     adapter.mkdir()
     (adapter / "w").write_bytes(b"1")
     judging = _frozen_repo(repo, adapter, adapter)["judging"]
-    assert (judging["sonnet_sample"], judging["sample_seed"], judging["max_weekly_pct"]) == (300, 13, 95.0)
+    assert (judging["sonnet_sample"], judging["sample_seed"], judging["max_weekly_pct"]) == (300, 13, 98.0)
     assert "sonnet_scope" not in inspect.signature(e8.build_freeze).parameters  # no other way to choose
     with pytest.raises(SystemExit):
         e8.main(["freeze", "--adapter-base", "x", "--adapter", "x", "--checker", "x", "--sonnet-scope", "all"])
@@ -190,7 +190,7 @@ def test_judge_refuses_a_weekly_stop_other_than_the_frozen_one(judged_repo: tupl
     root, commit, _ = judged_repo
     with pytest.raises(Refused, match="weekly stop"):
         e8.run_judge(root=root, from_commit=commit, haiku=FakeClaude("h"), sonnet=FakeClaude("s"),
-                     guard=UsageGuard(90.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
+                     guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)  # the old 95 is no longer allowed
 
 
 def test_extra_report_keeps_the_original_figure_and_states_the_extra() -> None:
@@ -304,7 +304,7 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
 
     root, commit, cards = judged_repo
     haiku, sonnet = FakeClaude("haiku-x"), FakeClaude("sonnet-x", rule=lambda t: "single" not in t)
-    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0),
                         counter_path=tmp_path / "calls.json", say=lambda t: None, concurrency=2)
     rec = json.loads(path.read_text(encoding="utf-8"))
     assert rec["split"] == "test" and rec["experiment"] == "E8" and set(rec["predictions"]) == set(e8.SYSTEMS)
@@ -322,10 +322,10 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
     assert haiku.n == 9 and sonnet.n == 9  # 3 answered cards on each of 3 systems, one claim per call
     assert "failed the written calibration test" in cfg["judge_note"] and "reading, not proof" in cfg["judge_note"]
     with pytest.raises(Refused, match="no more claims"):  # all 9 claims were in the original sample of 300
-        e8.run_sonnet_extra(root=root, from_commit=commit, sonnet=sonnet, more=100, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+        e8.run_sonnet_extra(root=root, from_commit=commit, sonnet=sonnet, more=100, guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0),
                             counter_path=tmp_path / "calls.json", say=lambda t: None)
     with pytest.raises(Refused, match="already run"):  # the record just written makes any second run need a note
-        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0),
                      counter_path=tmp_path / "calls.json", say=lambda t: None)
 
 
@@ -436,7 +436,7 @@ def test_judge_refuses_a_dirty_tree_before_any_call(judged_repo: tuple[Path, str
     (root / "stray.txt").write_text("uncommitted", encoding="utf-8")
     haiku, sonnet = FakeClaude("h"), FakeClaude("s")
     with pytest.raises(Refused, match="uncommitted"):
-        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0),
                      counter_path=tmp_path / "c.json", say=lambda t: None)
     assert haiku.n == 0 and sonnet.n == 0
     assert not (root / e8.JUDGE_DIR_REL).exists()
@@ -472,5 +472,5 @@ def test_judge_stops_before_any_call_if_its_own_log_would_dirty_the_tree(judged_
     haiku = FakeClaude("h")
     with pytest.raises(Refused, match="uncommitted"):
         e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=FakeClaude("s"),
-                     guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
+                     guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
     assert haiku.n == 0
