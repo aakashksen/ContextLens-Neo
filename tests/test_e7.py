@@ -714,3 +714,55 @@ def test_meetings_run_shortest_first_and_the_order_is_recorded(repo: Path) -> No
                      .read_text(encoding="utf-8"))
     assert rec["config"]["processing_order"] == ["m2", "m1"] and rec["n"] == 4
     assert SPEEDS == [1000.0, 1000.0, 1.0]
+
+
+# -- the record says what the deadline did ----------------------------------------------------------------------------
+
+def pred(sid: str, total: int, missing: list[str], **stages: int) -> Prediction:
+    return Prediction(scenario_id=sid, ranked_turn_ids=[], stage_latency_ms={"total": total, **stages},
+                      card=Card(mode="recall", status="abstained", findings=[], missing=missing))
+
+
+def test_deadline_report_counts_cut_cards_and_reconciles_with_the_stage_count() -> None:
+    rows = {"clean": [
+        pred("a", 8017, ["memory: llm error: request to x/api/chat failed: timed out", "assistance: deadline reached"],
+             memory_ms=8001, consistency_ms=3000, assistance_ms=10),
+        pred("b", 8030, ["assistance: deadline reached"], memory_ms=6500, consistency_ms=5457, assistance_ms=1495),
+        pred("c", 4000, [], memory_ms=2000, consistency_ms=1000, assistance_ms=500),
+        pred("d", 8010, ["consistency: llm error: request to x/api/chat failed: timed out"], memory_ms=100,
+             consistency_ms=8005, assistance_ms=5),
+    ]}
+    rep = e7.deadline_report(rows, deadline_ms=8000)["clean"]
+    assert rep["cards"] == 4 and rep["cut_by_deadline"] == 3 and rep["total_at_or_over_deadline"] == 3
+    assert rep["memory_or_consistency_at_or_over_deadline"] == 2  # a and d: the smaller count of the two
+    assert rep["cut_in_stage"] == {"memory": 1, "consistency": 1, "assistance": 2}
+    assert rep["cut_after_earlier_stages_used_the_budget"] == 1  # b: cut in assistance, no stage over the line itself
+    assert rep["share_of_presses_at_the_ceiling"] == 0.75
+
+
+def test_latency_statements_make_the_segment_the_headline_and_say_the_4x_figures_are_secondary() -> None:
+    rep = {"clean": {"cards": 4, "cut_by_deadline": 3, "total_at_or_over_deadline": 3, "share_of_presses_at_the_ceiling": 0.75}}
+    seg = {"meeting": "m1", "press_latency_ms": {"latency_p50_ms": 4564.5, "latency_p95_ms": 8022.7}}
+    out = e7.latency_statements(rep, seg, ran_alone=True)
+    assert out["headline_latency"] == {"source": "realtime_segment", "meeting": "m1",
+                                       "press_latency_ms": seg["press_latency_ms"]}
+    assert "secondary" in out["secondary_latency"] and "4x" in out["secondary_latency"]
+    assert "ceiling" in out["latency_note"] and "3 of 4" in out["latency_note"]
+    assert e7.latency_statements({"clean": {**rep["clean"], "cut_by_deadline": 0, "total_at_or_over_deadline": 0,
+                                            "share_of_presses_at_the_ceiling": 0.0}}, seg, ran_alone=True)["latency_note"] is None
+
+
+def test_restate_writes_a_superseding_record_with_the_same_rows(repo: Path) -> None:
+    base = run(repo)
+    before = {s: (repo / f"results/runs/{base.stem}.{s}.predictions.jsonl").read_bytes() for s in e7.SYSTEMS}
+    new = e7.restate(base.stem, "the record did not state what the deadline did to its cards", root=repo)
+    rec, old = json.loads(new.read_text(encoding="utf-8")), json.loads(base.read_text(encoding="utf-8"))
+    assert rec["supersedes"] == [{"run_id": base.stem, "reason": "the record did not state what the deadline did to its cards"}]
+    assert rec["metrics"] == old["metrics"] and rec["n"] == old["n"] and rec["dataset_hash"] == old["dataset_hash"]
+    assert set(rec["config"]["deadline"]) == set(e7.SYSTEMS) and rec["config"]["headline_latency"]["source"] == "realtime_segment"
+    assert rec["config"]["restated_from"] == base.stem
+    for s in e7.SYSTEMS:  # the rows are the saved ones, not regenerated
+        assert (repo / f"results/runs/{new.stem}.{s}.predictions.jsonl").read_bytes() == before[s]
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+    with pytest.raises(ValueError, match="reason"):
+        e7.restate(base.stem, " ", root=repo)

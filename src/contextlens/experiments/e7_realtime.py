@@ -39,6 +39,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
 import statistics
 import subprocess
 import threading
@@ -259,6 +260,77 @@ def encode_play(got: dict[str, dict[str, Prediction]], st: dict[str, Any], lags:
 def decode_play(data: dict[str, Any]):
     got = {n: {sid: Prediction.model_validate(p) for sid, p in r.items()} for n, r in data["rows"].items()}
     return got, data["stats"], data["lags"], data["backends"]
+
+
+# -- what the deadline did to the cards ---------------------------------------------------------------------------------
+
+DEADLINE_MS = 8_000  # production.DEADLINE_S, in ms: the press is cut here
+_CUT = re.compile(r"^(memory|consistency|assistance): (?:deadline reached|llm error: .*timed out)")
+PRESS_STAGES = ("memory", "consistency", "assistance")
+
+
+def deadline_report(preds: dict[str, list[Prediction]], deadline_ms: int = DEADLINE_MS) -> dict[str, dict[str, Any]]:
+    """Per system, how many cards the deadline cut and where. `cut_by_deadline` counts cards whose `missing` holds a
+    deadline or timeout note from any stage; `memory_or_consistency_at_or_over_deadline` counts only those where one of
+    those two stages alone ran to the deadline, which is why it is the smaller number: the rest were cut in assistance
+    after earlier stages had used the budget (`cut_after_earlier_stages_used_the_budget`)."""
+    out: dict[str, dict[str, Any]] = {}
+    for system, rows in preds.items():
+        cut_in = dict.fromkeys(PRESS_STAGES, 0)
+        cut = early = either = total_over = 0
+        for p in rows:
+            st = p.stage_latency_ms
+            stages = {m.group(1) for note in (p.card.missing if p.card else []) if (m := _CUT.match(note))}
+            for name in stages:
+                cut_in[name] += 1
+            hit = any(st.get(f"{k}_ms", 0) >= deadline_ms for k in PRESS_STAGES)
+            cut += bool(stages)
+            either += any(st.get(f"{k}_ms", 0) >= deadline_ms for k in ("memory", "consistency"))
+            early += bool(stages) and not hit
+            total_over += st.get("total", 0) >= deadline_ms
+        out[system] = {"cards": len(rows), "deadline_ms": deadline_ms, "cut_by_deadline": cut, "cut_in_stage": cut_in,
+                       "memory_or_consistency_at_or_over_deadline": either,
+                       "cut_after_earlier_stages_used_the_budget": early, "total_at_or_over_deadline": total_over,
+                       "share_of_presses_at_the_ceiling": total_over / len(rows) if rows else 0.0}
+    return out
+
+
+def latency_statements(report: dict[str, dict[str, Any]], segment: dict[str, Any] | None,
+                       ran_alone: bool) -> dict[str, Any]:
+    """Config fields that say what the deadline did and which latencies are the headline: the real-time segment's.
+    The saved `latency_*` metrics come from the sped-up part, where only the model calls are timed as they would be live."""
+    cut = ", ".join(f"{s} {r['cut_by_deadline']} of {r['cards']}" for s, r in report.items())
+    note = None
+    if any(r["cut_by_deadline"] for r in report.values()):
+        note = (f"The {DEADLINE_MS // 1000} s deadline cut cards (cards with a deadline or timeout note: {cut}); their quality "
+                "numbers are confounded by the cut. Press latency sits at the deadline ceiling: the share of presses at or over "
+                f"{DEADLINE_MS} ms is " + ", ".join(f"{s} {r['share_of_presses_at_the_ceiling']:.0%}" for s, r in report.items())
+                + ", so p50 and p95 there are the ceiling, not a measurement of the work.")
+    if not ran_alone:
+        note = (note + " " if note else "") + "The machine was shared during this run; latencies include contention."
+    return {"deadline": report, "latency_note": note,
+            "headline_latency": {"source": "realtime_segment", "meeting": segment["meeting"],
+                                 "press_latency_ms": segment["press_latency_ms"]} if segment else None,
+            "secondary_latency": "The latency_* metrics of this record are from the 4x pass (model-call times, not speech or "
+                                 "speaker timing): secondary figures. The headline stage latencies are in the real-time segment."}
+
+
+def restate(run_id: str, reason: str, root: Path = ROOT) -> Path:
+    """A new record with exactly the saved rows, metrics and comparisons of `run_id`, adding what the deadline did and
+    which latencies are the headline, and superseding the old one. Nothing is regenerated."""
+    if not reason.strip():
+        raise ValueError("a superseding record needs a reason")
+    require_clean(root)
+    old = json.loads((root / "results/runs" / f"{run_id}.json").read_text(encoding="utf-8"))
+    if old["experiment"] != "E7":
+        raise ValueError(f"{run_id} is not an E7 record")
+    preds = {name: [Prediction.model_validate_json(x) for x in (root / rel).read_text(encoding="utf-8").splitlines() if x.strip()]
+             for name, rel in old["predictions"].items()}
+    cfg = {**old["config"], **latency_statements(deadline_report(preds), old["config"].get("realtime_segment"),
+                                                 bool(old["config"].get("ran_alone"))), "restated_from": run_id}
+    return write_run("E7", old["split"], cfg, old["models"], old["prompt_versions"], old["metrics"], old["intervals"],
+                     old["attempts"], preds, old["dataset_hash"], comparisons=old.get("comparisons"),
+                     supersedes=[{"run_id": run_id, "reason": reason}], scenario_source=old["scenario_source"], root=root)
 
 
 # -- GPU memory ----------------------------------------------------------------------------------------------------
@@ -742,7 +814,7 @@ def rerun_segment(
         "obs_profile": telemetry is not None, "latency_basis": "real_time",
         "audio_source": audio_source(audio), "speech_address": speech_address, "devices": devices,
         "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"], "ran_alone": ran_alone,
-        "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
+        **latency_statements(deadline_report({"clean": preds}), segment, ran_alone),
         "gpu_peak": gpu_peak(), "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
         "resumed_stages": partial.resumed,
     }
@@ -916,7 +988,6 @@ def run_e7(
         "audio_source": audio_source(audio), "speech_address": speech_address,
         "devices": devices, "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"],
         "ran_alone": ran_alone,
-        "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
         "pipeline_timing": {
             "asr_lag_ms": _summary(asr_lags), "diarization_run_ms": _summary(all_diar),
             "asr_real_time_factor": sum(s["asr_wall_s"] * speedup for s in stats.values())
@@ -937,6 +1008,7 @@ def run_e7(
         "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
         "resumed_stages": partial.resumed,
     }
+    config.update(latency_statements(deadline_report(preds), segment, ran_alone))
     if baseline is None:
         config["bottlenecks"] = top_bottlenecks(pipeline)
     else:
@@ -984,6 +1056,10 @@ def main(argv: list[str] | None = None) -> int:
     rr_alone = rr.add_mutually_exclusive_group(required=True)
     rr_alone.add_argument("--alone", action="store_true")
     rr_alone.add_argument("--not-alone", action="store_true")
+    st = sub.add_parser("restate", help="a superseding record with the same saved rows plus what the deadline did "
+                                        "and which latencies are the headline; regenerates nothing")
+    st.add_argument("run_id")
+    st.add_argument("--reason", required=True)
     d = sub.add_parser("ready", help="can speech keep up with sped-up audio? writes results/local/e7-readiness-*.json")
     d.add_argument("--meeting", required=True, help="a dev meeting whose first minutes are streamed")
     d.add_argument("--speedup", type=float, default=READY_SPEEDUP)
@@ -992,6 +1068,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "build-scenarios":
         print(build_ami_dev(raw_root=args.raw))
+        return 0
+    if args.cmd == "restate":
+        try:
+            print(restate(args.run_id, args.reason).as_posix())
+        except (RuntimeError, ValueError) as exc:
+            print(exc, file=sys.stderr)
+            return 2
         return 0
     if args.cmd == "ready":
         return _ready(args)
