@@ -405,3 +405,36 @@ def test_a_followup_to_memory_is_not_prefetched_and_a_missing_question_is_not_se
     team, ctx, _ = build(ls, turns=ZEBRA, prefetch_memory=True)
     team.answer(ButtonRequest(conversation_id="c1", as_of_seq=7, question=None), ctx)
     assert TOOL_OPEN not in "\n".join(m["content"] for m in ls["memory"].calls[0])
+
+
+# -- a sub-deadline for the specialists, so assistance always has time to write ------------------------------------------
+
+def test_specialists_stop_at_their_sub_deadline_and_assistance_still_writes_the_card():
+    class Hangs(FakeLLM):
+        def _raw(self, *a):
+            time.sleep(2.0)
+            return super()._raw(*a)
+
+    ls = {"memory": Hangs([MEM]), "consistency": FakeLLM([CON]), "assistance": FakeLLM([PLAN])}
+    team, ctx, _ = build(ls, deadline_s=1.0, specialist_deadline_s=0.2)
+    t0 = time.perf_counter()
+    card = team.answer(req(), ctx)
+    assert time.perf_counter() - t0 < 1.5
+    assert len(ls["assistance"].calls) == 1  # assistance ran: it was not left without time
+    assert card.status == "partial" and [f.agent for f in card.findings] == ["consistency"]
+    assert any("memory: deadline" in m for m in card.missing)
+    assert ctx.stage_ms["memory_ms"] < 900  # cut near the sub-deadline plus the abandonment margin, not at 1.0 + margin
+
+
+def test_a_followup_is_not_held_to_the_specialists_sub_deadline():
+    ls = {"memory": Slow([MEM, MEM], 0.15, 10), "consistency": Slow([CON], 0.05, 10),
+          "assistance": FakeLLM([ask("memory"), PLAN])}
+    team, ctx, _ = build(ls, deadline_s=2.0, specialist_deadline_s=0.1)
+    team.answer(req(), ctx)
+    assert len(ls["memory"].calls) == 2  # the follow-up ran although the first pass already passed 0.1 s
+
+
+def test_no_sub_deadline_changes_nothing():
+    ls = llms([MEM], [CON], [PLAN])
+    team, ctx, _ = build(ls)
+    assert team.specialist_deadline_s is None and team.answer(req(), ctx).status == "answered"

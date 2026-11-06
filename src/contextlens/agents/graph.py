@@ -64,10 +64,11 @@ class TeamAssistant:
     def __init__(
         self, llm_by_agent: dict[str, LLMClient], tools: Tools, prompt_version: str,
         deadline_s: float = 8.0, max_followups: int = 1, memory_gap_abstains: bool = False,
-        prefetch_memory: bool = False,
+        prefetch_memory: bool = False, specialist_deadline_s: float | None = None,
     ) -> None:  # fmt: skip
         self.llms, self.tools, self.deadline_s, self.max_followups = llm_by_agent, tools, deadline_s, max_followups
         self.memory_gap_abstains, self.prefetch_memory = memory_gap_abstains, prefetch_memory
+        self.specialist_deadline_s = specialist_deadline_s  # the specialists' own first-pass limit; assistance keeps the rest
         has_checker = tools.checker is not None
         self._specs = {
             "memory": (memory_agent.KIND, memory_agent.system(prompt_version), memory_agent.TOOLS),
@@ -125,7 +126,7 @@ class TeamAssistant:
         try:
             out = run_specialist(
                 name=name, kind=kind, system=system, tool_names=tool_names, llm=self.llms[name],
-                tools=self.tools, ctx=job.ctx, req=job.req, turns=job.turns, end=job.end,
+                tools=self.tools, ctx=job.ctx, req=job.req, turns=job.turns, end=self._specialist_end(job, request),
                 run=job.runs[name], request=request, prefetch=name == "memory" and self.prefetch_memory,
             )  # fmt: skip
         except Exception as exc:  # one agent breaking must not take the others down
@@ -139,6 +140,13 @@ class TeamAssistant:
             job.degraded = job.degraded or out.degraded
             job.ms[name] = job.ms.get(name, 0.0) + (time.perf_counter() - t0) * 1000
         return {}
+
+    def _specialist_end(self, job: _Job, request: str | None) -> float:
+        """The first pass stops at the sub-deadline so assistance always has the rest of the deadline; a follow-up, which
+        assistance asks for, runs to the full deadline."""
+        if request is not None or self.specialist_deadline_s is None:
+            return job.end
+        return min(job.end, job.start + self.specialist_deadline_s)
 
     # -- assistance --
 

@@ -93,3 +93,21 @@ def test_the_shipped_team_searches_before_the_memory_specialist_asks(monkeypatch
             "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
     _press(_build(llms))
     assert len(llms["memory"].calls) == 1 and '"tool": "search_transcript"' in str(llms["memory"].calls[0])
+
+
+def test_the_shipped_team_gives_its_specialists_a_sub_deadline_that_leaves_assistance_time(monkeypatch):
+    monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
+    seen = []
+
+    class Spy(TeamAssistant):
+        def __init__(self, *a, **kw):
+            seen.append(kw)
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(production, "TeamAssistant", Spy)
+    llms = {"memory": FakeLLM([{"tool": "final", "findings": [_evidence("memory")]}] * 3),
+            "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
+            "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
+    _press(_build(llms))
+    assert seen[0]["specialist_deadline_s"] == production.SPECIALIST_DEADLINE_S == 5.5
+    assert production.DEADLINE_S - production.SPECIALIST_DEADLINE_S >= 2.5 and seen[0]["prefetch_memory"] is True

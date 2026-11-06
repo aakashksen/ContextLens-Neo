@@ -31,6 +31,7 @@ MODEL = "qwen3.5:4b-q4_K_M"
 OLLAMA_URL = "http://127.0.0.1:11434"
 PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
+SPECIALIST_DEADLINE_S = 5.5  # memory and consistency stop here, so assistance always has at least 2.5 s
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
 ASSISTANTS = ("team", "single")
@@ -97,7 +98,8 @@ class TeamPerPress:
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         checker = PromptedChecker(self.llms["consistency"])
         tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id, checker)
-        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s, prefetch_memory=True).answer(req, ctx)
+        return TeamAssistant(self.llms, tools, PROMPT_VERSION, self.deadline_s, prefetch_memory=True,
+                             specialist_deadline_s=SPECIALIST_DEADLINE_S).answer(req, ctx)
 
 
 class _SinglePerPress(TeamPerPress):
