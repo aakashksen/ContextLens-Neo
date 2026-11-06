@@ -5,7 +5,7 @@ compared with the earlier arm's rows by one judge.
 Two stages. The first holds the GPU and judges nothing; the second runs after the GPU is released.
 
   python -m contextlens.experiments.team_prefetch write --run-conditions "<what else was running>"
-  python -m contextlens.experiments.team_prefetch judge E3TP-<run id> [--also-sonnet] [--max-weekly-pct 95]
+  python -m contextlens.experiments.team_prefetch judge E3TP-<run id> [--also-sonnet] [--max-weekly-pct 98]
 
 `write` builds each case's memory with the writer, then presses the shipping team (a `PromptedChecker` on the writer,
 `memory_gap_abstains` on) with the memory specialist prefetched, one case at a time, saving every finished row as it is made
@@ -214,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     j.add_argument("record")
     j.add_argument("--also-sonnet", action="store_true", help="Sonnet grades the same claims too, as a second figure")
     j.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
-    j.add_argument("--max-weekly-pct", type=float, default=95.0)
+    j.add_argument("--max-weekly-pct", type=float, default=98.0)
     a = ap.parse_args(argv)
     if a.cmd == "write":
         from contextlens.llm.client import Embedder, OllamaClient

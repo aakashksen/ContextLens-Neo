@@ -2,6 +2,7 @@
 judged by Haiku beside the earlier arm's rows. No real model."""
 import json
 import shutil
+from pathlib import Path
 import threading
 import time
 
@@ -161,3 +162,17 @@ def test_the_dev_check_builds_the_team_with_the_settings_production_ships(monkey
 def test_the_arm_and_the_change_name_both_fixes():
     assert "subdeadline" in tp.ARM and "prefetch" in tp.ARM
     assert "retrieval before the memory model call" in tp.CHANGE and "sub-deadline" in tp.CHANGE
+
+
+def test_the_judge_command_stops_at_98_percent_weekly_usage_by_default(monkeypatch):
+    seen = {}
+
+    def fake_judge(record, *, guard, **kw):
+        seen["limit"] = guard.limit
+        return Path("x")
+
+    monkeypatch.setattr(tp, "judge", fake_judge)
+    import contextlens.experiments.parallel_grader as pg
+
+    monkeypatch.setattr(pg, "CountedClaude", lambda *a: None)
+    assert tp.main(["judge", "E3TP-1"]) == 0 and seen["limit"] == 98.0
