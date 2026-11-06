@@ -127,7 +127,7 @@ def _frozen_repo(repo: Path, adapter: Path, checker: Path) -> dict:
         rel = e8.SCENARIO_SOURCES[src][0]
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         (repo / rel).write_text(json.dumps({"splits": {"test": {"hash": f"h-{src}"}}}), encoding="utf-8")
-    return e8.build_freeze(repo, adapter_base=adapter, adapter=adapter, checker=checker, checker_threshold=0.5, sonnet_scope=300)
+    return e8.build_freeze(repo, adapter_base=adapter, adapter=adapter, checker=checker, checker_threshold=0.5)
 
 
 def test_freeze_records_the_choices_and_checks_the_trained_files_again(repo: Path, tmp_path: Path) -> None:
@@ -158,20 +158,50 @@ def test_freeze_records_the_choices_and_checks_the_trained_files_again(repo: Pat
         e8.check_inputs(repo, freeze)
 
 
-def test_sonnet_scope_is_all_or_a_seeded_sample_of_at_least_300() -> None:
+def test_sonnet_sample_is_seeded_and_the_extra_step_continues_it_without_overlap() -> None:
     ids = [f"c{i}" for i in range(1000)]
-    assert e8.sonnet_sample(ids, "all") == sorted(ids)
     a, b = e8.sonnet_sample(ids, 300, 13), e8.sonnet_sample(ids, 300, 13)
     assert a == b and len(a) == 300 and set(a) <= set(ids)
     assert e8.sonnet_sample(ids, 300, 14) != a
     assert len(e8.sonnet_sample(ids[:120], 300)) == 120  # fewer claims than the sample: all of them
-    with pytest.raises(Refused, match="at least 300"):
-        e8.sonnet_sample(ids, 299)
+    more = e8.sonnet_extra(ids, 13, 300, 200)
+    assert len(more) == 200 and not set(more) & set(a)  # additive: new claims only
+    assert set(e8.sonnet_sample(ids, 500, 13)) == set(a) | set(more)  # and the original sample is a prefix of the order
+    assert e8.sonnet_extra(ids[:120], 13, 300, 50) == []
 
 
-def test_freeze_refuses_a_small_sonnet_scope(repo: Path, tmp_path: Path) -> None:
-    with pytest.raises(Refused, match="at least 300"):
-        e8.build_freeze(repo, adapter_base=repo, adapter=repo, checker=repo, checker_threshold=0.5, sonnet_scope=100)
+def test_freeze_fixes_the_sonnet_sample_the_seed_and_the_weekly_stop(repo: Path, tmp_path: Path) -> None:
+    import inspect
+
+    adapter = tmp_path / "a"
+    adapter.mkdir()
+    (adapter / "w").write_bytes(b"1")
+    judging = _frozen_repo(repo, adapter, adapter)["judging"]
+    assert (judging["sonnet_sample"], judging["sample_seed"], judging["max_weekly_pct"]) == (300, 13, 95.0)
+    assert "sonnet_scope" not in inspect.signature(e8.build_freeze).parameters  # no other way to choose
+    with pytest.raises(SystemExit):
+        e8.main(["freeze", "--adapter-base", "x", "--adapter", "x", "--checker", "x", "--sonnet-scope", "all"])
+
+
+def test_judge_refuses_a_weekly_stop_other_than_the_frozen_one(judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = judged_repo
+    with pytest.raises(Refused, match="weekly stop"):
+        e8.run_judge(root=root, from_commit=commit, haiku=FakeClaude("h"), sonnet=FakeClaude("s"),
+                     guard=UsageGuard(90.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
+
+
+def test_extra_report_keeps_the_original_figure_and_states_the_extra() -> None:
+    haiku = {f"c{i}": i % 2 == 0 for i in range(6)}
+    original = {"c0": True, "c1": True, "c2": True}  # agrees on c0, c2; not c1
+    extra = {"c3": False, "c4": False, "c5": False}  # agrees on c3, c4; not c5
+    out = e8.extra_report(haiku, original, extra)
+    assert out["original"] == e8.agreement(haiku, original) and out["original"]["claims"] == 3
+    assert out["extra"]["claims"] == 3 and out["combined"]["claims"] == 6
+    assert out["combined"]["agreement"] == pytest.approx(4 / 6)
+    assert "does not replace" in out["note"] and "extra" in out["note"]
 
 
 def test_agreement_counts_the_direction_of_disagreement() -> None:
@@ -242,7 +272,7 @@ def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
     models = tmp_path / "m"
     models.mkdir()
     (models / "w.bin").write_bytes(b"x")
-    freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5, sonnet_scope=300)
+    freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5)
     e8.write_freeze(root, freeze)
     (root / ".gitignore").write_text("results/partial/\ndatasets/raw/\n", encoding="utf-8")
     _git(root, "init", "-q")
@@ -274,7 +304,7 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
 
     root, commit, cards = judged_repo
     haiku, sonnet = FakeClaude("haiku-x"), FakeClaude("sonnet-x", rule=lambda t: "single" not in t)
-    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(90.0, read=lambda: 10.0, interval_s=0.0),
+    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
                         counter_path=tmp_path / "calls.json", say=lambda t: None, concurrency=2)
     rec = json.loads(path.read_text(encoding="utf-8"))
     assert rec["split"] == "test" and rec["experiment"] == "E8" and set(rec["predictions"]) == set(e8.SYSTEMS)
@@ -283,7 +313,7 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
     assert set(cfg["benchmarks"]) == {"qmsum", "longmemeval", "decode", "consistency_scenarios"}
     assert cfg["benchmarks"]["decode"]["systems"] == ["trained", "tfidf"]
     assert cfg["benchmarks"]["decode"]["false_alert_comparison"]["mcnemar_p"] is not None
-    assert cfg["sonnet"]["scope"] == 300 and cfg["sonnet"]["claims_graded"] == 9  # fewer claims than the sample: all of them
+    assert cfg["sonnet"]["sample"] == 300 and cfg["sonnet"]["claims_graded"] == 9  # fewer claims than the sample: all of them
     assert cfg["sonnet"]["agreement_with_haiku"]["haiku_yes_sonnet_no"] == 3  # Sonnet's rule rejects `single`'s three claims
     assert rec["subset"] == "e8-cards" and cfg["freeze"]["cards_subset"]["name"] == "e8-cards"
     from contextlens.eval.check_run import check
@@ -291,8 +321,11 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
     assert check("E8", root=root, min_n=1, split="test") == []  # the record passes the full check
     assert haiku.n == 9 and sonnet.n == 9  # 3 answered cards on each of 3 systems, one claim per call
     assert "failed the written calibration test" in cfg["judge_note"] and "reading, not proof" in cfg["judge_note"]
+    with pytest.raises(Refused, match="no more claims"):  # all 9 claims were in the original sample of 300
+        e8.run_sonnet_extra(root=root, from_commit=commit, sonnet=sonnet, more=100, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
+                            counter_path=tmp_path / "calls.json", say=lambda t: None)
     with pytest.raises(Refused, match="already run"):  # the record just written makes any second run need a note
-        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(90.0, read=lambda: 10.0, interval_s=0.0),
+        e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(95.0, read=lambda: 10.0, interval_s=0.0),
                      counter_path=tmp_path / "calls.json", say=lambda t: None)
 
 
