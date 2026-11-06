@@ -149,9 +149,9 @@ async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
     """Stream the audio at `speedup` times real time. Returns the final segments, how late each arrived after its
     audio was sent (ms), and the wall seconds taken. The service failing before the audio is all sent raises."""
     stream = await speech.open()
-    if info is not None:  # the service says which backend it runs on ("cpu" or "gpu:<name>"), if the stream can tell
-        ask = getattr(stream, "compute_backend", None)
-        info["compute_backend"] = await ask() if ask else None
+    ask = getattr(stream, "compute_backend", None) if info is not None else None
+    # The service's header comes with its first reply, so it is asked for while the audio is sent, never before.
+    backend = asyncio.create_task(ask()) if ask else None
     segments: list[Segment] = []
     lags: list[int] = []
     t0 = time.perf_counter()
@@ -184,6 +184,12 @@ async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
             raise failure[0]
     finally:
         reader.cancel()
+        if backend is not None:
+            if backend.done() and not backend.cancelled() and backend.exception() is None:
+                info["compute_backend"] = backend.result()
+            else:
+                backend.cancel()
+                info["compute_backend"] = None
         await stream.close()
     return sorted(segments, key=lambda s: (s.start_ms, s.end_ms)), lags, time.perf_counter() - t0
 

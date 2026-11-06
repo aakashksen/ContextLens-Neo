@@ -173,3 +173,51 @@ def test_ready_command_writes_its_answer_under_results_local(tmp_path, monkeypat
 
     monkeypatch.setattr(e7, "readiness", slow)
     assert e7.main(["ready", "--meeting", "m", "--audio-dir", str(tmp_path)]) == 3
+
+
+def test_transcribe_does_not_wait_for_the_backend_name_before_sending_audio():
+    """gRPC sends a server's initial metadata with its first reply, so asking for it before any audio is sent never
+    returns against the real service (seen on the real GPU service: `ready` hung)."""
+    from contextlens.speech.client import Segment
+
+    class LateMetadata:
+        sent = 0
+
+        def send(self, pcm: bytes) -> None:
+            self.sent += len(pcm)
+
+        async def compute_backend(self):
+            while not self.sent:  # the header only comes once the service has been given audio
+                await asyncio.sleep(0.005)
+            await asyncio.sleep(0.05)
+            return "gpu:CUDA0"
+
+        async def segments(self):
+            while self.sent < 3000 * BYTES_PER_MS:
+                await asyncio.sleep(0.005)
+            yield Segment(text="hi", start_ms=0, end_ms=3000)
+            await asyncio.sleep(3600)
+
+        async def close(self):
+            pass
+
+    class Speech:
+        async def open(self):
+            return LateMetadata()
+
+    class Never(LateMetadata):
+        async def compute_backend(self):
+            await asyncio.sleep(3600)
+
+    class NeverSpeech:
+        async def open(self):
+            return Never()
+
+    info: dict = {}
+    segs, _, _ = asyncio.run(asyncio.wait_for(
+        e7.transcribe(Speech(), bytes(5000 * BYTES_PER_MS), speedup=100.0, settle_s=0.2, info=info), 10))
+    assert len(segs) == 1 and info["compute_backend"] == "gpu:CUDA0"
+    info = {}
+    asyncio.run(asyncio.wait_for(
+        e7.transcribe(NeverSpeech(), bytes(5000 * BYTES_PER_MS), speedup=100.0, settle_s=0.2, info=info), 10))
+    assert info["compute_backend"] is None  # never reported: recorded as unknown, not waited for
