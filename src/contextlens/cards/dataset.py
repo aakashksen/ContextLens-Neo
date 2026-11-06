@@ -27,6 +27,7 @@ import json
 import random
 import re
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -48,7 +49,7 @@ SYSTEM = (
 NO_QUESTION = "(none: the button was pressed without a question)"
 MAX_TURN_CHARS = 600
 QUOTE_CHARS = 200
-MAX_GOLD = 4
+MAX_GOLD = 12  # chosen for E5 from 6, 8 and 12 (docs/DECISIONS.md entry 60); 4 was never tested
 N_DISTRACTORS = 2
 N_RECENT = 3
 ABSTAIN_EVERY = 5  # about one recall example in five has its gold evidence removed
@@ -88,11 +89,22 @@ def _ref(t: Turn) -> EvidenceRef:
                        speaker=effective_speaker(t), start_ms=t.start_ms)
 
 
-def _card(s: Scenario, turns: list[Turn], gold: list[int], abstain: bool) -> tuple[Card | None, str]:
+def _consistent_card(turns: list[Turn], gold: list[int]) -> tuple[Card | None, str]:
+    """A clarify card saying two statements agree, citing both. Needs exactly two gold turns."""
+    if len(gold) != 2:
+        return None, "dropped_unusable"
+    refs = [_ref(turns[i]) for i in gold]
+    finding = Finding(agent="clarify", kind="consistency", label="consistent", confidence=1.0, evidence=refs,
+                      statement=f"The statements agree. Earlier: {refs[0].quote} Later: {refs[1].quote}")
+    return Card(mode="clarify", status="answered", findings=[finding]), ""
+
+
+def _card(s: Scenario, turns: list[Turn], gold: list[int], abstain: bool,
+          convert_consistent: bool = False) -> tuple[Card | None, str]:
     """The target card, or None and the reason the example is dropped."""
     q, label, answer = s.request.question, s.gold_label, s.gold_answer
     if label == "consistent":
-        return None, "dropped_no_card_for_label"
+        return _consistent_card(turns, gold) if convert_consistent else (None, "dropped_no_card_for_label")
     if label == "insufficient":
         if not q:
             return None, "dropped_unusable"
@@ -127,14 +139,16 @@ def _gold_card(turns: list[Turn], gold: list[int], abstain: bool, q: str | None,
     return None, "dropped_unusable"
 
 
-def _example(s: Scenario, split: str, source: str, stats: Counter) -> Example | None:
+def _example(s: Scenario, split: str, source: str, stats: Counter, convert_consistent: bool = False) -> Example | None:
     turns = [_trim(t) for t in s.conversation.turns]
     index = {t.id: i for i, t in enumerate(turns)}
     gold = sorted({index[g] for g in s.gold_evidence_turn_ids if g in index})
-    card, reason = _card(s, turns, gold, _bucket(s.id, ABSTAIN_EVERY) == 0)
+    card, reason = _card(s, turns, gold, _bucket(s.id, ABSTAIN_EVERY) == 0, convert_consistent)
     if card is None:
         stats[reason] += 1
         return None
+    if s.gold_label == "consistent":
+        stats["converted_consistent"] += 1
     answered = card.status == "answered"
     start = gold[0] if gold else len(turns)
     recent = list(range(max(0, start - N_RECENT), start))
@@ -236,8 +250,14 @@ def _check_train_scenarios(scs: list[Scenario], held_out: list[Scenario]) -> Non
 
 
 def _cap_train(by_file: dict[str, dict[str, list[Example]]], abstain_cap: float, cap_seed: int,
-               stats: Counter) -> None:
-    """Thin abstained train examples over the combined train examples of every source; val is not touched."""
+               stats: Counter, fits: Callable[[Example], bool] | None = None) -> None:
+    """Thin abstained train examples over the combined train examples of every source; val is not touched. With `fits`,
+    train examples it rejects (too long to train on) are removed first, so the cap applies to the set that trains."""
+    if fits is not None:
+        for by_split in by_file.values():
+            kept = [e for e in by_split["train"] if fits(e)]
+            stats["train_dropped_too_long"] += len(by_split["train"]) - len(kept)
+            by_split["train"] = kept
     train = [e for by_split in by_file.values() for e in by_split["train"]]
     kept = {e.id for e in cap_abstained(train, abstain_cap, cap_seed, stats)}
     for by_split in by_file.values():
@@ -256,7 +276,8 @@ def _write_examples(out_dir: Path, by_file: dict[str, dict[str, list[Example]]])
 def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Path("datasets/splits"),
                    out_dir: Path | None = None, train_scenarios: Path | None = None,
                    held_out_dir: Path = SCENARIOS_DIR, stats: Counter | None = None,
-                   abstain_cap: float | None = None, cap_seed: int = 0) -> dict[str, int]:
+                   abstain_cap: float | None = None, cap_seed: int = 0,
+                   convert_consistent: bool = False, fits: Callable[[Example], bool] | None = None) -> dict[str, int]:
     """Examples from QMSum conversations in the manifest's `train` split, divided by conversation into train and val.
     With `train_scenarios` (a directory holding `train.jsonl`), examples from that invented set are added too, after
     it is checked against the dev and test scenarios in `held_out_dir`. Returns counts per split; writes
@@ -264,7 +285,9 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
     counts per source, mode and status, and how many examples were dropped and why. Without the scenario set it has
     `scenario_set_absent` = 1. With `abstain_cap` (e.g. 0.25), abstained train examples (all sources together, never val)
     are thinned by `cap_abstained` with `cap_seed`, and `stats` gets the `train_*` final size, class, source and
-    synthetic-share entries."""
+    synthetic-share entries. With `convert_consistent`, a `consistent` scenario with two gold turns becomes an answered
+    clarify card saying the statements agree (counted as `converted_consistent`); without it such scenarios are dropped.
+    With `fits` (and `abstain_cap`), train examples it rejects are dropped before the cap (`train_dropped_too_long`)."""
     stats = stats if stats is not None else Counter()
     splits = json.loads((splits_dir / "qmsum.json").read_text(encoding="utf-8"))["splits"]
     allowed = set(splits["train"])
@@ -283,12 +306,12 @@ def build_examples(raw_root: Path = Path("datasets/raw"), splits_dir: Path = Pat
         by_split: dict[str, list[Example]] = {"train": [], "val": []}
         for s in scs:
             split = "val" if _bucket(s.conversation.id, VAL_EVERY) == 0 else "train"
-            ex = _example(s, split, source, stats)
+            ex = _example(s, split, source, stats, convert_consistent)
             if ex is not None:
                 by_split[split].append(ex)
         by_file["qmsum" if source == "qmsum" else "scenarios"] = by_split
     if abstain_cap is not None:
-        _cap_train(by_file, abstain_cap, cap_seed, stats)
+        _cap_train(by_file, abstain_cap, cap_seed, stats, fits)
     if out_dir is not None:
         _write_examples(out_dir, by_file)
     return {split: sum(len(v[split]) for v in by_file.values()) for split in ("train", "val")}
