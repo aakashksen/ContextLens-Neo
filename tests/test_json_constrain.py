@@ -1,5 +1,4 @@
 """Schema-constrained decoding for the local model: the prefix checker, and the logits processor on a fake tokenizer."""
-import json
 
 import pytest
 
