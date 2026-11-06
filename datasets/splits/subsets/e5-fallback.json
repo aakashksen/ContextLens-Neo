@@ -117,5 +117,5 @@
   "qmsum-val-28-q1"
  ],
  "rule": "proportional by (category, origin), hash order with the seed; the QMSum ids are drawn from e5-qmsum-100",
- "reason": "Card writing measured 70 s per card on the probe (about 4 tokens per second, reference linear attention on Windows), so the full run of 248 cases on two sides is about 9.7 h of GPU time. The coordinator decided on a smaller fixed subset, chosen by seed before any card was written: 60 invented dev scenarios and 50 QMSum dev cases. The default stays all 248."
+ "reason": "Card writing measured 53.8 s per card on the 2B (11.2 tokens per second, three fresh cards, reference linear attention on Windows; the 4B probe had measured 70 s), so the full run of 248 cases on two sides is about 7.4 h of GPU time. The coordinator decided on a smaller fixed subset, chosen by seed before any card was written: 60 invented dev scenarios and 50 QMSum dev cases. The default stays all 248."
 }

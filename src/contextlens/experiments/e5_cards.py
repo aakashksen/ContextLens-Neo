@@ -67,10 +67,12 @@ EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 2048, 4, 3
 DEADLINE_S, REPLY_TOKENS = 300.0, 800
 FALLBACK = "e5-fallback"
 FALLBACK_SEED, FALLBACK_SCENARIOS, FALLBACK_QMSUM = "e5-fallback-v1", 60, 50
-FALLBACK_REASON = ("Card writing measured 70 s per card on the probe (about 4 tokens per second, reference linear attention "
-                   "on Windows), so the full run of 248 cases on two sides is about 9.7 h of GPU time. The coordinator decided "
-                   "on a smaller fixed subset, chosen by seed before any card was written: 60 invented dev scenarios and 50 "
-                   "QMSum dev cases. The default stays all 248.")
+FALLBACK_REASON = ("Card writing measured 53.8 s per card on the 2B (11.2 tokens per second, three fresh cards, reference "
+                   "linear attention on Windows; the 4B probe had measured 70 s), so the full run of 248 cases on two sides is "
+                   "about 7.4 h of GPU time. The coordinator decided on a smaller fixed subset, chosen by seed before any card "
+                   "was written: 60 invented dev scenarios and 50 QMSum dev cases. The default stays all 248.")
+DECODING = ("schema-constrained: the card's JSON schema limits every token (llm/json_constrain.py) on both sides, as Ollama's "
+            "`format` does for E6's models; the first run, unconstrained, is kept under the old folder name")
 MODES = ("recall", "clarify", "respond")
 HEADLINE = ("grounded_rate", "unsupported_claim_rate", "schema_valid_rate", "abstain_when_insufficient",
             "answer_when_answerable")
@@ -369,7 +371,7 @@ def _read_rows(path: Path) -> list[Prediction]:
 
 
 def run_dir(root: Path, prompt_version: str, adapter_sha: str, fallback: bool = False) -> Path:
-    return root / PARTIAL_REL / f"{prompt_version}-{adapter_sha[:12]}{'-fallback' if fallback else ''}"
+    return root / PARTIAL_REL / f"{prompt_version}-{adapter_sha[:12]}-sc{'-fallback' if fallback else ''}"
 
 
 def eval_scenarios(root: Path) -> dict[str, list[Scenario]]:
@@ -592,6 +594,7 @@ def build_record(*, root: Path, scenarios: list[Scenario], dataset_hash: str, pr
         "per_source": {"scenarios": {"n": len(scenarios)}, "qmsum": qmsum},
         "schema_valid_note": "schema_valid_rate is the share of cases whose first model reply parsed as a Card, before the retry.",
         "peak_vram_gb": training["train_meta"]["peak_vram_gb"],
+        "decoding": DECODING,
         **extra_config,
     }
     attempts = [{"setting": "adapter", "kind": "training", "history": history, "steps": len(history)},

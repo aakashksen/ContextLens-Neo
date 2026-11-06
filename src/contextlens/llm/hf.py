@@ -19,6 +19,7 @@ class HFClient(_Base):
         self.model = model_path + (f"+{adapter_path}" if adapter_path else "")
         self._model: Any = None
         self._tok: Any = None
+        self._schema: type[BaseModel] | None = None  # set by `_raw` for the call in progress
 
     def load(self) -> None:
         if self._model is not None:
@@ -59,15 +60,26 @@ class HFClient(_Base):
         self._model.eval()
         if getattr(self._model, "is_gradient_checkpointing", False):  # a training setting must not leak into generation
             self._model.gradient_checkpointing_disable()
+        extra = {}
+        if self._schema is not None:  # as Ollama's `format` does: the output can only be a value of the schema
+            from transformers import LogitsProcessorList
+
+            from contextlens.llm.json_constrain import SchemaLogitsProcessor
+
+            eos = getattr(self._model.generation_config, "eos_token_id", None)
+            eos = [eos] if isinstance(eos, int) else eos
+            extra["logits_processor"] = LogitsProcessorList([SchemaLogitsProcessor(
+                self._tok, self._schema.model_json_schema(), int(ids["input_ids"].shape[1]), eos_ids=eos)])
         with torch.no_grad():
             out = self._model.generate(**ids, max_new_tokens=max_tokens, max_time=timeout_s, use_cache=True,
-                                       pad_token_id=self._tok.pad_token_id, **sample)
+                                       pad_token_id=self._tok.pad_token_id, **sample, **extra)
         new = out[0][ids["input_ids"].shape[1]:]
         return self._tok.decode(new, skip_special_tokens=True), int(ids["input_ids"].shape[1]), int(new.shape[0])
 
     def _raw(self, messages: list[dict], schema: type[BaseModel] | None, max_tokens: int, temperature: float,
              timeout_s: float) -> LLMResult:
         t0 = time.perf_counter()
+        self._schema = schema
         try:
             text, n_prompt, n_new = self._generate(messages, max_tokens, temperature, timeout_s)
         except (RuntimeError, ValueError, OSError) as err:

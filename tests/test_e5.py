@@ -405,7 +405,7 @@ def test_fallback_manifest_is_seeded_ids_only_and_inside_the_dev_sets(repo: Path
     m = json.loads(path.read_text(encoding="utf-8"))
     assert len(m["scenarios"]) == 60 and len(m["qmsum"]) == 50
     assert set(m["scenarios"]) <= {s.id for s in own} and set(m["qmsum"]) <= {s.id for s in q100}
-    assert m["seed"] and "70 s per card" in m["reason"] and "9.7 h" in m["reason"] and "coordinator" in m["reason"]
+    assert m["seed"] and "53.8 s per card" in m["reason"] and "7.4 h" in m["reason"] and "9.7 h" not in m["reason"] and "coordinator" in m["reason"]
     assert "text" not in json.dumps(m).replace("context", "")  # ids and the reason only
     first = path.read_text(encoding="utf-8")
     assert e5.make_fallback_subset(repo).read_text(encoding="utf-8") == first  # same seed, same ids
@@ -447,7 +447,7 @@ def test_fallback_write_covers_only_the_manifest_and_the_record_says_why(repo: P
         series.RESAMPLES = 10_000
     cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
     assert cfg["subset"]["name"] == "e5-fallback" and cfg["subset"]["n"] == {"scenarios": 3, "qmsum": 1}
-    assert "70 s per card" in cfg["subset"]["reason"] and cfg["per_source"]["scenarios"]["n"] == 3
+    assert "70 s per card" in cfg["subset"]["reason"] and cfg["decoding"].startswith("schema-constrained") and cfg["per_source"]["scenarios"]["n"] == 3
 
 
 def test_speed_check_writes_three_base_cards_and_reports_rates(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -608,3 +608,38 @@ def test_selection_reuses_what_the_preflight_embedded() -> None:
     e5.select_evidence([_long_sc("a", 20)], emb, {"k": 3, "mode": "hybrid"})
     embedded = [t for r in emb.requests for t in r]
     assert len(embedded) == len(set(embedded))  # no text was sent twice
+
+
+def test_the_local_client_decodes_under_the_cards_schema_when_it_is_given_one() -> None:
+    torch = pytest.importorskip("torch")
+    from contextlens.llm.json_constrain import SchemaLogitsProcessor
+
+    seen = []
+
+    class Tok:
+        pad_token_id, eos_token_id = 0, 1
+        def apply_chat_template(self, m, **kw): return "p"
+        def __call__(self, text, **kw): return SimpleNamespace(to=lambda dev: {"input_ids": torch.tensor([[5, 6, 7]])})
+        def decode(self, ids, **kw): return '{"mode":"recall","status":"abstained","findings":[]}'
+        def __len__(self): return 10
+
+    class Model:
+        device = "cpu"
+        generation_config = SimpleNamespace(eos_token_id=[1, 2])
+        def eval(self): pass
+        def generate(self, **kw):
+            seen.append(kw.get("logits_processor"))
+            return torch.tensor([[5, 6, 7, 8]])
+
+    client = HFClient("m")
+    client._model, client._tok = Model(), Tok()
+    client.complete([{"role": "user", "content": "x"}], schema=Card)
+    client.complete([{"role": "user", "content": "x"}])
+    (proc,) = seen[0]
+    assert isinstance(proc, SchemaLogitsProcessor) and proc.prompt_len == 3 and proc.eos == [1, 2]
+    assert not seen[1]  # no schema, no constraint
+
+
+def test_rows_written_under_the_constraint_do_not_mix_with_the_unconstrained_ones() -> None:
+    old = e5.run_dir(Path("."), "v3", "abc123", True)
+    assert "-sc" in old.name and old.name.endswith("-fallback") and e5.DECODING.startswith("schema-constrained")
