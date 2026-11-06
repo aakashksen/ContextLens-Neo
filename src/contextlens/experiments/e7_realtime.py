@@ -37,6 +37,7 @@ HF_TOKEN; `CONTEXTLENS_METRICS_PORT` must be set for the writing stage and the r
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import statistics
 import subprocess
@@ -54,9 +55,10 @@ from typing import Any, Protocol
 from contextlens.data.loaders import load_dataset
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
-from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, split_hash, write_local_manifest, write_run
+from contextlens.eval.records import ROOT, SCENARIO_SOURCES, head_commit, is_dirty, split_hash, write_local_manifest, write_run
 from contextlens.eval.series import base_name
 from contextlens.eval.stats import percentile
+from contextlens.experiments.e2_context import _append_durable
 from contextlens.memory.extract import MemoryStore
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.obs.tracing import Telemetry, TracedAssistant
@@ -192,6 +194,71 @@ async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0,
                 info["compute_backend"] = None
         await stream.close()
     return sorted(segments, key=lambda s: (s.start_ms, s.end_ms)), lags, time.perf_counter() - t0
+
+
+# -- a run is never lost: a clean tree first, finished work kept ------------------------------------------------------
+
+PARTIAL_REL = Path("results/partial/e7")  # git-ignored
+
+
+def require_clean(root: Path) -> None:
+    """The same check `write_run` makes, made before anything loads: a run of hours must not find out at its end."""
+    if is_dirty(root):
+        raise RuntimeError("working tree has uncommitted changes; commit first (checked at the start, since "
+                           "write_run would refuse at the end and the run would be lost)")
+
+
+def stamped(say: Callable[[str], None]) -> Callable[[str], None]:
+    """Each progress line with the clock time and the seconds since the run began, so stage times can be read later."""
+    t0 = time.monotonic()
+
+    def out(msg: str) -> None:
+        say(f"{datetime.now():%H:%M:%S} +{time.monotonic() - t0:.0f}s {msg}")
+
+    return out
+
+
+class PartialRows:
+    """Finished stages of a run, one durable line each, keyed by the commit and the run's settings. A rerun at the same
+    commit and settings takes them back; another commit or setting finds none. A stage is saved only when it is whole:
+    a meeting interrupted midway, or a real-time segment cut off, saves nothing and is redone whole, since its memory
+    and speaker state build up over the replay and its timings must come from one uninterrupted pass."""
+
+    def __init__(self, root: Path, settings: dict[str, Any]) -> None:
+        key = hashlib.sha256(json.dumps([head_commit(root), settings], sort_keys=True, default=str).encode()).hexdigest()[:16]
+        self.path = root / PARTIAL_REL / f"{key}.jsonl"
+        self.stages: dict[str, dict[str, Any]] = {}
+        self.resumed: list[str] = []
+        if self.path.is_file():
+            for ln in self.path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(ln)
+                except ValueError:  # a line cut short by a crash was never a finished stage
+                    continue
+                self.stages[row["stage"]] = row["data"]
+
+    def get(self, stage: str) -> dict[str, Any] | None:
+        data = self.stages.get(stage)
+        if data is not None:
+            self.resumed.append(stage)
+        return data
+
+    def put(self, stage: str, data: dict[str, Any]) -> None:
+        _append_durable(self.path, json.dumps({"stage": stage, "data": data}))
+
+    def clear(self) -> None:
+        self.path.unlink(missing_ok=True)
+
+
+def encode_play(got: dict[str, dict[str, Prediction]], st: dict[str, Any], lags: list[int],
+                backends: list[str | None]) -> dict[str, Any]:
+    return {"rows": {n: {sid: p.model_dump(mode="json") for sid, p in r.items()} for n, r in got.items()},
+            "stats": st, "lags": lags, "backends": backends}
+
+
+def decode_play(data: dict[str, Any]):
+    got = {n: {sid: Prediction.model_validate(p) for sid, p in r.items()} for n, r in data["rows"].items()}
+    return got, data["stats"], data["lags"], data["backends"]
 
 
 # -- GPU memory ----------------------------------------------------------------------------------------------------
@@ -437,6 +504,7 @@ def replay_meeting(
                     spans, start, start + len(window) // BYTES_PER_MS, store.turns(meeting, ALL)):
                 store.relabel(meeting, seq, who, conf)
         for sc in (s for s in scs if cuts[s.id] == b):
+            t_press = time.perf_counter()
             for name, sess in sessions.items():
                 if name == "clean":
                     as_of, turns = sc.request.as_of_seq, []
@@ -462,7 +530,7 @@ def replay_meeting(
                         **({"speaker_spans": [(t.start_ms, t.end_ms, t.speaker) for t in visible]}
                            if name == "asr_pipeline" else {})})
                 rows[name][sc.id] = row
-            say(f"  {sc.id} pressed at {b / 1000:.0f} s")
+            say(f"  {sc.id} pressed at {b / 1000:.0f} s; {time.perf_counter() - t_press:.0f} s for the three systems")
         prev = b
     final = sessions["asr_pipeline"].store.turns(meeting, ALL)
     stats = {
@@ -580,12 +648,18 @@ def _summary(values: list[int] | list[float]) -> dict[str, float | int | None]:
 
 
 def clean_cards(scenarios: list[Scenario], embedder: Any, make_assistant: MakeAssistant, extractor: Extractor | None,
-                telemetry: Telemetry | None, say: Callable[[str], None] = print) -> list[Prediction]:
+                telemetry: Telemetry | None, say: Callable[[str], None] = print,
+                partial: PartialRows | None = None) -> list[Prediction]:
     """The questions asked on the clean transcript alone (no audio), each at its own cut, in the scenarios' order.
     This is the cheap part of a rerun: it gives the tokens per card and the recall that go beside the segment."""
     done: dict[str, Prediction] = {}
     for meeting in dict.fromkeys(s.conversation.id for s in scenarios):
         mine = sorted((s for s in scenarios if s.conversation.id == meeting), key=lambda s: s.request.as_of_seq)
+        saved = partial.get(f"clean:{meeting}") if partial else None
+        if saved is not None:
+            say(f"  clean:{meeting}: finished in an earlier run at this commit, taken from results/partial/e7")
+            done.update({sid: Prediction.model_validate(p) for sid, p in saved.items()})
+            continue
         turns = max((s.conversation.turns for s in mine), key=len)
         session, prev = Session("clean", meeting, embedder, make_assistant, extractor, telemetry), -1
         for sc in mine:
@@ -597,6 +671,8 @@ def clean_cards(scenarios: list[Scenario], embedder: Any, make_assistant: MakeAs
             say(f"  {sc.id} (clean)")
         if session.traced:
             session.traced.flush()
+        if partial:
+            partial.put(f"clean:{meeting}", {s.id: done[s.id].model_dump(mode="json") for s in mine})
     return [done[s.id] for s in scenarios]
 
 
@@ -611,6 +687,8 @@ def rerun_segment(
     """After the fixes: replay only the baseline's real-time segment (same meeting, same presses) and the questions on
     the clean transcript, and write a record with the two bottleneck stages, the token count and recall before and
     after. It has the `clean` system only, since the speed-up runs and the speech numbers are not repeated."""
+    require_clean(root)
+    say = stamped(say)
     if not [c for c in changes if c.strip()]:
         raise ValueError("a rerun must list what changed")
     baseline = json.loads((root / "results/runs" / f"{baseline_id}.json").read_text(encoding="utf-8"))
@@ -632,14 +710,23 @@ def rerun_segment(
         raise FileNotFoundError(f"no audio for {meeting}")
     _, reviewed = load_questions(root)
     started = datetime.now(timezone.utc).isoformat()
+    partial = PartialRows(root, {"kind": "rerun_segment", "digest": digest, "baseline": baseline_id,
+                                 "segment_ms": segment_ms, "step_ms": step_ms})
     say(f"real-time segment: {meeting} at 1.0")
     backends: set[str | None] = set()
     scs = segment_scenarios(mine, segment_ms, step_ms)
-    got, st, lags = play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, 1.0, None,
-                                 settle_s, step_ms, say, backends)
+    saved = partial.get(f"segment:{meeting}")
+    if saved is not None:
+        say("  segment: finished in an earlier run at this commit, taken from results/partial/e7")
+        got, st, lags, seen = decode_play(saved)
+        backends.update(seen)
+    else:
+        got, st, lags = play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, 1.0,
+                                     None, settle_s, step_ms, say, backends)
+        partial.put(f"segment:{meeting}", encode_play(got, st, lags, sorted(backends, key=str)))
     segment = segment_summary(meeting, scs, got, st, lags, segment_ms)
     say("questions on the clean transcript (token count)")
-    preds = clean_cards(scenarios, embedder, make_assistant, extractor, telemetry, say)
+    preds = clean_cards(scenarios, embedder, make_assistant, extractor, telemetry, say, partial)
     metrics = {k: v for k, v in recompute_metrics(scenarios, preds, KS).items()
                if base_name(k) in SAVED and ("[" not in k or "[stage=" in k)}
     intervals = {k: iv for k, iv in recompute_intervals(scenarios, preds, ["recall@5"]).items() if iv}
@@ -657,11 +744,14 @@ def rerun_segment(
         "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"], "ran_alone": ran_alone,
         "latency_note": None if ran_alone else "the machine was shared during this run; latencies include contention",
         "gpu_peak": gpu_peak(), "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
+        "resumed_stages": partial.resumed,
     }
     attempts = [{"setting": "clean", "ok": True, "errored_presses": sum(p.errored for p in preds)}]
-    return write_run("E7", SPLIT, config, models, prompt_versions, {"clean": metrics},
+    path = write_run("E7", SPLIT, config, models, prompt_versions, {"clean": metrics},
                      {"clean": intervals} if intervals else {}, attempts, {"clean": preds}, digest,
                      scenario_source=SOURCE, root=root)
+    partial.clear()
+    return path
 
 
 def play_meeting(speech: SpeechService, backend: WindowBackend, embedder: Any, make_assistant: MakeAssistant,
@@ -675,10 +765,14 @@ def play_meeting(speech: SpeechService, backend: WindowBackend, embedder: Any, m
     info: dict[str, Any] = {}
     segments, lags, wall_s = asyncio.run(transcribe(speech, stream_pcm, speedup=speed, settle_s=settle_s, info=info))
     whisper_backends.add(info.get("compute_backend"))
+    say(f"  speech {meeting}: {len(segments)} segments from {cut / 1000:.0f} s of audio at {speed:g}x in {wall_s:.0f} s")
+    t_replay = time.perf_counter()
     got, st = replay_meeting(
         scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
         make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
     st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
+    say(f"  replay {meeting}: {time.perf_counter() - t_replay:.0f} s ({len(st['diar_ms'])} speaker runs, "
+        f"{sum(st['diar_ms']) / 1000:.0f} s in them)")
     return got, st, lags
 
 
@@ -721,6 +815,8 @@ def run_e7(
 
     The real-time segment is the first `segment_ms` of `realtime_meeting` (see `segment_scenarios`); `gpu_peak` is
     called at the end and returns the GPU memory seen during the run, for the record."""
+    require_clean(root)
+    say = stamped(say)
     manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
     if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
         raise RuntimeError("the AMI manifest must be committed before the run")
@@ -758,18 +854,29 @@ def run_e7(
         raise FileNotFoundError(f"no audio for {missing}; run download")
     _, reviewed = load_questions(root)
     started = datetime.now(timezone.utc).isoformat()
+    partial = PartialRows(root, {"kind": "run", "digest": digest, "speedup": speedup, "step_ms": step_ms,
+                                 "segment_ms": segment_ms, "realtime_meeting": realtime_meeting, "subset": subset})
     rows: dict[str, dict[str, Prediction]] = {n: {} for n in SYSTEMS}
     stats: dict[str, dict[str, Any]] = {}
     asr_lags: list[int] = []
     whisper_backends: set[str | None] = set()
 
-    def play(meeting: str, scs: list[Scenario], speed: float, tele: Telemetry | None):
-        return play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, speed, tele,
-                            settle_s, step_ms, say, whisper_backends)
+    def play(stage: str, meeting: str, scs: list[Scenario], speed: float, tele: Telemetry | None):
+        saved = partial.get(stage)
+        if saved is not None:
+            say(f"  {stage}: finished in an earlier run at this commit, taken from results/partial/e7")
+            got, st, lags, backends = decode_play(saved)
+            whisper_backends.update(backends)
+            return got, st, lags
+        before = set(whisper_backends)
+        got, st, lags = play_meeting(speech, backend, embedder, make_assistant, extractor, audio, meeting, scs, speed,
+                                     tele, settle_s, step_ms, say, whisper_backends)
+        partial.put(stage, encode_play(got, st, lags, sorted(whisper_backends - before, key=str)))
+        return got, st, lags
 
     for n, (meeting, scs) in enumerate(by_meeting.items(), 1):
         say(f"{meeting}: {len(scs)} questions ({n}/{len(by_meeting)})")
-        got, stats[meeting], lags = play(meeting, scs, speedup, telemetry)
+        got, stats[meeting], lags = play(meeting, meeting, scs, speedup, telemetry)
         asr_lags += lags
         for name in SYSTEMS:
             rows[name].update(got[name])
@@ -777,7 +884,7 @@ def run_e7(
     if realtime_meeting:
         say(f"real-time segment: {realtime_meeting} at 1.0")
         scs = segment_scenarios(by_meeting[realtime_meeting], segment_ms, step_ms)
-        got, st, lags = play(realtime_meeting, scs, 1.0, None)  # not in Prometheus: it would count these presses twice
+        got, st, lags = play(f"segment:{realtime_meeting}", realtime_meeting, scs, 1.0, None)  # not in Prometheus: it would count these presses twice
         segment = segment_summary(realtime_meeting, scs, got, st, lags, segment_ms)
     preds = {name: [rows[name][s.id] for s in scenarios] for name in SYSTEMS}
     # The speaker model names speakers speaker_1, speaker_2, ..., so comparing its names with AMI's says nothing;
@@ -825,6 +932,7 @@ def run_e7(
         "per_meeting": {m: {k: v for k, v in s.items() if k != "diar_ms"} for m, s in stats.items()},
         "gpu_peak": gpu_peak(), "subset": subset,
         "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
+        "resumed_stages": partial.resumed,
     }
     if baseline is None:
         config["bottlenecks"] = top_bottlenecks(pipeline)
@@ -837,10 +945,13 @@ def run_e7(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({"not_a_record": True, "meeting": only_meeting, "meetings": subset, "n": len(scenarios), "config": config,
                                    "metrics": metrics}, indent=1) + "\n", encoding="utf-8")
+        partial.clear()
         return out
     attempts = [{"setting": n, "ok": True, "errored_presses": sum(p.errored for p in preds[n])} for n in SYSTEMS]
-    return write_run("E7", SPLIT, config, models, prompt_versions, metrics, intervals, attempts, preds, digest,
+    path = write_run("E7", SPLIT, config, models, prompt_versions, metrics, intervals, attempts, preds, digest,
                      comparisons=comparisons, scenario_source=SOURCE, root=root)
+    partial.clear()  # the record holds them now
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -913,6 +1024,11 @@ def _run_real(args: argparse.Namespace) -> int:
     if not (only_meeting or shortest) and not os.environ.get("CONTEXTLENS_METRICS_PORT"):
         print("set CONTEXTLENS_METRICS_PORT (see docs/run-everything.md, Metrics) so E7 runs with the obs profile on",
               file=sys.stderr)
+        return 2
+    try:
+        require_clean(ROOT)  # before any model loads
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
         return 2
     from contextlens.api import production
     from contextlens.llm.client import unload_ollama

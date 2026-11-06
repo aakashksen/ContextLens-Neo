@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import re
 import subprocess
 import wave
 from pathlib import Path
@@ -239,7 +240,7 @@ def git(root: Path, *args: str) -> None:
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    (tmp_path / ".gitignore").write_text("datasets/raw/\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("datasets/raw/\nresults/partial/\nresults/logs/\nresults/local/\n", encoding="utf-8")
     write_local_manifest("ami", {"dev": meeting_scenarios("m1") + meeting_scenarios("m2")}, tmp_path)
     (tmp_path / "datasets/ami-questions").mkdir(parents=True)
     (tmp_path / e7.QUESTIONS_REL).write_text(json.dumps({"labels_reviewed": False, "questions": []}), encoding="utf-8")
@@ -448,7 +449,7 @@ def test_the_record_states_each_stage_device_and_every_fallback_is_warned(repo: 
     cfg = rec["config"]
     assert [d["actual"] for d in cfg["devices"].values()] == ["cuda", "cpu", "unknown", "mixed: 60% of the model on the GPU"]
     assert cfg["stages_not_on_cuda"] == ["pyannote", "embeddings", "llm"]
-    assert len(caught) == 3 and sum(m.startswith("WARNING") for m in seen) == 3
+    assert len(caught) == 3 and sum(" WARNING " in m for m in seen) == 3
 
 
 def test_a_speech_service_on_the_cpu_is_recorded_as_cpu(repo: Path, monkeypatch) -> None:
@@ -581,3 +582,126 @@ def test_the_cli_refuses_a_rerun_without_the_metrics_port_and_a_sped_up_shortest
     assert "CONTEXTLENS_METRICS_PORT" in capsys.readouterr().err
     assert e7.main(["run", "--alone", "--shortest", "5", "--speedup", "4"]) == 2
     assert "real time" in capsys.readouterr().err
+
+
+# -- a run is never lost to a dirty tree, and finished work is kept -----------------------------------------------------
+
+def test_the_progress_log_folder_is_ignored_by_git() -> None:
+    assert subprocess.run(["git", "check-ignore", "-q", "results/logs/e7-run.log"], cwd=ROOT).returncode == 0
+
+
+def test_every_writing_stage_refuses_a_dirty_tree_before_it_opens_anything(repo: Path) -> None:
+    (repo / "results").mkdir(exist_ok=True)
+    (repo / "results/notes.txt").write_text("untracked", encoding="utf-8")
+
+    class Boom:
+        async def open(self):
+            raise AssertionError("the speech service was opened")
+
+    with pytest.raises(RuntimeError, match="uncommitted"):
+        e7.run_e7(root=repo, speech=Boom(), backend=TruthBackend(), embedder=NoEmbed(), make_assistant=make_assistant,
+                  extractor=None, models={}, prompt_versions={}, ran_alone=True, speech_address="x",
+                  device_probe=ALL_CUDA, say=lambda m: None)
+    with pytest.raises(RuntimeError, match="uncommitted"):
+        e7.rerun_segment(root=repo, speech=Boom(), backend=TruthBackend(), embedder=NoEmbed(),
+                         make_assistant=make_assistant, extractor=None, models={}, prompt_versions={},
+                         baseline_id="E7-x", changes=["c"], ran_alone=True, speech_address="x",
+                         device_probe=ALL_CUDA, say=lambda m: None)
+
+
+def test_the_cli_checks_the_tree_before_importing_any_model(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("CONTEXTLENS_METRICS_PORT", "9464")
+    monkeypatch.setattr(e7, "is_dirty", lambda root: True)
+    assert e7.main(["run", "--alone"]) == 2
+    assert "uncommitted" in capsys.readouterr().err
+    assert e7.main(["rerun-segment", "--baseline", "x", "--change", "c", "--alone"]) == 2
+    assert "uncommitted" in capsys.readouterr().err
+
+
+class FailsToOpen:
+    """A speech service that works for `ok` streams, then the run is cut off."""
+
+    def __init__(self, scripts, ok: int) -> None:
+        self.inner, self.ok, self.opened = ScriptedSpeech(scripts), ok, 0
+
+    async def open(self):
+        self.opened += 1
+        if self.opened > self.ok:
+            raise e7.SpeechUnavailable("cut off")
+        return await self.inner.open()
+
+
+def run_with(repo: Path, speech, **kw) -> Path:
+    return e7.run_e7(
+        root=repo, speech=speech, backend=TruthBackend(), embedder=NoEmbed(), make_assistant=make_assistant,
+        extractor=FirstTurnExtractor(), models={"llm": "x"}, prompt_versions={"team": "v1"}, speedup=1000.0,
+        realtime_meeting="m1", step_ms=10_000, ran_alone=True, speech_address="x", device_probe=ALL_CUDA,
+        say=lambda m: None, **kw)
+
+
+def test_a_cut_off_run_resumes_at_the_same_commit_and_never_redoes_finished_meetings(repo: Path) -> None:
+    with pytest.raises(e7.SpeechUnavailable):  # m1 done, m2 cut off
+        run_with(repo, FailsToOpen([aligned_script("m1"), merged_script("m2")], ok=1))
+    assert not (repo / "results/runs").exists()  # a partial run is never a result
+    SPEEDS.clear()
+    second = ScriptedSpeech([merged_script("m2"), aligned_script("m1")])  # no stream for m1's meeting pass
+    path = run_with(repo, second)
+    assert SPEEDS == [1000.0, 1.0]  # m2, then the segment: m1 was not replayed
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    assert rec["config"]["resumed_stages"] == ["m1"] and rec["n"] == 4
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+    assert not list((repo / "results/partial/e7").glob("*.jsonl"))  # the record holds them now
+
+
+def test_a_cut_off_real_time_segment_is_redone_whole_not_mixed(repo: Path) -> None:
+    with pytest.raises(e7.SpeechUnavailable):  # both meetings done, the segment cut off
+        run_with(repo, FailsToOpen([aligned_script("m1"), merged_script("m2"), aligned_script("m1")], ok=2))
+    SPEEDS.clear()
+    path = run_with(repo, ScriptedSpeech([aligned_script("m1")]))
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    assert SPEEDS == [1.0] and rec["config"]["resumed_stages"] == ["m1", "m2"]
+    assert rec["config"]["realtime_segment"]["asr_lag_ms"]["n"] == 8  # one pass, from this run
+
+
+def test_rows_saved_at_another_commit_or_setting_are_not_reused(repo: Path) -> None:
+    with pytest.raises(e7.SpeechUnavailable):
+        run_with(repo, FailsToOpen([aligned_script("m1"), merged_script("m2")], ok=1))
+    (repo / "x.txt").write_text("a new commit", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "next")
+    SPEEDS.clear()
+    run_with(repo, ScriptedSpeech([aligned_script("m1"), merged_script("m2"), aligned_script("m1")]))
+    assert SPEEDS == [1000.0, 1000.0, 1.0]  # a different commit: everything is redone
+
+
+def test_progress_lines_carry_a_timestamp(repo: Path) -> None:
+    lines: list[str] = []
+    e7.run_e7(root=repo, speech=ScriptedSpeech([aligned_script("m1"), merged_script("m2"), aligned_script("m1")]),
+              backend=TruthBackend(), embedder=NoEmbed(), make_assistant=make_assistant, extractor=None, models={},
+              prompt_versions={}, speedup=1000.0, realtime_meeting="m1", step_ms=10_000, ran_alone=True,
+              speech_address="x", device_probe=ALL_CUDA, say=lines.append)
+    assert lines and all(re.match(r"\d\d:\d\d:\d\d \+\d+s ", ln) for ln in lines)
+    assert any("speech" in ln and "m1" in ln for ln in lines) and any("pressed" in ln for ln in lines)
+
+
+def test_clean_cards_take_a_finished_meeting_from_the_saved_rows(repo: Path) -> None:
+    scs = meeting_scenarios("m1") + meeting_scenarios("m2")
+    calls: list[str] = []
+
+    def counting(store, retriever, memory):
+        inner = CiteLast(store)
+
+        class Counting:
+            def answer(self, req, ctx):
+                calls.append(req.conversation_id)
+                return inner.answer(req, ctx)
+
+        return Counting()
+
+    settings = {"kind": "t"}
+    first = e7.PartialRows(repo, settings)
+    e7.clean_cards(scs[:2], NoEmbed(), counting, None, None, lambda m: None, first)  # m1 only
+    assert calls == ["m1", "m1"]
+    again = e7.PartialRows(repo, settings)
+    preds = e7.clean_cards(scs, NoEmbed(), counting, None, None, lambda m: None, again)
+    assert calls == ["m1", "m1", "m2", "m2"] and again.resumed == ["clean:m1"] and len(preds) == 4
