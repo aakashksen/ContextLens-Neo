@@ -566,18 +566,18 @@ def _f(statement, quote):
     ("fee is 15", "fee is 5", False),
     ("3.5 hours", "3 hours", False),
     ("3 hours", "3.5 hours", False),
-    ("$9", "nine dollars", False),
+    ("$9", "nine dollars", True),  # changed: a number word and its digits agree
     ("$9", "9 dollars", True),
     ("3 pm", "3pm", True),
     ("1000 dollars", "1,000 dollars", True),
     ("1,000 dollars", "1000 dollars", True),
-    ("3 people", "three people", False),
+    ("3 people", "three people", True),  # changed
     ("2.5k", "2500", False),
     ("2500", "2.5k", False),
     ("March 5", "5th of March", True),
     ("15:00", "3 pm", False),
     ("5/3", "March 5th", False),
-    ("1000 dollars", "one thousand", False),
+    ("1000 dollars", "one thousand", True),  # changed
     ("no numbers here", "anything", True),
     # the verifier's cases and the coordinator's examples
     ("five hundred dollars", "5 dollars", False),
@@ -588,7 +588,7 @@ def _f(statement, quote):
     ("three dollars", "$13", False),
     ("five hundred", "five hundred", True),
     ("500", "500", True),
-    ("500", "five hundred", False),
+    ("500", "five hundred", True),  # changed
     ("five", "five hundred", False),
     ("5", "5.5", False),
     ("5", "500", False),
@@ -600,9 +600,81 @@ def _f(statement, quote):
     ("a hundred", "two hundred", False),
     ("the one", "no number", True),
     ("twenty one", "twenty-one", True),
+    # the number-word class, either direction (T7.1)
+    ("two people", "2 people", True),
+    ("2 people", "two people", True),
+    ("two people", "3 people", False),
+    ("half an hour", "0.5 hour", True),
+    ("0.5 hour", "half an hour", True),
+    ("half an hour", "an hour", False),
+    ("a dozen eggs", "12 eggs", True),
+    ("12 eggs", "a dozen eggs", True),
+    ("two dozen eggs", "24 eggs", True),
+    ("two dozen eggs", "a dozen eggs", False),
+    ("the first option", "option 1st", True),
+    ("the 5th floor", "the fifth floor", True),
+    ("the fifth floor", "the 5th floor", True),
+    ("the fifth floor", "the sixth floor", False),
+    ("the 5th floor", "the 6th floor", False),
+    ("she first said it", "nothing numeric", True),  # first, second and third alone are not read as numbers in a statement
+    ("the second statement", "I agree", True),
+    ("his first one", "nothing numeric", True),  # first beside a pronoun one is still the adverb
+    ("the first two", "nothing numeric", False),  # but a real number next to it is checked
+    ("the second one", "the 2nd", True),
+    ("the 1st option", "the first option", True),
+    ("the 1st option", "the second option", False),
+    ("the fourth floor", "the third floor", False),
+    ("the twenty-first", "the 20th", False),
+    ("twenty-first", "21st", True),
+    ("2 thousand", "two thousand", True),
+    ("2500 dollars", "two thousand five hundred dollars", True),
+    ("two thousand five hundred", "2,500", True),
+    ("105", "one hundred and five", True),
+    ("2 million", "two million", True),
+    ("five hundred", "five", False),
+    ("five hundred", "a hundred", False),
+    ("two", "twelve", False),
+    ("fifty", "fifteen", False),
+    ("one hundred", "one", False),
+    ("a couple of days", "two days", True),  # a couple is not read as a number, so nothing is checked
+    ("two days", "a couple of days", False),  # limit: couple is not read as 2, and this fails closed
+    ("1.5 hours", "one and a half hours", False),  # limit, fails closed
+    ("1990", "nineteen ninety", False),  # limit, fails closed
+    ("three people", "I count three", True),
+    ("three people", "I count four", False),
 ])  # fmt: skip
 def test_numbers_must_match_as_whole_numbers(statement, quote, kept):
     assert single._numbers_supported(_f(statement, quote)) is kept
+
+
+def test_number_words_do_not_join_across_two_quotes_and_an_invented_number_still_drops():
+    two = Finding(agent="a", kind="recall", statement="the fee is five hundred", confidence=0.5, evidence=[
+        EvidenceRef(turn_id="t1", quote="it is five", speaker="Ana", start_ms=0),
+        EvidenceRef(turn_id="t2", quote="hundred times", speaker="Ana", start_ms=0)])
+    assert single._numbers_supported(two) is False
+    ok = two.model_copy(update={"statement": "it is five, said Ana"})
+    assert single._numbers_supported(ok) is True
+    invented = two.model_copy(update={"statement": "seven people said it is five"})
+    assert single._numbers_supported(invented) is False
+
+
+def _cites(statement, *turn_ids):
+    return Finding(agent="a", kind="recall", statement=statement, confidence=0.5, evidence=[
+        EvidenceRef(turn_id=t, quote="some words", speaker="Ana", start_ms=0) for t in turn_ids])
+
+
+@pytest.mark.parametrize(("statement", "turns", "kept"), [
+    ("the two statements differ", ("c:t0", "c:t2"), True),  # two counts the cited turns
+    ("the two statements differ", ("c:t0", "c:t1", "c:t2"), True),
+    ("the two statements differ", ("c:t0",), False),  # only one turn is cited
+    ("the two statements differ", ("c:t0", "c:t0"), False),  # one turn cited twice is one turn
+    ("the three speakers differ", ("c:t0", "c:t2"), False),  # more than the evidence holds
+    ("the 2 statements differ", ("c:t0", "c:t2"), False),  # digits must be in a quote
+    ("the seven statements differ", ("c:t0", "c:t2"), False),
+    ("Sam asked for 500, and the two differ", ("c:t0", "c:t2"), False),  # an invented number is still dropped
+])
+def test_a_spelled_number_up_to_the_count_of_cited_turns_counts_the_evidence(statement, turns, kept):
+    assert single._numbers_supported(_cites(statement, *turns)) is kept
 
 
 NUMS = [turn(1, "The fee is five hundred dollars", "Ravi"), turn(2, "ok"), turn(3, "What was the fee?")]
@@ -610,7 +682,9 @@ NUMS = [turn(1, "The fee is five hundred dollars", "Ravi"), turn(2, "ok"), turn(
 
 @pytest.mark.parametrize(("suggestion", "kept"), [
     ("Ask about the five hundred dollar fee", True),
-    ("Ask about the 500 dollar fee", False),
+    ("Ask about the 500 dollar fee", True),  # changed: 500 is five hundred
+    ("Ask about the 50 dollar fee", False),
+    ("Ask about the 5 dollar fee", False),
     ("Ask about the five dollar fee", False),
     ("Ask whether the fee is twenty-five dollars", False),
 ])  # fmt: skip

@@ -25,7 +25,7 @@ This overrides older text in this plan where they differ. Background and evidenc
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 7,000 Claude Code calls (raised from 5,000 by the person, 2026-11-05) (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
@@ -287,6 +287,7 @@ Runs after T7.1, because it needs the best prompt. **Do:** Add `HFClient(model_p
 **Decision (the coordinator):** `retrieval_memory`'s weak spots in E2 are explicit targets here: it abstains correctly only half the time when evidence is insufficient, and its groundedness is below the other strategies'. Selection uses the lower of the two abstention sides alongside groundedness, written down before the run.
 **Decision (the coordinator):** T3.3 reverted a single-agent prompt that defined the modes: it reached respond on 0 of 16 respond cases and answered fewer answerable cases (record `E2-20261103T155026435232Z`). Any further single-agent prompt work on modes belongs here, and measures respond mode and injected claims in findings as well as suggestions.
 **Decision (the coordinator), number rule:** T3.2's number rule still drops true statements that use number words such as "two". This is a real bug, and E8's numbers must not inherit it. Fix it here, test first, whatever the count from T4.2 shows. Any records it affects go through the same written-rule rerun approach as the short-id bug: state the rule first, same cases and settings, old records listed.
+**Decision (the coordinator), system:** E6 runs on `single`, the default of the runner's `--system` setting (E3's written rule selects it); the record names it in `config.system`. The `retrieval_memory` targets above stay as an observation made on E2. If the team attempt later changes the selection under the written rule, only E6's chosen prompt and the baseline are rerun on the new system, not all versions. The prompt version applies to the single agent: `SingleAgent` builds its system message from the version under test, and `tests/test_e6.py` checks it.
 **Accept:** `{py} -m pytest tests/test_e6.py -q`; `{py} -m contextlens.eval.check_run E6 --min-n 100 --split dev`.
 
 ### T7.2: Prompt regression tests in CI
@@ -404,6 +405,8 @@ See `docs/HUMAN-GATES.md`.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Decision (the coordinator):** The report's limits state that statements restating a conflict are where both judges wobble.
+
+**Decision (the coordinator):** The report's limits also state the number rule's known false-keep (`docs/DECISIONS.md`, entry 41): a finding citing N turns may say a spelled number up to N with no quote holding it, so an invented "two companies" over two cited turns is left for the judge to catch. They give the measured count from the `full_cloud` rerun. Ordinary `first`, `second` and `third` in a statement are not checked either.
 **Decision (the coordinator), selected and shipping system:** Any difference between the selected system and the shipping system is reported plainly, and no bullet may describe one system's numbers as if they were the other's.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 

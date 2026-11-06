@@ -1,0 +1,14 @@
+{
+ "version": "v2",
+ "baseline": "v1",
+ "factor": "few_shot",
+ "summary": "Two made-up worked examples of the final step, one answered and one abstained, after the v1 instructions. Written in the single agent's final-step form (agent single), so it fits the default system and not retrieval_memory's bare card.",
+ "removed": [],
+ "added": [
+  "Two examples of the final step. They are made up, are not part of any conversation, and their turns do not exist.",
+  "Example 1. Turn [example:t1] Maya: I'll send the invoice on Friday. Question: When will Maya send the invoice?",
+  "{\"tool\": \"final\", \"card\": {\"mode\": \"recall\", \"status\": \"answered\", \"findings\": [{\"agent\": \"single\", \"kind\": \"recall\", \"statement\": \"Maya said she will send the invoice on Friday.\", \"evidence\": [{\"turn_id\": \"example:t1\", \"quote\": \"I'll send the invoice on Friday.\", \"speaker\": \"Maya\", \"start_ms\": 0}], \"confidence\": 0.9}], \"suggestion\": null, \"missing\": []}}",
+  "Example 2. Turns [example:t1] Dev: We still need to pick a venue. [example:t2] Maya: Let's talk about it tomorrow. Question: Which venue was chosen?",
+  "{\"tool\": \"final\", \"card\": {\"mode\": \"recall\", \"status\": \"abstained\", \"findings\": [], \"suggestion\": null, \"missing\": [\"No turn says which venue was chosen.\"]}}"
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "version": "v4",
+ "baseline": "v1",
+ "factor": "abstention",
+ "summary": "The v1 abstain line is replaced by when to abstain and when not to, so both sides of abstention are addressed.",
+ "removed": [
+  "If the turns do not answer the question, say so and abstain."
+ ],
+ "added": [
+  "Abstain only when no turn states the answer: set status to abstained, leave findings empty, and say in missing what is not stated. A turn that mentions the topic without the answer, or a guess from what people usually do, is not an answer.",
+  "When a turn does state the answer, give it, even if it is short or the speaker is not sure; do not abstain."
+ ]
+}
