@@ -221,3 +221,56 @@ def test_transcribe_does_not_wait_for_the_backend_name_before_sending_audio():
     asyncio.run(asyncio.wait_for(
         e7.transcribe(NeverSpeech(), bytes(5000 * BYTES_PER_MS), speedup=100.0, settle_s=0.2, info=info), 10))
     assert info["compute_backend"] is None  # never reported: recorded as unknown, not waited for
+
+
+# -- the speech service's voice gate is a fixed level; quiet rebuilt audio fell under it ------------------------------------
+
+def tone(seconds: float, rms: float, silence_s: float = 0.0):
+    import numpy as np
+
+    t = np.arange(int(seconds * SAMPLE_RATE)) / SAMPLE_RATE
+    wave_ = np.sin(2 * np.pi * 220 * t) * rms * 2**0.5  # a sine of this RMS
+    x = np.concatenate([wave_, np.zeros(int(silence_s * SAMPLE_RATE))])
+    return (x * 32768).astype(np.int16).tobytes()
+
+
+def speech_median_rms(pcm: bytes) -> float:
+    import numpy as np
+
+    a = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768
+    n = len(a) // 320
+    r = np.sqrt((a[: n * 320].reshape(n, 320) ** 2).mean(1))
+    return float(np.median(r[r > e7.LEVEL_FLOOR]))
+
+
+def test_quiet_speech_is_brought_to_twice_the_voice_gate_without_touching_silence():
+    quiet = tone(5, 0.004, silence_s=5)  # speech at 0.004 RMS is under the service's 0.01 gate
+    gain = e7.level_gain(quiet)
+    leveled = e7.apply_gain(quiet, gain)
+    assert gain == pytest.approx(e7.LEVEL_TARGET / 0.004, rel=0.05)
+    assert speech_median_rms(leveled) == pytest.approx(e7.LEVEL_TARGET, rel=0.05)
+    assert leveled[len(leveled) // 2 + 1000 :] == bytes(len(leveled) // 2 - 1000)  # the digital silence stays silence
+    assert e7.LEVEL_TARGET >= 2 * 0.01  # the gate threshold in speech/src/vad.h, which is not changed
+
+
+def test_the_gain_is_bounded_by_the_floor_loud_audio_is_not_wrapped_and_silence_has_gain_one():
+    import numpy as np
+
+    g = e7.level_gain(tone(2, 0.0021))
+    assert g == pytest.approx(e7.LEVEL_TARGET / 0.0021, rel=0.05) and g <= e7.LEVEL_TARGET / e7.LEVEL_FLOOR
+    assert e7.level_gain(tone(2, 0.0015)) == 1.0  # all under the floor: it is noise, not speech, and is left alone
+    assert e7.level_gain(bytes(32000)) == 1.0  # nothing above the floor
+    loud = tone(1, 0.5)
+    out = np.frombuffer(e7.apply_gain(loud, 3.0), dtype=np.int16)
+    assert out.max() <= 32767 and out.min() >= -32768 and np.abs(out).max() == 32767  # saturates, never wraps
+
+
+def test_read_leveled_wav_returns_the_pcm_and_the_gain_used(tmp_path: Path):
+    path = tmp_path / "m.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(tone(4, 0.005, silence_s=1))
+    pcm, gain = e7.read_leveled_wav(path)
+    assert gain == pytest.approx(e7.LEVEL_TARGET / 0.005, rel=0.05) and speech_median_rms(pcm) == pytest.approx(e7.LEVEL_TARGET, rel=0.05)
