@@ -33,6 +33,7 @@ from contextlens.cards.dataset import MAX_GOLD, N_RECENT, SYSTEM, _trim, build_e
 from contextlens.eval import series
 from contextlens.eval.check_run import recompute_metrics
 from contextlens.eval.records import ROOT, load_verified, write_atomic, write_run
+from contextlens.experiments.e1_retrieval import BatchedEmbedder
 from contextlens.experiments.e2_context import (
     EMBED_MODEL,
     RUBRIC_VERSION,
@@ -254,8 +255,35 @@ class ReplayRetriever:
         return self.chosen.get(conv_id, [])
 
 
+class EmbedCache:
+    """Embeds in batches the server accepts (E1's `BatchedEmbedder`, 32 texts; Ollama refused 256 at once with a 400 on a
+    QMSum meeting of 756 turns) and sends each distinct text once."""
+
+    def __init__(self, inner: Any) -> None:
+        self.inner, self.batched, self.vectors = inner, BatchedEmbedder(inner), {}
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        missing = list(dict.fromkeys(t for t in texts if t not in self.vectors))
+        if missing:
+            self.vectors.update(zip(missing, self.batched.embed(missing), strict=True))
+        return [self.vectors[t] for t in texts]
+
+
+def preflight_embeddings(scenarios: list[Scenario], embedder: Any) -> None:
+    """Embed every case's searchable turns and its query, biggest conversation first, so a case the embedder cannot take
+    stops the run here, by name, before any model is loaded. What is embedded stays in `embedder` for the retrieval."""
+    for sc in sorted(scenarios, key=lambda s: -len(s.conversation.turns)):
+        query, _ = query_for(sc)
+        try:
+            embedder.embed([t.text for t in sc.conversation.turns if t.seq <= sc.request.as_of_seq] + [query])
+        except Exception as err:
+            raise RuntimeError(f"case {sc.id}: embedding failed ({len(sc.conversation.turns)} turns): {err}") from err
+
+
 def select_evidence(scenarios: list[Scenario], embedder: Any, config: dict[str, Any]) -> dict[str, list[tuple[str, float]]]:
     """Scenario id -> (turn id, score) of the retrieved turns, by the product's rule. Needs the embedder."""
+    embedder = EmbedCache(embedder)
+    preflight_embeddings(scenarios, embedder)
     out = {}
     for sc in scenarios:
         query, last_seq = query_for(sc)

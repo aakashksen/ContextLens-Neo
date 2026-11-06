@@ -562,3 +562,49 @@ def test_e5_training_does_not_fall_back_to_another_model(tmp_path: Path, monkeyp
     with pytest.raises(ValueError, match="unsupported"):
         tl.train(tmp_path / "o", steps=1, base_model=e5.BASE_MODEL, allow_fallback=False)
     assert loaded == [e5.BASE_MODEL]  # no second load of another model
+
+
+# ---- embedding the cases before any GPU model loads ----
+
+class LimitedEmbedder:
+    """Like Ollama's: a request of more than 100 texts is refused (the real server refused 256 with a 400)."""
+
+    model = "fake-embed"
+
+    def __init__(self, fail_on: str | None = None) -> None:
+        self.requests: list[list[str]] = []
+        self.fail_on = fail_on
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.requests.append(list(texts))
+        if len(texts) > 100 or (self.fail_on and self.fail_on in " ".join(texts)):
+            raise RuntimeError("request failed: HTTP Error 400: Bad Request")
+        return [[float(len(t) % 7), 1.0, float(len(t) % 3)] for t in texts]
+
+
+def _long_sc(sid: str, n: int) -> Scenario:
+    sc = _sc(sid, None, question="When?", gold=[1])
+    turns = _turns(sid, [f"turn number {i} about topic {i % 5}" for i in range(n)])
+    return sc.model_copy(update={"conversation": sc.conversation.model_copy(update={"turns": turns}),
+                                 "request": sc.request.model_copy(update={"as_of_seq": n - 1})})
+
+
+def test_a_long_conversation_is_embedded_in_batches_the_server_accepts() -> None:
+    emb = LimitedEmbedder()
+    out = e5.select_evidence([_long_sc("big", 300)], emb, {"k": 3, "mode": "hybrid"})
+    assert len(out["big"]) == 3 and max(len(r) for r in emb.requests) <= 32  # the E1 batch size
+
+
+def test_preflight_names_the_case_that_cannot_be_embedded_and_goes_biggest_first() -> None:
+    emb = LimitedEmbedder(fail_on="turn number 7 ")
+    with pytest.raises(RuntimeError, match="case big-2: embedding failed"):
+        e5.select_evidence([_long_sc("small", 5), _long_sc("big-2", 40), _long_sc("big-1", 30)], emb, {"k": 3, "mode": "hybrid"})
+    assert emb.requests[0][0].startswith("turn number 0")  # the biggest conversation went first
+    assert len(emb.requests) <= 2  # it stopped at the first failure
+
+
+def test_selection_reuses_what_the_preflight_embedded() -> None:
+    emb = LimitedEmbedder()
+    e5.select_evidence([_long_sc("a", 20)], emb, {"k": 3, "mode": "hybrid"})
+    embedded = [t for r in emb.requests for t in r]
+    assert len(embedded) == len(set(embedded))  # no text was sent twice
