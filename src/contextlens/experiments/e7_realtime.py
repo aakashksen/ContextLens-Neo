@@ -152,7 +152,9 @@ def read_wav(path: Path) -> bytes:
 LEVEL_FLOOR = 0.002  # 20 ms frames above this RMS count as speech when setting the level
 LEVEL_TARGET = 0.02  # the median speech frame goes here: twice the speech service's voice gate (0.01 in speech/src/vad.h)
 LEVEL_RULE = (f"each meeting gets one gain so that the median RMS of its 20 ms frames above {LEVEL_FLOOR} is {LEVEL_TARGET} "
-              "(twice the speech service's fixed voice-gate threshold of 0.01); samples saturate at 16 bits, silence stays silence")
+              "(twice the speech service's fixed voice-gate threshold of 0.01); samples saturate at 16 bits, silence stays silence. "
+              "The gain is computed over the whole meeting, which a live system cannot do: this is a normalization of the "
+              "rebuilt audio, not a live feature")
 
 
 def level_gain(pcm: bytes) -> float:
@@ -1060,6 +1062,144 @@ def run_e7(
     return path
 
 
+SPEECH_ONLY_REASON = ("The earlier record's WER, DER, pipeline and oracle numbers were invalid: the speech service's fixed "
+                      "voice gate (RMS 0.01) dropped most of the quiet rebuilt audio, so the streamed text held far less "
+                      "than the audio said (see docs/DECISIONS.md, entry 60). The clean system's cards and the press "
+                      "latencies of that record do not depend on the speech path and still stand there.")
+SPEECH_ONLY_INVALIDATES = ("The earlier E7 records' WER, DER, asr_pipeline and asr_oracle_speakers quality and their speech and "
+                           "speaker timings were invalid because of the voice gate bug (the gate dropped quiet speech); this "
+                           "record replaces the WER and DER. The clean system's cards and the press latencies do not depend "
+                           "on the speech path.")
+SPEECH_ONLY_DROPPED = ("The 33-question quality under speech errors (recall and the rest of the card metrics of the pipeline "
+                       "and oracle systems) is not measured again, because no resume bullet uses it; this record has no cards.")
+
+
+def speech_only_meeting(scs: list[Scenario], pcm: bytes, segments: list[Segment], *, backend: WindowBackend,
+                        step_ms: int = STEP_MS, say: Callable[[str], None] = print) -> tuple[dict[str, Prediction], dict[str, Any]]:
+    """The speech and speaker path of `replay_meeting` and nothing else: turns arrive as `unknown`, the speaker model runs
+    over its last two minutes at every tick and relabels them, and each question gets the transcript and speaker spans
+    as they stand at its cut. No memory, cards or model calls."""
+    meeting = scs[0].conversation.id
+    scs = sorted(scs, key=cut_ms)
+    cuts = {s.id: cut_ms(s) for s in scs}
+    last_cut = max(cuts.values())
+    boundaries = sorted({*range(step_ms, last_cut, step_ms), *cuts.values(), last_cut})
+    store, diarizer = InMemoryTranscriptStore(), Diarizer(meeting, backend)
+    rows: dict[str, Prediction] = {}
+    diar_ms: list[int] = []
+    prev = -1
+    for b in boundaries:
+        new_segs = [g for g in segments if prev < g.end_ms <= b]
+        diarizer.feed(pcm[max(prev, 0) * BYTES_PER_MS : b * BYTES_PER_MS])
+        for t in diarizer.assign(new_segs):
+            store.add(t)
+        window, start = diarizer.window()
+        if window:
+            t0 = time.perf_counter()
+            spans = backend.spans(window)
+            diar_ms.append(int((time.perf_counter() - t0) * 1000))
+            for seq, who, conf in diarizer.speaker_updates(
+                    spans, start, start + len(window) // BYTES_PER_MS, store.turns(meeting, ALL)):
+                store.relabel(meeting, seq, who, conf)
+        for sc in (x for x in scs if cuts[x.id] == b):
+            turns = store.turns(meeting, ALL)
+            rows[sc.id] = Prediction(scenario_id=sc.id, ranked_turn_ids=[], asr_text=" ".join(t.text for t in turns),
+                                     speaker_spans=[(t.start_ms, t.end_ms, t.speaker) for t in turns])
+            say(f"  {sc.id} read at {b / 1000:.0f} s")
+        prev = b
+    final = store.turns(meeting, ALL)
+    return rows, {"diar_ms": diar_ms, "turns": len(final), "turns_still_unknown": sum(t.speaker == "unknown" for t in final)}
+
+
+def run_speech_only(
+    *, root: Path = ROOT, speech: SpeechService, backend: WindowBackend, supersedes: list[str], audio_dir: Path | None = None,
+    speedup: float = 4.0, settle_s: float = 10.0, step_ms: int = STEP_MS, say: Callable[[str], None] = print,
+    ran_alone: bool, speech_address: str, device_probe: Callable[[], dict[str, str | None]],
+    gpu_peak: Callable[[], dict[str, Any] | None] = lambda: None,
+) -> Path:
+    """Speech and speaker runs only, on every meeting shortest first, with each finished meeting saved; one E7 record of
+    phase `speech_only` with card-less `asr_pipeline` rows, holding WER and DER. `supersedes` names the earlier records
+    whose speech numbers were invalid. Nothing here is a latency figure: speech and speaker timings come from the
+    real-time segment."""
+    require_clean(root)
+    say = stamped(say)
+    if speedup <= 0:
+        raise ValueError("speedup must be positive")
+    manifest_rel = SCENARIO_SOURCES[SOURCE][0].as_posix()
+    if not committed_unchanged({"git_commit": head_commit(root)}, root, manifest_rel):
+        raise RuntimeError("the AMI manifest must be committed before the run")
+    scenarios, digest = _load_dev(root)
+    by_meeting: dict[str, list[Scenario]] = {}
+    for sc in scenarios:
+        by_meeting.setdefault(sc.conversation.id, []).append(sc)
+    audio = audio_dir or root / AUDIO_REL
+    missing = [m for m in by_meeting if not (audio / f"{m}.wav").is_file()]
+    if missing:
+        raise FileNotFoundError(f"no audio for {missing}")
+    _, reviewed = load_questions(root)
+    started = datetime.now(timezone.utc).isoformat()
+    partial = PartialRows(root, {"kind": "speech_only", "digest": digest, "speedup": speedup, "step_ms": step_ms})
+    order = shortest_meetings(audio, list(by_meeting), len(by_meeting))
+    rows: dict[str, Prediction] = {}
+    stats: dict[str, dict[str, Any]] = {}
+    backends: set[str | None] = set()
+    for n, meeting in enumerate(order, 1):
+        scs = by_meeting[meeting]
+        say(f"{meeting}: {len(scs)} questions ({n}/{len(order)})")
+        saved = partial.get(meeting)
+        if saved is not None:
+            say(f"  {meeting}: finished in an earlier run at this commit, taken from results/partial/e7")
+            stats[meeting] = saved["stats"]
+            backends.update(saved["backends"])
+            rows.update({sid: Prediction.model_validate(p) for sid, p in saved["rows"].items()})
+            continue
+        pcm, gain = read_leveled_wav(audio / f"{meeting}.wav")
+        cut = max(cut_ms(s) for s in scs)
+        info: dict[str, Any] = {}
+        segments, _, wall_s = asyncio.run(transcribe(speech, pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS),
+                                                     speedup=speedup, settle_s=settle_s, info=info))
+        say(f"  speech {meeting}: {len(segments)} segments from {cut / 1000:.0f} s of audio at {speedup:g}x in {wall_s:.0f} s")
+        t_replay = time.perf_counter()
+        got, st = speech_only_meeting(scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend,
+                                      step_ms=step_ms, say=say)
+        st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments), gain=gain)
+        say(f"  speaker runs {meeting}: {time.perf_counter() - t_replay:.0f} s ({len(st['diar_ms'])} runs, "
+            f"{sum(st['diar_ms']) / 1000:.0f} s in them)")
+        partial.put(meeting, {"rows": {sid: p.model_dump(mode="json") for sid, p in got.items()}, "stats": st,
+                              "backends": [info.get("compute_backend")]})
+        backends.add(info.get("compute_backend"))
+        stats[meeting] = st
+        rows.update(got)
+    preds = [rows[s.id] for s in scenarios]
+    metrics = {"asr_pipeline": {k: v for k, v in recompute_metrics(scenarios, preds, KS).items() if k in ("wer", "der")}}
+    found = {k: iv for k, iv in recompute_intervals(scenarios, preds, ["wer"]).items() if iv}
+    whisper = _one(backends)
+    devices = {"whisper": {"requested": "cuda", "actual": device_kind(whisper), "reported": whisper}}
+    pyannote = device_probe().get("pyannote")
+    devices["pyannote"] = {"requested": "cuda", "actual": device_kind(pyannote), "reported": pyannote}
+    for stage, d in devices.items():
+        if d["actual"] != "cuda":
+            warnings.warn(f"{stage} ran on {d['actual']}, not cuda", RuntimeWarning, stacklevel=2)
+            say(f"WARNING {stage} ran on {d['actual']}, not cuda")
+    config: dict[str, Any] = {
+        "experiment": "E7", "phase": "speech_only", "systems": ["asr_pipeline"], "step_ms": step_ms, "speedup": speedup,
+        "latency_basis": "not measured: speech and speaker timings come only from a real-time segment, not from a sped-up pass",
+        "audio_source": audio_source(audio), "speech_address": speech_address, "devices": devices,
+        "stages_not_on_cuda": [k for k, d in devices.items() if d["actual"] != "cuda"], "ran_alone": ran_alone,
+        "processing_order": order, "per_meeting": {m: {k: v for k, v in s.items() if k != "diar_ms"} for m, s in stats.items()},
+        "diarization_run_ms": _summary([x for s in stats.values() for x in s["diar_ms"]]),
+        "invalidates": SPEECH_ONLY_INVALIDATES, "dropped": SPEECH_ONLY_DROPPED, "gpu_peak": gpu_peak(),
+        "resumed_stages": partial.resumed, "claude_calls": 0, "labels_reviewed": reviewed, "started_at": started,
+    }
+    path = write_run("E7", SPLIT, config, {"speech": "whisper.cpp ggml-tiny.en", "diarizer": "pyannote/speaker-diarization-3.1"},
+                     {}, metrics, {"asr_pipeline": found} if found else {},
+                     [{"setting": "asr_pipeline", "ok": True, "errored_presses": 0}], {"asr_pipeline": preds}, digest,
+                     supersedes=[{"run_id": r, "reason": SPEECH_ONLY_REASON} for r in supersedes],
+                     scenario_source=SOURCE, root=root)
+    partial.clear()
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="e7_realtime")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1091,6 +1231,15 @@ def main(argv: list[str] | None = None) -> int:
                                         "and which latencies are the headline; regenerates nothing")
     st.add_argument("run_id")
     st.add_argument("--reason", required=True)
+    so = sub.add_parser("speech-only", help="speech and speaker runs only, all meetings shortest first, one card-less "
+                                           "E7 record with WER and DER; needs the speech service and pyannote, no Ollama")
+    so.add_argument("--supersede", action="append", required=True, metavar="RUN_ID",
+                    help="an earlier E7 record whose WER and DER were invalid (repeat for several)")
+    so.add_argument("--speedup", type=float, default=READY_SPEEDUP)
+    so.add_argument("--speech-address", default=GPU_SPEECH_ADDRESS)
+    so_alone = so.add_mutually_exclusive_group(required=True)
+    so_alone.add_argument("--alone", action="store_true")
+    so_alone.add_argument("--not-alone", action="store_true")
     d = sub.add_parser("ready", help="can speech keep up with sped-up audio? writes results/local/e7-readiness-*.json")
     d.add_argument("--meeting", required=True, help="a dev meeting whose first minutes are streamed")
     d.add_argument("--speedup", type=float, default=READY_SPEEDUP)
@@ -1109,6 +1258,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "ready":
         return _ready(args)
+    if args.cmd == "speech-only":
+        return _speech_only(args)
     return _run_real(args)
 
 
@@ -1128,6 +1279,25 @@ def _ready(args: argparse.Namespace) -> int:
     print(path.as_posix())
     print("keeps up:", out["keeps_up"], "|", out.get("plan") or out.get("error"))
     return 0 if out["keeps_up"] else 3
+
+
+def _speech_only(args: argparse.Namespace) -> int:
+    try:
+        require_clean(ROOT)  # before any model loads
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    from contextlens.speech.client import GrpcSpeech
+    from contextlens.speech.diarize import PyannoteBackend
+
+    sampler = GpuSampler()
+    sampler.start()
+    backend = PyannoteBackend()
+    path = run_speech_only(speech=GrpcSpeech(args.speech_address), backend=backend, supersedes=args.supersede,
+                           speedup=args.speedup, ran_alone=args.alone, speech_address=args.speech_address,
+                           device_probe=lambda: {"pyannote": backend.device}, gpu_peak=sampler.stop)
+    print(path.as_posix())
+    return 0
 
 
 def _run_real(args: argparse.Namespace) -> int:

@@ -795,3 +795,79 @@ def test_the_audio_sent_to_speech_is_leveled_and_the_record_states_the_rule_and_
     assert rec["config"]["audio_source"]["level"] == e7.LEVEL_RULE
     assert rec["config"]["per_meeting"]["m1"]["gain"] == pytest.approx(e7.LEVEL_TARGET / 0.004, rel=0.05)
     assert rec["config"]["per_meeting"]["m2"]["gain"] == 1.0  # silence is left alone
+
+
+# -- speech and speaker only ----------------------------------------------------------------------------------------------
+
+def run_speech(repo: Path, speech=None, **kw) -> Path:
+    return e7.run_speech_only(
+        root=repo, speech=speech or ScriptedSpeech([aligned_script("m1"), merged_script("m2")]), backend=TruthBackend(),
+        speedup=1000.0, step_ms=10_000, ran_alone=True, speech_address="x", device_probe=lambda: {"pyannote": "cuda"},
+        say=lambda m: None, **kw)
+
+
+def test_speech_only_writes_cardless_wer_and_der_rows_that_check_run_accepts_by_its_own_rules(repo: Path) -> None:
+    path = run_speech(repo, supersedes=[])
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    cfg = rec["config"]
+    assert rec["experiment"] == "E7" and cfg["phase"] == "speech_only" and cfg["systems"] == ["asr_pipeline"] and rec["n"] == 4
+    assert set(rec["metrics"]["asr_pipeline"]) == {"wer", "der"} and rec["metrics"]["asr_pipeline"]["wer"] is not None
+    rows = [json.loads(x) for x in (repo / rec["predictions"]["asr_pipeline"]).read_text(encoding="utf-8").splitlines()]
+    assert all(r["card"] is None and r["asr_text"] and r["speaker_spans"] for r in rows)
+    assert check("E7", root=repo, min_n=4, split="dev") == []  # no rule loosened
+    assert cfg["processing_order"] == ["m1", "m2"] and set(cfg["devices"]) == {"whisper", "pyannote"}
+    assert cfg["per_meeting"]["m1"]["gain"] == 1.0 and cfg["latency_basis"].startswith("not measured")
+
+
+def test_speech_only_rows_are_the_rows_the_full_pipeline_makes_for_the_same_audio(repo: Path) -> None:
+    full = json.loads(run(repo).read_text(encoding="utf-8"))
+    ref = {json.loads(x)["scenario_id"]: json.loads(x) for x in
+           (repo / full["predictions"]["asr_pipeline"]).read_text(encoding="utf-8").splitlines()}
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "next")
+    new = json.loads(run_speech(repo, supersedes=[]).read_text(encoding="utf-8"))
+    rows = {json.loads(x)["scenario_id"]: json.loads(x) for x in
+            (repo / new["predictions"]["asr_pipeline"]).read_text(encoding="utf-8").splitlines()}
+    assert set(rows) == set(ref) and all(rows[s]["asr_text"] == ref[s]["asr_text"] for s in rows)
+    assert all(rows[s]["speaker_spans"] == ref[s]["speaker_spans"] for s in rows)
+    assert new["metrics"]["asr_pipeline"]["wer"] == full["metrics"]["asr_pipeline"]["wer"]
+
+
+def test_the_speech_only_record_says_what_it_invalidates_what_it_drops_and_supersedes_the_old_record(repo: Path) -> None:
+    base = run(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "next")
+    new = run_speech(repo, supersedes=[base.stem])
+    rec = json.loads(new.read_text(encoding="utf-8"))
+    cfg = rec["config"]
+    assert "voice gate" in cfg["invalidates"] and all(w in cfg["invalidates"] for w in ("WER", "DER", "pipeline", "oracle"))
+    assert "33-question" in cfg["dropped"] and "bullet" in cfg["dropped"]
+    assert rec["supersedes"] == [{"run_id": base.stem, "reason": e7.SPEECH_ONLY_REASON}]
+    assert "whole meeting" in cfg["audio_source"]["level"] and "not a live feature" in cfg["audio_source"]["level"]
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+
+
+def test_speech_only_saves_each_finished_meeting_and_resumes(repo: Path) -> None:
+    with pytest.raises(e7.SpeechUnavailable):
+        run_speech(repo, FailsToOpen([aligned_script("m1"), merged_script("m2")], ok=1), supersedes=[])
+    SPEEDS.clear()
+    rec = json.loads(run_speech(repo, ScriptedSpeech([merged_script("m2")]), supersedes=[]).read_text(encoding="utf-8"))
+    assert rec["config"]["resumed_stages"] == ["m1"] and SPEEDS == [1000.0]
+    assert not list((repo / "results/partial/e7").glob("*.jsonl"))
+
+
+def test_speech_only_refuses_a_dirty_tree_before_it_opens_speech(repo: Path) -> None:
+    (repo / "x.txt").write_text("x", encoding="utf-8")
+
+    class Boom:
+        async def open(self):
+            raise AssertionError("opened")
+
+    with pytest.raises(RuntimeError, match="uncommitted"):
+        run_speech(repo, Boom(), supersedes=[])
+
+
+def test_the_speech_only_command_refuses_a_dirty_tree_and_needs_a_baseline_to_supersede(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(e7, "is_dirty", lambda root: True)
+    assert e7.main(["speech-only", "--alone", "--supersede", "E7-x"]) == 2
+    assert "uncommitted" in capsys.readouterr().err
