@@ -480,10 +480,15 @@
         "{py} -m pytest tests/test_e6.py -q",
         "{py} -m contextlens.eval.check_run E6 --min-n 100 --split dev"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-03T17:15:41+00:00",
-      "verifier": false
+      "verifier": false,
+      "verified": {
+        "commit": "479d3c6c01b5da3cc916bbc8224cd1c9bba0e0d6",
+        "passed": true,
+        "at": "2026-11-06T00:10:53+00:00"
+      },
+      "done_at": "2026-11-06T00:12:16+00:00"
     },
     {
       "id": "T7.2",
