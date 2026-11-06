@@ -149,7 +149,7 @@ def _load_4bit(model_id: str) -> Any:
 
 
 def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARDS_DIR,
-          include_scenarios: bool = False, base_model: str = PRIMARY) -> dict[str, Any]:
+          include_scenarios: bool = False, base_model: str = PRIMARY, allow_fallback: bool = True) -> dict[str, Any]:
     """Needs a GPU turn. Tries `base_model`; if loading or PEFT fails with an architecture error (see
     is_architecture_error), uses FALLBACK and records the exact error in train_meta.json; any other failure is
     raised. Exceeding the VRAM limit raises at the first step over it: the model class is not changed silently."""
@@ -162,7 +162,7 @@ def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARD
     try:
         model = attach_lora(_load_4bit(base))
     except Exception as e:
-        if not is_architecture_error(e):
+        if not allow_fallback or not is_architecture_error(e):
             raise
         base, reason = FALLBACK, f"{type(e).__name__}: {e}"
         torch.cuda.empty_cache()

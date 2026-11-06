@@ -235,7 +235,7 @@ def _card_for(sc: Scenario, grounded_quote: str) -> Prediction:
 
 def _training(adapter: Path, loss: float = 0.5) -> dict:
     return {"training_set": {"size": 10}, "adapter_hash": e5.adapter_hash(adapter), "epochs": 2, "batch_size": 2,
-            "train_meta": {"base_model": "Qwen/Qwen3.5-4B", "fallback_used": False, "fallback_reason": None,
+            "train_meta": {"base_model": e5.BASE_MODEL, "fallback_used": False, "fallback_reason": None,
                            "peak_vram_gb": 5.0, "losses": [1.0, loss]}}
 
 
@@ -537,3 +537,28 @@ def test_record_states_the_base_model_change() -> None:
     assert (c["from"], c["to"]) == ("Qwen/Qwen3.5-4B", "Qwen/Qwen3.5-2B") == ("Qwen/Qwen3.5-4B", e5.BASE_MODEL)
     assert "5.5 GB" in c["why"] and "82 examples" in c["why"] and "2026-11-05" in c["why"]
     assert e5.training_summary(Counter({"train_final_size": 212}))["base_model_change"] == c
+
+
+def test_a_different_loaded_model_stops_write_and_judge(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    shared = tmp_path / "shared"
+    adapter = _adapter(shared / "models/e5-adapter")
+    info = _training(adapter)
+    info["train_meta"].update(base_model="Qwen/Qwen3-4B", fallback_used=True)
+    (adapter / "e5_training.json").write_text(json.dumps(info), encoding="utf-8")
+    monkeypatch.setattr(e5, "data_root", lambda: shared)
+    for call in (lambda: e5.run_write(repo, "v1", say=lambda *_: None), lambda: e5.run_judge(repo, "v1", say=lambda *_: None)):
+        with pytest.raises(RuntimeError, match="Qwen/Qwen3.5-2B.*trained on Qwen/Qwen3-4B"):
+            call()
+
+
+def test_e5_training_does_not_fall_back_to_another_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.cards import train_lora as tl
+
+    loaded = []
+    def boom(model_id):
+        loaded.append(model_id)
+        raise ValueError("unsupported architecture")
+    monkeypatch.setattr(tl, "_load_4bit", boom)
+    with pytest.raises(ValueError, match="unsupported"):
+        tl.train(tmp_path / "o", steps=1, base_model=e5.BASE_MODEL, allow_fallback=False)
+    assert loaded == [e5.BASE_MODEL]  # no second load of another model

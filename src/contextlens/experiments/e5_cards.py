@@ -233,7 +233,8 @@ def run_train(root: Path, *, small_ok: bool, say: Callable[[str], None] = print)
     if summary["under_minimum"] and not small_ok:
         raise SystemExit(f"refused: {summary['size']} examples is under {MIN_EXAMPLES}; tell the coordinator, then rerun with --small-ok")
     out = root / ADAPTER_REL
-    meta = train(out, steps_for(summary["size"]), MAX_LEN, cards_dir, include_scenarios=True, base_model=BASE_MODEL)
+    meta = train(out, steps_for(summary["size"]), MAX_LEN, cards_dir, include_scenarios=True, base_model=BASE_MODEL,
+                 allow_fallback=False)
     info = {"training_set": summary, "adapter_hash": adapter_hash(out), "epochs": EPOCHS, "batch_size": BATCH,
             "max_len": MAX_LEN, "train_meta": meta}
     write_atomic(out / "e5_training.json", json.dumps(info, indent=1) + "\n")
@@ -409,11 +410,19 @@ def run_speed_check(root: Path, prompt_version: str, say: Callable[[str], None] 
     return out
 
 
+def require_base(info: dict[str, Any]) -> str:
+    """The model the adapter was trained on, which must be BASE_MODEL: E5 never runs on a model that loaded in its place."""
+    loaded = info["train_meta"]["base_model"]
+    if loaded != BASE_MODEL or info["train_meta"].get("fallback_used"):
+        raise RuntimeError(f"E5 needs {BASE_MODEL} but the adapter was trained on {loaded}; retrain, do not write or judge")
+    return loaded
+
+
 def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = print, *, fallback: bool = False) -> Path:
     from contextlens.llm.client import unload_ollama
 
     info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
-    base = info["train_meta"]["base_model"]
+    base = require_base(info)
     folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)
     if fallback:
@@ -466,7 +475,7 @@ def run_probe(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     shared = data_root()
     summary = build_training(shared, shared / "datasets/cards")
     meta = train(shared / "models/e5-probe", PROBE_STEPS, MAX_LEN, shared / "datasets/cards", include_scenarios=True,
-                 base_model=BASE_MODEL)
+                 base_model=BASE_MODEL, allow_fallback=False)
     step_s = meta["train_s"] / PROBE_STEPS
     full_n = len(sets["scenarios"]) + len(sets["qmsum"])
     train_total = meta["load_s"] + steps_for(summary["size"]) * step_s
@@ -572,6 +581,7 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     from contextlens.llm.client import CLAUDE_CALL_CAP, CLAUDE_CALLS_PATH
 
     info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
+    loaded = require_base(info)
     folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)
     subset = None
@@ -603,7 +613,7 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
               for source, sides in by_source.items()}
     _, dhash = load_verified("scenarios", SPLIT, root)
     qmsum = qmsum_figures(sets["qmsum"], judged["qmsum"])
-    models = {"writer": BASE_MODEL, "adapter": ADAPTER_REL.as_posix(), "judge": llm.model, "embedder": EMBED_MODEL}
+    models = {"writer": loaded, "adapter": ADAPTER_REL.as_posix(), "judge": llm.model, "embedder": EMBED_MODEL}
     return build_record(root=root, scenarios=own, dataset_hash=dhash, preds=judged["scenarios"],
                         extra_config={"claude_calls": getattr(llm, "calls_made", 0) - before, **({"subset": subset} if subset else {})}, models=models,
                         prompt_version=prompt_version, training=info, qmsum=qmsum)
