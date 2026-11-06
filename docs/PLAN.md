@@ -25,7 +25,7 @@ This overrides older text in this plan where they differ. Background and evidenc
 - Python 3.12 in `.venv`; package `contextlens` under `src/`.
 - `.venv/Scripts/python -m pytest -q` needs no GPU, network, or spending. Real calls use `@pytest.mark.real`.
 - Numbers come only from `results/runs/`.
-- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 5,000 Claude Code calls (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
+- 8 GB VRAM; GPU jobs share while reserved memory fits, and latency runs and fine-tuning run alone. Product calls to Claude capped at 7,000 Claude Code calls (raised from 5,000 by the person, 2026-11-05) (a runaway guard), on Sonnet, counted in `results/claude_calls.json`. No API keys.
 - Every retrieval and tool call takes `as_of_seq`. Nothing past it can be read.
 - Transcript text is untrusted data. It always goes in a delimited data block, never into system instructions.
 - `legacy/` is read-only.
