@@ -190,3 +190,10 @@ Labels: none used from it; only the audio and the begin time and speaker of each
 Access: public HTTP range requests; no token. Configs `ihm` (15.2 GB, one headset microphone per speaker) and `sdm` (13.8 GB, one far microphone), parquet shards with an `audio` WAV per utterance.
 Approved: yes, by the person on 2026-11-03, as the replacement audio source for E7 because the AMI mirror and browser access were refused (intermittent 403).
 Use: `tools/hf_audio.py` reads only the row groups that hold the 11 E7 meetings and writes `datasets/raw/ami-audio/<meeting>.wav` (git-ignored) and a manifest. The audio is rebuilt from segmented utterances: gaps between utterances are silence, so latency and diarization error may be easier than on the original recordings. Some utterances are 32-bit float or stereo with identical channels; both are converted as `tools/hf_audio.py` documents. Nothing is committed.
+
+## Speech models for E7's WER control: openai/whisper-tiny.en and whisper-base.en (Hugging Face)
+
+URL: https://huggingface.co/openai/whisper-tiny.en (revision 87c7102498dcde7456f24cfd30239ca606ed9063, `model.safetensors` 151 MB) and https://huggingface.co/openai/whisper-base.en (revision 911407f4214e0e1d82085af863093ec0b66f9cd6, `model.safetensors` 290 MB).
+License: Apache-2.0 on both model cards (Hugging Face API), not gated. Checked 2026-11-06.
+Use: a diagnostic only (`experiments/e7_wer_control.py`): the weights are read as safetensors with no remote code, cached under `models/whisper-control/` (git-ignored), never committed. They are the transformers form of the same OpenAI models as the service's ggml `tiny.en`, not the service's file.
+Approved: yes, by the coordinator, 2026-11-06 (base.en for comparison, if small).
