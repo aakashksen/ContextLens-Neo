@@ -627,7 +627,7 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     if guard is None:
         from contextlens.experiments.judge_calibrate import UsageGuard
 
-        guard = UsageGuard(90.0)
+        guard = UsageGuard(95.0)  # the person moved the weekly stop from 90% to 95% on 2026-11-05
     guard.start()
     store = pg.RowStore(folder / "judge.rows.jsonl", {"kind": "e5-judge-rows", "model": llm.model, "rubric": RUBRIC_VERSION})
     todo = pg.pending(items, store)
