@@ -262,14 +262,16 @@ def test_train_uses_the_memory_savers_and_the_chosen_cap(tmp_path, monkeypatch):
 
     seen = {}
     dummy = type("M", (), {"save_pretrained": lambda self, d: None})()
-    monkeypatch.setattr(tl, "_load_4bit", lambda m: dummy)
+    seen_model = []
+    monkeypatch.setattr(tl, "_load_4bit", lambda m: seen_model.append(m) or dummy)
     monkeypatch.setattr(tl, "attach_lora", lambda m: m)
     monkeypatch.setattr(tl, "load_examples", lambda *a, **k: [])
     monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", lambda *a, **k: None)
     monkeypatch.setattr(tl, "run_steps", lambda *a, **k: seen.update(k) or seen.update(max_len=a[3]) or [0.5])
-    tl.train(tmp_path / "out", steps=1, max_len=e5.MAX_LEN)
+    tl.train(tmp_path / "out", steps=1, max_len=e5.MAX_LEN, base_model=e5.BASE_MODEL)
+    assert seen_model == [e5.BASE_MODEL] == ["Qwen/Qwen3.5-2B"]
     assert seen["micro_batch"] == 1 and seen["card_loss_only"] is True and seen["vram_limit_gb"] == tl.VRAM_LIMIT_GB
-    assert seen["max_len"] == e5.MAX_LEN == 917  # measured: the worst row it keeps peaks at 5.42 GB, under 5.5
+    assert seen["max_len"] == e5.MAX_LEN == 2048  # every one of the 212 rows peaks under 5.5 GB on the 2B (estimate; the limit checks each step)
     assert tl.VRAM_LIMIT_GB == 5.5  # the card has about 5.7 GB really free: Windows holds about 2 GB
 
 

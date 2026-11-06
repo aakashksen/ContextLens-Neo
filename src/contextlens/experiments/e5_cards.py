@@ -49,12 +49,18 @@ from contextlens.retrieval.query import query_for
 from contextlens.schemas import ButtonRequest, Scenario, Turn
 
 EXPERIMENT, SPLIT = "E5", "dev"
-BASE_MODEL = "Qwen/Qwen3.5-4B"
+BASE_MODEL = "Qwen/Qwen3.5-2B"
+BASE_MODEL_CHANGE = {
+    "from": "Qwen/Qwen3.5-4B", "to": BASE_MODEL,
+    "why": "The card has about 5.5 GB of real room (Windows holds about 2 GB). On the 4B that limit keeps 82 examples "
+           "(MAX_LEN 917); the 2B keeps all 212. The person decided on 2026-11-05 that both sides, the prompted base with the "
+           "chosen prompt and the adapter, run on the 2B.",
+}
 ADAPTER_REL = Path("models/e5-adapter")  # git-ignored
 PARTIAL_REL = Path("results/partial/e5")  # git-ignored
 QMSUM_SUBSET, QMSUM_N, SUBSET_SEED = "e5-qmsum-100", 100, "e5-v1"
 ABSTAIN_CAP, CAP_SEED, MIN_EXAMPLES = 0.25, 13, 300
-EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 917, 4, 3
+EPOCHS, BATCH, MAX_LEN, PROBE_STEPS, PROBE_CARDS = 2, 2, 2048, 4, 3
 # A local 4-bit model is slow; both sides get the same generous limits. 800 new tokens: the longest of the 212 training
 # cards is 788 tokens and one cut short is invalid JSON, which costs a retry; the probe's replies were 200 to 350 tokens.
 DEADLINE_S, REPLY_TOKENS = 300.0, 800
@@ -130,6 +136,14 @@ MEMORY_CHOICE = {
                                   "cache): all 212 rows would stay under 5.5 GB, training about 14 min (2B) or 8 min (0.8B), "
                                   "against 5.5 min for the 82 examples on the 4B. The fit behind it is rough (rms 0.35 GB).",
     },
+    "base_model_2b": {
+        "decision": "the person, 2026-11-05: Qwen/Qwen3.5-2B for both sides, all 212 examples, MAX_LEN 2048, limit 5.5 GB kept",
+        "estimate_not_measured": "per row from the 4B's measured peaks (weights 3.5 GB to 2.0 GB, the layer part scaled by "
+                                 "2048x24 / 2560x32 = 0.6, the card-logits part unchanged, plus 0.24 GB for the optimizer): "
+                                 "worst row 4.75 GB, none over 5.5; the 2B tokenizer gives the same length on all 212 rows. "
+                                 "Projected 3.4 to 5.1 s per step of 2 rows, 212 steps = 12 to 18 min. A GPU run must confirm "
+                                 "it; check_vram still stops at the first step over 5.5.",
+    },
     "tool": "tools/e5_memory_diag.py (synthetic rows of an exact length built from real ones, inside the tool only)",
     "peak_gb_and_s_per_step_by_input_tokens": {  # savers: base = batch 2 full logits; A = batch 1 x 2 accumulated; B = card-only loss
         "512": {"base": [7.51, 6.4], "A": [6.01, 3.3], "B": [5.35, 2.7], "A+B": [4.95, 3.2]},
@@ -172,7 +186,7 @@ def training_summary(stats: Counter) -> dict[str, Any]:
         "dropped_too_long": stats["train_dropped_too_long"],
         "dropped": {k: v for k, v in stats.items() if k.startswith("dropped_")},
         "built_before_cap_and_split_by_source_mode_status": built,
-        "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "memory_choice": MEMORY_CHOICE, "max_len": MAX_LEN, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
+        "max_gold": MAX_GOLD, "max_gold_choice": MAX_GOLD_CHOICE, "memory_choice": MEMORY_CHOICE, "base_model_change": BASE_MODEL_CHANGE, "max_len": MAX_LEN, "abstain_cap": ABSTAIN_CAP, "cap_seed": CAP_SEED,
         "under_minimum": n < MIN_EXAMPLES, "minimum": MIN_EXAMPLES,
     }
 
@@ -219,7 +233,7 @@ def run_train(root: Path, *, small_ok: bool, say: Callable[[str], None] = print)
     if summary["under_minimum"] and not small_ok:
         raise SystemExit(f"refused: {summary['size']} examples is under {MIN_EXAMPLES}; tell the coordinator, then rerun with --small-ok")
     out = root / ADAPTER_REL
-    meta = train(out, steps_for(summary["size"]), MAX_LEN, cards_dir, include_scenarios=True)
+    meta = train(out, steps_for(summary["size"]), MAX_LEN, cards_dir, include_scenarios=True, base_model=BASE_MODEL)
     info = {"training_set": summary, "adapter_hash": adapter_hash(out), "epochs": EPOCHS, "batch_size": BATCH,
             "max_len": MAX_LEN, "train_meta": meta}
     write_atomic(out / "e5_training.json", json.dumps(info, indent=1) + "\n")
@@ -451,7 +465,8 @@ def run_probe(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     client.unload()
     shared = data_root()
     summary = build_training(shared, shared / "datasets/cards")
-    meta = train(shared / "models/e5-probe", PROBE_STEPS, MAX_LEN, shared / "datasets/cards", include_scenarios=True)
+    meta = train(shared / "models/e5-probe", PROBE_STEPS, MAX_LEN, shared / "datasets/cards", include_scenarios=True,
+                 base_model=BASE_MODEL)
     step_s = meta["train_s"] / PROBE_STEPS
     full_n = len(sets["scenarios"]) + len(sets["qmsum"])
     train_total = meta["load_s"] + steps_for(summary["size"]) * step_s

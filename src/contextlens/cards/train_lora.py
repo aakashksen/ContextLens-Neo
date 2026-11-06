@@ -149,15 +149,15 @@ def _load_4bit(model_id: str) -> Any:
 
 
 def train(out_dir: Path, steps: int, max_len: int = 2048, cards_dir: Path = CARDS_DIR,
-          include_scenarios: bool = False) -> dict[str, Any]:
-    """Needs a GPU turn. Tries PRIMARY; if loading or PEFT fails with an architecture error (see
+          include_scenarios: bool = False, base_model: str = PRIMARY) -> dict[str, Any]:
+    """Needs a GPU turn. Tries `base_model`; if loading or PEFT fails with an architecture error (see
     is_architecture_error), uses FALLBACK and records the exact error in train_meta.json; any other failure is
     raised. Exceeding the VRAM limit raises at the first step over it: the model class is not changed silently."""
     from transformers import AutoTokenizer
 
     import torch
 
-    base, reason = PRIMARY, None
+    base, reason = base_model, None
     t0 = time.perf_counter()
     try:
         model = attach_lora(_load_4bit(base))

@@ -530,3 +530,10 @@ def test_speed_check_fails_when_no_token_was_counted(repo: Path, monkeypatch: py
     monkeypatch.setattr(client_mod, "unload_ollama", lambda *a, **k: None)
     with pytest.raises(RuntimeError, match="no generated tokens"):
         e5.run_speed_check(repo, "v1", say=lambda *_: None)
+
+
+def test_record_states_the_base_model_change() -> None:
+    c = e5.BASE_MODEL_CHANGE
+    assert (c["from"], c["to"]) == ("Qwen/Qwen3.5-4B", "Qwen/Qwen3.5-2B") == ("Qwen/Qwen3.5-4B", e5.BASE_MODEL)
+    assert "5.5 GB" in c["why"] and "82 examples" in c["why"] and "2026-11-05" in c["why"]
+    assert e5.training_summary(Counter({"train_final_size": 212}))["base_model_change"] == c
