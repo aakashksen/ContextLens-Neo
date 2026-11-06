@@ -766,3 +766,32 @@ def test_restate_writes_a_superseding_record_with_the_same_rows(repo: Path) -> N
     assert check("E7", root=repo, min_n=4, split="dev") == []
     with pytest.raises(ValueError, match="reason"):
         e7.restate(base.stem, " ", root=repo)
+
+
+def test_the_audio_sent_to_speech_is_leveled_and_the_record_states_the_rule_and_each_gain(repo: Path, monkeypatch) -> None:
+    import numpy as np
+
+    t = np.arange(24 * SAMPLE_RATE) / SAMPLE_RATE
+    quiet = (np.sin(2 * np.pi * 220 * t) * 0.004 * 2**0.5 * 32768).astype(np.int16).tobytes()
+    with wave.open(str(repo / e7.AUDIO_REL / "m1.wav"), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(quiet)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "audio", "--allow-empty")
+    sent: list[bytes] = []
+    inner = e7.transcribe
+
+    async def spy(speech, pcm, **kw):
+        sent.append(pcm)
+        return await inner(speech, pcm, **kw)
+
+    monkeypatch.setattr(e7, "transcribe", spy)
+    rec = json.loads(run(repo).read_text(encoding="utf-8"))
+    a = np.frombuffer(sent[0], dtype=np.int16).astype(np.float32) / 32768
+    rms = np.sqrt((a[: len(a) // 320 * 320].reshape(-1, 320) ** 2).mean(1))
+    assert float(np.median(rms[rms > e7.LEVEL_FLOOR])) == pytest.approx(e7.LEVEL_TARGET, rel=0.05)
+    assert rec["config"]["audio_source"]["level"] == e7.LEVEL_RULE
+    assert rec["config"]["per_meeting"]["m1"]["gain"] == pytest.approx(e7.LEVEL_TARGET / 0.004, rel=0.05)
+    assert rec["config"]["per_meeting"]["m2"]["gain"] == 1.0  # silence is left alone

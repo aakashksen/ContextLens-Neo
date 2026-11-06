@@ -53,6 +53,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+import numpy as np
+
 from contextlens.data.loaders import load_dataset
 from contextlens.data.scenarios import load_scenarios
 from contextlens.eval.check_run import committed_unchanged, recompute_comparison, recompute_intervals, recompute_metrics
@@ -145,6 +147,35 @@ def read_wav(path: Path) -> bytes:
         if (w.getframerate(), w.getnchannels(), w.getsampwidth()) != (SAMPLE_RATE, 1, 2):
             raise ValueError(f"{path.name} is not 16 kHz mono 16-bit")
         return w.readframes(w.getnframes())
+
+
+LEVEL_FLOOR = 0.002  # 20 ms frames above this RMS count as speech when setting the level
+LEVEL_TARGET = 0.02  # the median speech frame goes here: twice the speech service's voice gate (0.01 in speech/src/vad.h)
+LEVEL_RULE = (f"each meeting gets one gain so that the median RMS of its 20 ms frames above {LEVEL_FLOOR} is {LEVEL_TARGET} "
+              "(twice the speech service's fixed voice-gate threshold of 0.01); samples saturate at 16 bits, silence stays silence")
+
+
+def level_gain(pcm: bytes) -> float:
+    """The one gain that puts a meeting's median speech frame at LEVEL_TARGET; 1.0 if no frame is above the floor."""
+    a = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    n = len(a) // 320
+    rms = np.sqrt((a[: n * 320].reshape(n, 320) ** 2).mean(axis=1)) if n else np.zeros(0)
+    speech = rms[rms > LEVEL_FLOOR]
+    return float(LEVEL_TARGET / np.median(speech)) if speech.size else 1.0
+
+
+def apply_gain(pcm: bytes, gain: float) -> bytes:
+    a = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) * gain
+    return np.clip(np.rint(a), -32768, 32767).astype(np.int16).tobytes()
+
+
+def read_leveled_wav(path: Path) -> tuple[bytes, float]:
+    """The meeting's audio at the E7 input level, and the gain applied. The rebuilt headset audio is quiet (on some
+    meetings most speech sits under the speech service's fixed voice gate and is never transcribed), so it is brought to
+    a fixed level, as a microphone's gain control would; the service's threshold is not changed."""
+    pcm = read_wav(path)
+    gain = level_gain(pcm)
+    return apply_gain(pcm, gain), gain
 
 
 async def transcribe(speech: SpeechService, pcm: bytes, *, speedup: float = 1.0, settle_s: float = 10.0,
@@ -423,7 +454,7 @@ async def readiness(speech: SpeechService, audio_dir: Path, meeting: str, *, spe
     """Stream the first `audio_s` of a meeting at `speedup` and say whether speech kept up, and so which plan runs:
     every meeting sped up, or (when it cannot) the shortest five in real time, which has too few questions for the
     30-question rule."""
-    pcm = read_wav(audio_dir / f"{meeting}.wav")[: int(audio_s * 1000) * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
+    pcm = read_leveled_wav(audio_dir / f"{meeting}.wav")[0][: int(audio_s * 1000) * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
     info: dict[str, Any] = {}
     out: dict[str, Any] = {"meeting": meeting, "speedup": speedup, "audio_s": audio_s}
     try:
@@ -655,7 +686,7 @@ def audio_source(audio_dir: Path) -> dict[str, Any]:
     """What the audio is, for the record. `method` is always present; the rest comes from tools/hf_audio.py's manifest."""
     manifest = audio_dir / "manifest.json"
     meta = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else {}
-    return {"method": AUDIO_METHOD,
+    return {"method": AUDIO_METHOD, "level": LEVEL_RULE,
             "note": "gaps between utterances are silence, so latency and diarization error may be easier than on the "
                     "original recordings",
             **{k: meta.get(k) for k in ("dataset", "config", "revision", "sample_rate", "rule")}}
@@ -831,7 +862,7 @@ def play_meeting(speech: SpeechService, backend: WindowBackend, embedder: Any, m
                  tele: Telemetry | None, settle_s: float, step_ms: int, say: Callable[[str], None],
                  whisper_backends: set[str | None]):
     """One meeting's audio through speech at `speed`, then the three-way replay up to its last cut."""
-    pcm = read_wav(audio / f"{meeting}.wav")
+    pcm, gain = read_leveled_wav(audio / f"{meeting}.wav")
     cut = max(cut_ms(s) for s in scs)
     stream_pcm = pcm[: cut * BYTES_PER_MS] + bytes(TAIL_MS * BYTES_PER_MS)
     info: dict[str, Any] = {}
@@ -842,7 +873,7 @@ def play_meeting(speech: SpeechService, backend: WindowBackend, embedder: Any, m
     got, st = replay_meeting(
         scs, pcm, [g for g in segments if g.end_ms <= cut], backend=backend, embedder=embedder,
         make_assistant=make_assistant, extractor=extractor, telemetry=tele, step_ms=step_ms, say=say)
-    st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments))
+    st.update(audio_s=cut / 1000, asr_wall_s=wall_s, asr_segments=len(segments), gain=gain)
     say(f"  replay {meeting}: {time.perf_counter() - t_replay:.0f} s ({len(st['diar_ms'])} speaker runs, "
         f"{sum(st['diar_ms']) / 1000:.0f} s in them)")
     return got, st, lags
