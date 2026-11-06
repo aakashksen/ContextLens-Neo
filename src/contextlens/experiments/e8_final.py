@@ -67,6 +67,8 @@ EXTRA_PREFIX = "E8X"  # public-benchmark and detector rows: results/runs/E8X-<st
 PRIMARY, SINGLE, TRAINED_TEAM = "team_shipping_changed", "single", "team_trained"
 SYSTEMS = (PRIMARY, SINGLE, TRAINED_TEAM)
 PROMPT = "v3"
+SUBSET_NAME = "e8-cards"  # the ids of the test cases that get written answers (check_run's subset manifest)
+SUBSET_REL = Path("datasets/splits/subsets") / f"{SUBSET_NAME}.json"
 LME = "longmemeval"
 SEARCH_SYSTEM = "hybrid_t1"
 MAX_WEEKLY_PCT = 90.0
@@ -94,6 +96,21 @@ def _need(path: Path, what: str) -> Path:
     return path
 
 
+def write_cards_subset(root: Path) -> Path:
+    """The ids-only manifest of the test cases that get cards: every case whose conversation is not LongMemEval. It reads
+    only `id` and `conversation.source` from each line of the test file, never the text."""
+    ids = []
+    for line in (root / SCENARIO_SOURCES["scenarios"][1] / f"{SPLIT}.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            d = json.loads(line)
+            if d["conversation"]["source"] != LME:
+                ids.append(d["id"])
+    path = root / SUBSET_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(path, json.dumps({"name": SUBSET_NAME, "split": SPLIT, "ids": ids}, indent=1) + "\n")
+    return path
+
+
 def build_freeze(root: Path, *, adapter_base: Path, adapter: Path, checker: Path, checker_threshold: float,
                  sonnet_scope: str | int = "all", baselines: dict[str, str] | None = None) -> dict[str, Any]:
     """The choices made on dev. Reads only the committed manifests (hashes), never a test file."""
@@ -105,6 +122,7 @@ def build_freeze(root: Path, *, adapter_base: Path, adapter: Path, checker: Path
     test_hashes = {src: json.loads((root / SCENARIO_SOURCES[src][0]).read_text(encoding="utf-8"))["splits"][SPLIT]["hash"]
                    for src in ("scenarios", "qmsum", "decode")}
     retrieval = root / e2.CONFIG_REL
+    subset = write_cards_subset(root)
     return {
         "kind": "e8-freeze", "experiment": EXPERIMENT, "chosen_on": "dev", "decision_entries": list(DECISION_ENTRIES),
         "systems": {"primary": PRIMARY, "others": [SINGLE, TRAINED_TEAM]},
@@ -119,6 +137,9 @@ def build_freeze(root: Path, *, adapter_base: Path, adapter: Path, checker: Path
         "judging": {"haiku": pg.HAIKU_MODEL, "sonnet": e2.CLOUD_MODEL, "sonnet_scope": sonnet_scope, "sample_seed": SAMPLE_SEED,
                     "max_weekly_pct": MAX_WEEKLY_PCT, "rubric": e2.RUBRIC_VERSION},
         "test_hashes": test_hashes,
+        "cards_subset": {"name": SUBSET_NAME, "path": SUBSET_REL.as_posix(), "sha256": sha256_path(subset),
+                         "reads": "only `id` and `conversation.source` of each line of the test file; no text",
+                         "committed": "in the same commit as this config file; committed_freeze refuses otherwise"},
     }
 
 
@@ -133,13 +154,15 @@ def committed_freeze(root: Path) -> dict[str, Any]:
     rel = FREEZE_REL.as_posix()
     if not (root / FREEZE_REL).is_file():
         raise Refused(f"{rel} does not exist; run `freeze` and commit it before the test is touched")
-    if git(root, "ls-files", "--error-unmatch", rel).returncode != 0:
-        raise Refused(f"{rel} is not committed; commit it before the test is touched")
-    if git(root, "diff", "--quiet", "HEAD", "--", rel).returncode != 0:
-        raise Refused(f"{rel} differs from the committed one; commit the change before the test is touched")
     freeze = json.loads((root / FREEZE_REL).read_text(encoding="utf-8"))
     if freeze.get("kind") != "e8-freeze":
         raise Refused(f"{rel} is not an E8 freeze file")
+    paths = [rel, *([freeze["cards_subset"]["path"]] if "cards_subset" in freeze else [])]
+    for r in paths:
+        if git(root, "ls-files", "--error-unmatch", r).returncode != 0:
+            raise Refused(f"{r} is not committed; commit it before the test is touched")
+        if git(root, "diff", "--quiet", "HEAD", "--", r).returncode != 0:
+            raise Refused(f"{r} differs from the committed one; commit the change before the test is touched")
     return freeze
 
 
@@ -156,6 +179,8 @@ def check_inputs(root: Path, freeze: dict[str, Any]) -> None:
     _need(base if base.is_absolute() else root / base, "the adapter's base model")
     if sha256_path(root / freeze["retrieval"]["path"]) != freeze["retrieval"]["sha256"]:
         raise Refused("the retrieval config is not the one that was frozen")
+    if sha256_path(root / freeze["cards_subset"]["path"]) != freeze["cards_subset"]["sha256"]:
+        raise Refused("the card-case manifest is not the one that was frozen")
     for src, want in freeze["test_hashes"].items():
         entry = json.loads((root / SCENARIO_SOURCES[src][0]).read_text(encoding="utf-8"))["splits"][SPLIT]["hash"]
         if entry != want:
@@ -508,9 +533,9 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
     config: dict[str, Any] = {
         "experiment": EXPERIMENT, "freeze": {"path": FREEZE_REL.as_posix(), "sha256": sha256_path(root / FREEZE_REL), **freeze},
         "generating_commit": commit, "systems": list(SYSTEMS), "primary": PRIMARY, "prompt_note": f"prompt {PROMPT} for every system",
-        "cards_cases": len(cards), "search_only_cases": {LME: len(lme), "qmsum": len(loaded["qmsum"][0])},
+        "cards_subset": freeze["cards_subset"], "cards_cases": len(cards), "search_only_cases": {LME: len(lme), "qmsum": len(loaded["qmsum"][0])},
         "written_score": {n: e3.score(m) for n, m in metrics.items()}, "primary_vs_single": primary_vs_single(comparisons),
-        "judge": {"model": haiku.model, "via": "claude -p, one claim per call, in parallel", "claims": n_claims,
+        "judge": {"model": haiku.model, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False, "via": "claude -p, one claim per call, in parallel", "claims": n_claims,
                   "share_supported": sum(h_verdicts.values()) / n_claims, "calibration": "failed the written test (entry 56)"},
         "judge_note": CAL_NOTE, "sonnet": {"model": sonnet.model, **sonnet_view},
         "benchmarks": benchmarks, "extra_rows": extra_files,
@@ -527,7 +552,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
                  "health": e2.check_health(n, rows[n])} for n in SYSTEMS]
     return write_run(EXPERIMENT, SPLIT, config, {"writer": names.writer, "judge": haiku.model, "cloud_grader": sonnet.model,
                                                  "embedder": names.embedder}, {"recall": PROMPT}, metrics, intervals, attempts, judged,
-                     loaded["scenarios"][1], comparisons=comparisons, scenario_source="scenarios", root=root)
+                     loaded["scenarios"][1], comparisons=comparisons, scenario_source="scenarios", subset=SUBSET_NAME, root=root)
 
 
 # ---------------------------------------------------------------- command line

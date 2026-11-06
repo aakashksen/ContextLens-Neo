@@ -120,6 +120,7 @@ def test_freeze_refuses_trained_models_that_do_not_exist(repo: Path, tmp_path: P
 
 
 def _frozen_repo(repo: Path, adapter: Path, checker: Path) -> dict:
+    _fixture_test_file(repo)
     (repo / "configs").mkdir(exist_ok=True)
     (repo / e2.CONFIG_REL).write_text('{"mode": "hybrid"}', encoding="utf-8")
     for src in ("scenarios", "qmsum", "decode"):
@@ -282,9 +283,69 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
     assert set(cfg["benchmarks"]) == {"qmsum", "longmemeval", "decode", "consistency_scenarios"}
     assert cfg["benchmarks"]["decode"]["systems"] == ["trained", "tfidf"]
     assert cfg["benchmarks"]["decode"]["false_alert_comparison"]["mcnemar_p"] is not None
-    assert cfg["sonnet"]["scope"] == "all" or cfg["sonnet"]["scope"] == 300
+    assert cfg["sonnet"]["scope"] == 300 and cfg["sonnet"]["claims_graded"] == 9  # fewer claims than the sample: all of them
+    assert cfg["sonnet"]["agreement_with_haiku"]["haiku_yes_sonnet_no"] == 3  # Sonnet's rule rejects `single`'s three claims
+    assert rec["subset"] == "e8-cards" and cfg["freeze"]["cards_subset"]["name"] == "e8-cards"
+    from contextlens.eval.check_run import check
+
+    assert check("E8", root=root, min_n=1, split="test") == []  # the record passes the full check
     assert haiku.n == 9 and sonnet.n == 9  # 3 answered cards on each of 3 systems, one claim per call
     assert "failed the written calibration test" in cfg["judge_note"] and "reading, not proof" in cfg["judge_note"]
     with pytest.raises(Refused, match="already run"):  # the record just written makes any second run need a note
         e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(90.0, read=lambda: 10.0, interval_s=0.0),
                      counter_path=tmp_path / "calls.json", say=lambda t: None)
+
+
+# ---------------------------------------------------------------- the card-case manifest, the product prompt (coordinator, 2026-11-06)
+
+def _fixture_test_file(root: Path) -> None:
+    (root / "datasets/scenarios").mkdir(parents=True, exist_ok=True)
+    lines = []
+    for sid, src in (("t1", "synthetic"), ("t2", "longmemeval"), ("t3", "synthetic")):
+        d = json.loads(_scenario(sid, "consistent", source=src).model_dump_json())
+        d["conversation"]["turns"][0]["text"] = "LEAKCHECK private words"
+        lines.append(json.dumps(d))
+    (root / "datasets/scenarios/test.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_cards_manifest_holds_ids_only_and_leaves_out_longmemeval(repo: Path) -> None:
+    _fixture_test_file(repo)
+    path = e8.write_cards_subset(repo)
+    assert path == repo / "datasets/splits/subsets/e8-cards.json"
+    text = path.read_text(encoding="utf-8")
+    manifest = json.loads(text)
+    assert manifest == {"name": "e8-cards", "split": "test", "ids": ["t1", "t3"]}
+    assert "LEAKCHECK" not in text and "private" not in text
+
+
+def test_freeze_names_the_manifest_and_the_record_uses_it(repo: Path, tmp_path: Path) -> None:
+    adapter = tmp_path / "a"
+    adapter.mkdir()
+    (adapter / "w").write_bytes(b"1")
+    freeze = _frozen_repo(repo, adapter, adapter)
+    sub = freeze["cards_subset"]
+    assert sub["name"] == "e8-cards" and sub["path"] == "datasets/splits/subsets/e8-cards.json"
+    assert sub["sha256"] == e8.sha256_path(repo / sub["path"]) and "`conversation.source`" in sub["reads"]
+    assert "same commit" in sub["committed"]
+
+
+def test_refuses_when_the_manifest_is_not_committed_with_the_config(repo: Path, tmp_path: Path) -> None:
+    adapter = tmp_path / "a"
+    adapter.mkdir()
+    (adapter / "w").write_bytes(b"1")
+    freeze = _frozen_repo(repo, adapter, adapter)
+    _freeze_file(repo, freeze)
+    _git(repo, "add", str(e8.FREEZE_REL))
+    _git(repo, "commit", "-q", "-m", "config only")
+    with pytest.raises(Refused, match="e8-cards.json is not committed"):
+        e8.committed_freeze(repo)
+    _commit_all(repo)
+    assert e8.committed_freeze(repo)["cards_subset"]["name"] == "e8-cards"
+    (repo / freeze["cards_subset"]["path"]).write_text('{"ids": []}', encoding="utf-8")
+    with pytest.raises(Refused, match="differs from the committed"):
+        e8.committed_freeze(repo)
+
+
+def test_product_prompt_is_v3_and_the_default_assistant_is_unchanged() -> None:
+    assert production.PROMPT_VERSION == "v3" == e8.PROMPT  # E8 measures the prompt the product ships
+    assert production.DEFAULT_ASSISTANT == "team"

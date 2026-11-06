@@ -28,7 +28,7 @@ from contextlens.vision.local import SceneStore
 
 MODEL = "qwen3.5:4b-q4_K_M"
 OLLAMA_URL = "http://127.0.0.1:11434"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
 DEADLINE_S = 8.0
 SHUTDOWN_FLUSH_S = 5.0
 ASSISTANTS = ("team", "single", "team_shipping_changed")
