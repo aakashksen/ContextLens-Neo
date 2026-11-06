@@ -501,8 +501,15 @@
       "acceptance": [
         "{py} -m pytest tests/regression -q"
       ],
-      "status": "pending",
-      "verifier": false
+      "status": "done",
+      "verifier": false,
+      "started_at": "2026-11-06T00:12:26+00:00",
+      "verified": {
+        "commit": "9abb88789d6cf71daee41052688ec17c9f49dfc9",
+        "passed": true,
+        "at": "2026-11-06T00:12:46+00:00"
+      },
+      "done_at": "2026-11-06T00:12:56+00:00"
     },
     {
       "id": "T6.1",
