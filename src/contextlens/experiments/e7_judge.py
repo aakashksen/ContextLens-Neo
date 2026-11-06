@@ -52,19 +52,20 @@ def load_items(run_id: str, root: Path) -> tuple[list[pg.Item], dict[str, str]]:
     return items, system_of
 
 
-def judge(run_id: str, *, llm, root: Path = ROOT, guard: UsageGuard | None, use_guard: bool = True,
-          concurrency: int = pg.DEFAULT_CONCURRENCY, counter_path: Path = CLAUDE_CALLS_PATH,
-          cap: int = CLAUDE_CALL_CAP, say: Callable[[str], None] = print,
-          sleep: Callable[[float], None] = time.sleep) -> Path:
+def grade_claims(items: list[pg.Item], *, llm, partial_path: Path, header: dict, guard: UsageGuard | None,
+                 use_guard: bool = True, concurrency: int = pg.DEFAULT_CONCURRENCY,
+                 counter_path: Path = CLAUDE_CALLS_PATH, cap: int = CLAUDE_CALL_CAP, say: Callable[[str], None] = print,
+                 sleep: Callable[[float], None] = time.sleep) -> tuple[dict[str, bool], list[str], dict]:
+    """One call per claim without a saved verdict, many at a time, under the weekly usage guard. Returns the verdicts,
+    the ids left ungraded and a small account (calls made, weekly usage at start and end). Raises Stopped when a limit
+    ended the run early; the saved rows stay and the same call resumes."""
     if use_guard and guard is None:
         raise Refused("the weekly usage guard needs a usage reader; pass none only with --no-usage-guard")
     start_pct = guard.start() if guard is not None and use_guard else None
-    items, system_of = load_items(run_id, root)
-    header = {"kind": "e7-judge-rows", "run_id": run_id, "model": llm.model, "rubric": RUBRIC_VERSION}
-    store = pg.RowStore(root / PARTIAL_REL / f"{run_id}.rows.jsonl", header)
+    store = pg.RowStore(partial_path, header)
     todo = pg.pending(items, store)
-    say(f"{run_id}: {len(items)} claims, {len(items) - len(todo)} already graded; {len(todo)} calls to {llm.model}, "
-        f"concurrency {concurrency}. Weekly usage {'not guarded' if start_pct is None else f'{start_pct:g}%'}.")
+    say(f"{len(items)} claims, {len(items) - len(todo)} already graded; {len(todo)} calls to {llm.model}, concurrency "
+        f"{concurrency}. Weekly usage {'not guarded' if start_pct is None else f'{start_pct:g}%'}.")
     preflight(len(todo), counter_path, cap)
     calls_before = llm.calls_made
     stop = (lambda: guard.check()) if guard is not None and use_guard else (lambda: None)
@@ -73,16 +74,30 @@ def judge(run_id: str, *, llm, root: Path = ROOT, guard: UsageGuard | None, use_
     if out.stop_reason:
         raise Stopped(f"{out.stop_reason}; {len(store.rows)} rows kept, rerun the same command to resume", start_pct, end_pct)
     verdicts = {i.id: store.rows[i.id]["cloud"] for i in items if store.rows.get(i.id, {}).get("status") == "ok"}
+    return verdicts, pg.ungraded(items, store), {"calls_made": llm.calls_made - calls_before,
+                                                 "weekly_usage_pct": {"start": start_pct, "end": end_pct}}
+
+
+def judge(run_id: str, *, llm, root: Path = ROOT, guard: UsageGuard | None, use_guard: bool = True,
+          concurrency: int = pg.DEFAULT_CONCURRENCY, counter_path: Path = CLAUDE_CALLS_PATH,
+          cap: int = CLAUDE_CALL_CAP, say: Callable[[str], None] = print,
+          sleep: Callable[[float], None] = time.sleep) -> Path:
+    if use_guard and guard is None:
+        raise Refused("the weekly usage guard needs a usage reader; pass none only with --no-usage-guard")
+    items, system_of = load_items(run_id, root)
+    header = {"kind": "e7-judge-rows", "run_id": run_id, "model": llm.model, "rubric": RUBRIC_VERSION}
+    verdicts, missing, account = grade_claims(
+        items, llm=llm, partial_path=root / PARTIAL_REL / f"{run_id}.rows.jsonl", header=header, guard=guard,
+        use_guard=use_guard, concurrency=concurrency, counter_path=counter_path, cap=cap, say=say, sleep=sleep)
     per_system: dict[str, dict] = {}
     for system in dict.fromkeys(system_of.values()):
         mine = [i for i in system_of if system_of[i] == system]
         graded = [verdicts[i] for i in mine if i in verdicts]
         per_system[system] = {"claims": len(mine), "graded": len(graded), "supported": sum(graded),
                               "grounded_rate": sum(graded) / len(graded) if graded else None}
-    missing = pg.ungraded(items, store)
     doc = {"kind": "e7-judge", "run_id": run_id, "model": llm.model, "rubric": RUBRIC_VERSION,
            "note": NOTE, "complete": not missing, "per_system": per_system, "ungraded": missing, "verdicts": verdicts,
-           "calls_made": llm.calls_made - calls_before, "weekly_usage_pct": {"start": start_pct, "end": end_pct},
+           **account,
            "judged_at": datetime.now(timezone.utc).isoformat()}
     path = root / OUT_REL / f"{run_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
