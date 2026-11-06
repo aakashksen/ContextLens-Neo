@@ -32,7 +32,7 @@ from contextlens.agents.single import RetrievalAssistant, load_retrieval_config
 from contextlens.cards.dataset import MAX_GOLD, N_RECENT, SYSTEM, _trim, build_examples, user_prompt
 from contextlens.eval import series
 from contextlens.eval.check_run import recompute_metrics
-from contextlens.eval.records import ROOT, load_verified, write_atomic, write_run
+from contextlens.eval.records import ROOT, is_dirty, load_verified, write_atomic, write_run
 from contextlens.experiments.e1_retrieval import BatchedEmbedder
 from contextlens.experiments.e2_context import (
     EMBED_MODEL,
@@ -678,6 +678,14 @@ def qmsum_figures(scs: list[Scenario], rows: dict[str, list[Prediction]]) -> dic
     return out
 
 
+def require_ready(root: Path) -> None:
+    """What `write_run` will demand at the end, checked before a stage loads a model or spends calls: a clean tree and
+    dev scenarios that match their manifest."""
+    if is_dirty(root):
+        raise RuntimeError("working tree has uncommitted changes; commit first (checked now so the run does not lose its work at the end)")
+    load_verified("scenarios", SPLIT, root)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     stage = ap.add_mutually_exclusive_group(required=True)
@@ -689,6 +697,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if (a.probe or a.write or a.judge or a.speed_check) and not a.prompt_version:
         ap.error("--prompt-version is required")
+    if a.probe or a.train or a.write or a.judge or a.speed_check:
+        require_ready(ROOT)
     if a.make_subset:
         print(make_subset(ROOT))
     elif a.make_fallback_subset:

@@ -643,3 +643,30 @@ def test_the_local_client_decodes_under_the_cards_schema_when_it_is_given_one() 
 def test_rows_written_under_the_constraint_do_not_mix_with_the_unconstrained_ones() -> None:
     old = e5.run_dir(Path("."), "v3", "abc123", True)
     assert "-sc" in old.name and old.name.endswith("-fallback") and e5.DECODING.startswith("schema-constrained")
+
+
+# ---- every stage that holds the GPU or writes the record checks the record's preconditions first ----
+
+@pytest.mark.parametrize("flags", [["--probe", "--prompt-version", "v1"], ["--train"], ["--write", "--prompt-version", "v1"],
+                                   ["--judge", "--prompt-version", "v1"], ["--speed-check", "--prompt-version", "v1"]])
+def test_every_stage_refuses_a_dirty_tree_before_loading_anything(repo: Path, monkeypatch: pytest.MonkeyPatch, flags: list[str]) -> None:
+    called = []
+    for name in ("run_probe", "run_train", "run_write", "run_judge", "run_speed_check"):
+        monkeypatch.setattr(e5, name, lambda *a, _n=name, **k: called.append(_n))
+    monkeypatch.setattr(e5, "ROOT", repo)
+    assert e5.main(flags) == 0 and len(called) == 1  # a clean tree is let through
+    called.clear()
+    (repo / "stray.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="uncommitted changes"):
+        e5.main(flags)
+    assert called == []
+
+
+def test_a_stage_refuses_when_the_dev_scenarios_no_longer_match_their_manifest(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(e5, "ROOT", repo)
+    monkeypatch.setattr(e5, "run_train", lambda *a, **k: pytest.fail("loaded a model"))
+    (repo / "datasets/scenarios/dev.jsonl").write_text("", encoding="utf-8")  # git-ignored in real use; changes the hash
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "edit")
+    with pytest.raises(RuntimeError, match="does not match its manifest"):
+        e5.main(["--train"])
