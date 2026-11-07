@@ -797,8 +797,9 @@ def rerun_segment(
     if not [c for c in changes if c.strip()]:
         raise ValueError("a rerun must list what changed")
     baseline = json.loads((root / "results/runs" / f"{baseline_id}.json").read_text(encoding="utf-8"))
-    if baseline["experiment"] != "E7" or baseline["config"].get("phase") != "baseline":
-        raise ValueError(f"{baseline_id} is not an E7 baseline record")
+    base_phase = baseline["config"].get("phase")
+    if baseline["experiment"] != "E7" or base_phase not in ("baseline", "rerun_segment"):
+        raise ValueError(f"{baseline_id} is not an E7 baseline record (or a segment rerun, which may also be one)")
     before_seg = baseline["config"].get("realtime_segment")
     if not before_seg:
         raise ValueError(f"{baseline_id} has no real-time segment to compare with")
@@ -842,6 +843,10 @@ def rerun_segment(
     devices = stage_devices({"whisper": _one(backends), **device_probe()}, say)
     config: dict[str, Any] = {
         "experiment": "E7", "phase": "rerun_segment", "systems": ["clean"], "baseline_run_id": baseline_id,
+        "baseline_phase": base_phase, "baseline_is_a_rerun": base_phase == "rerun_segment",
+        "baseline_note": ("the baseline is itself a segment rerun (its changes: " + "; ".join(baseline["config"].get("changes", []))
+                          + "), so before and after compare two runs of the same segment") if base_phase == "rerun_segment"
+        else "the baseline is the original E7 record",
         "changes": changes, "bottlenecks": named, "before_after": before_after(before, after, stages),
         "realtime_segment": segment, "baseline_realtime_segment": before_seg, "step_ms": step_ms, "speedup": 1.0,
         "obs_profile": telemetry is not None, "latency_basis": "real_time",

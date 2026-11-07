@@ -569,11 +569,22 @@ def test_rerun_segment_records_before_and_after_for_the_segment_and_the_token_co
     assert cfg["before_after"]["total"]["p95"]["before"] is not None and cfg["before_after"]["total"]["p95"]["after"] is not None
     assert cfg["realtime_segment"]["meeting"] == "m1" and rec["n"] == 4
     assert check("E7", root=repo, min_n=4, split="dev") == []
+    assert cfg["baseline_phase"] == "baseline" and cfg["baseline_is_a_rerun"] is False
+    kw = dict(root=repo, backend=TruthBackend(), embedder=NoEmbed(), make_assistant=make_assistant,
+              extractor=FirstTurnExtractor(), models={"llm": "x"}, prompt_versions={"team": "v1"}, step_ms=10_000,
+              ran_alone=True, speech_address="x", device_probe=ALL_CUDA, say=lambda m: None)
+    # a segment rerun can itself be the baseline: the same segment fields are compared, and the record says so
+    again = e7.rerun_segment(speech=ScriptedSpeech([aligned_script("m1")]), baseline_id=path.stem,
+                             changes=["both team fixes"], **kw)
+    cfg2 = json.loads(again.read_text(encoding="utf-8"))["config"]
+    assert cfg2["baseline_run_id"] == path.stem and cfg2["baseline_phase"] == "rerun_segment" and cfg2["baseline_is_a_rerun"] is True
+    assert "rerun" in cfg2["baseline_note"] and cfg2["bottlenecks"] == cfg["bottlenecks"]
+    assert cfg2["before_after"]["total"]["p95"]["before"] == cfg["realtime_segment"]["press_latency_ms"]["latency_p95_ms"]
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+    # other kinds of record are still refused
+    full = run(repo, rerun_of=base.stem, changes=["x"])
     with pytest.raises(ValueError, match="not an E7 baseline"):
-        e7.rerun_segment(root=repo, speech=ScriptedSpeech([]), backend=TruthBackend(), embedder=NoEmbed(),
-                         make_assistant=make_assistant, extractor=None, models={}, prompt_versions={},
-                         baseline_id=path.stem, changes=["again"], ran_alone=True, speech_address="x",
-                         device_probe=ALL_CUDA, say=lambda m: None)
+        e7.rerun_segment(speech=ScriptedSpeech([]), baseline_id=full.stem, changes=["again"], **kw)
 
 
 def test_the_cli_refuses_a_rerun_without_the_metrics_port_and_a_sped_up_shortest_run(monkeypatch, capsys) -> None:
