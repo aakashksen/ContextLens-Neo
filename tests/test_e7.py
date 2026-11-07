@@ -882,3 +882,24 @@ def test_the_speech_only_command_refuses_a_dirty_tree_and_needs_a_baseline_to_su
     monkeypatch.setattr(e7, "is_dirty", lambda root: True)
     assert e7.main(["speech-only", "--alone", "--supersede", "E7-x"]) == 2
     assert "uncommitted" in capsys.readouterr().err
+
+
+def test_restate_can_add_what_became_of_the_change_a_rerun_tried(repo: Path) -> None:
+    base = run(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "next")
+    after = e7.rerun_segment(
+        root=repo, speech=ScriptedSpeech([aligned_script("m1")]), backend=TruthBackend(), embedder=NoEmbed(),
+        make_assistant=make_assistant, extractor=FirstTurnExtractor(), models={"llm": "x"}, prompt_versions={"team": "v1"},
+        baseline_id=base.stem, changes=["a fix"], step_ms=10_000, ran_alone=True, speech_address="x", device_probe=ALL_CUDA,
+        say=lambda m: None)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "record")
+    out = e7.restate(after.stem, "the record did not say the fix was dropped", root=repo, outcome="tried and dropped under entry 64")
+    rec = json.loads(out.read_text(encoding="utf-8"))
+    assert rec["config"]["outcome"] == "tried and dropped under entry 64" and rec["config"]["restated_from"] == after.stem
+    assert rec["config"]["phase"] == "rerun_segment" and rec["supersedes"][0]["run_id"] == after.stem
+    assert rec["metrics"] == json.loads(after.read_text(encoding="utf-8"))["metrics"]
+    assert check("E7", root=repo, min_n=4, split="dev") == []
+    plain = e7.restate(base.stem, "no outcome given", root=repo)
+    assert "outcome" not in json.loads(plain.read_text(encoding="utf-8"))["config"]

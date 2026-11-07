@@ -348,9 +348,10 @@ def latency_statements(report: dict[str, dict[str, Any]], segment: dict[str, Any
                                  "speaker timing): secondary figures. The headline stage latencies are in the real-time segment."}
 
 
-def restate(run_id: str, reason: str, root: Path = ROOT) -> Path:
+def restate(run_id: str, reason: str, root: Path = ROOT, outcome: str | None = None) -> Path:
     """A new record with exactly the saved rows, metrics and comparisons of `run_id`, adding what the deadline did and
-    which latencies are the headline, and superseding the old one. Nothing is regenerated."""
+    which latencies are the headline, and superseding the old one. Nothing is regenerated. `outcome` is added to the config
+    when given: what became of the change the run tried (a record cannot say that before the rule that decides it is applied)."""
     if not reason.strip():
         raise ValueError("a superseding record needs a reason")
     require_clean(root)
@@ -360,7 +361,8 @@ def restate(run_id: str, reason: str, root: Path = ROOT) -> Path:
     preds = {name: [Prediction.model_validate_json(x) for x in (root / rel).read_text(encoding="utf-8").splitlines() if x.strip()]
              for name, rel in old["predictions"].items()}
     cfg = {**old["config"], **latency_statements(deadline_report(preds), old["config"].get("realtime_segment"),
-                                                 bool(old["config"].get("ran_alone"))), "restated_from": run_id}
+                                                 bool(old["config"].get("ran_alone"))), "restated_from": run_id,
+           **({"outcome": outcome} if outcome else {})}
     return write_run("E7", old["split"], cfg, old["models"], old["prompt_versions"], old["metrics"], old["intervals"],
                      old["attempts"], preds, old["dataset_hash"], comparisons=old.get("comparisons"),
                      supersedes=[{"run_id": run_id, "reason": reason}], scenario_source=old["scenario_source"], root=root)
@@ -1236,6 +1238,7 @@ def main(argv: list[str] | None = None) -> int:
                                         "and which latencies are the headline; regenerates nothing")
     st.add_argument("run_id")
     st.add_argument("--reason", required=True)
+    st.add_argument("--outcome", help="what became of the change the run tried, added to the record's config")
     so = sub.add_parser("speech-only", help="speech and speaker runs only, all meetings shortest first, one card-less "
                                            "E7 record with WER and DER; needs the speech service and pyannote, no Ollama")
     so.add_argument("--supersede", action="append", required=True, metavar="RUN_ID",
@@ -1256,7 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "restate":
         try:
-            print(restate(args.run_id, args.reason).as_posix())
+            print(restate(args.run_id, args.reason, outcome=args.outcome).as_posix())
         except (RuntimeError, ValueError) as exc:
             print(exc, file=sys.stderr)
             return 2
