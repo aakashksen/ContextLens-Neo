@@ -736,17 +736,17 @@
         "{py} -m pytest tests/test_e7.py -q",
         "{py} -m contextlens.eval.check_run E7 --min-n 30 --split dev"
       ],
-      "status": "in_progress",
+      "status": "done",
       "reason": "verifier FAIL at b6accf6: bottleneck fix and before/after rerun not done; 18-25 of 33 cards per system cut by the 8 s deadline, not stated; headline stage latencies from the 4x part, not the real-time segment; no control for WER/DER (tiny.en, rebuilt audio, 4x)",
       "attempts": 1,
       "note": "The person chose the Hugging Face copy edinburghcstr/ami (public, ungated, CC BY 4.0, license and access checked on its API); the AMI mirror refused.",
-      "worktree": "<local path>",
       "started_at": "2026-11-03T17:44:44+00:00",
       "verified": {
-        "commit": "b6accf6f2e44b617aef0e7b6bdb3a10fc227fa0b",
+        "commit": "5eb02d2bf53a1bb32030c27b7175572e78a532b1",
         "passed": true,
-        "at": "2026-11-06T19:22:36+00:00"
-      }
+        "at": "2026-11-07T02:50:06+00:00"
+      },
+      "done_at": "2026-11-07T02:55:20+00:00"
     },
     {
       "id": "H3",
