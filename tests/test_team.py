@@ -5,7 +5,7 @@ from contextlens.agents.evidence import EvidenceStore
 from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.tools import Tools
 from contextlens.guard.instructions import instruction_kind
-from contextlens.llm.client import FakeLLM, LLMResult
+from contextlens.llm.client import FakeLLM, LLMError, LLMResult
 from contextlens.memory.extract import MemoryStore
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Context
@@ -438,3 +438,48 @@ def test_no_sub_deadline_changes_nothing():
     ls = llms([MEM], [CON], [PLAN])
     team, ctx, _ = build(ls)
     assert team.specialist_deadline_s is None and team.answer(req(), ctx).status == "answered"
+
+
+# -- a call cut off by the deadline is a deadline, not an outage ---------------------------------------------------------
+
+class TimesOut(FakeLLM):
+    """A model server that holds the request for the whole time the client allows, then the client gives up."""
+
+    def _raw(self, messages, schema, max_tokens, temperature, timeout_s):
+        time.sleep(timeout_s)
+        raise LLMError("request to http://127.0.0.1:11434/api/chat failed: timed out")
+
+
+class Refuses(FakeLLM):
+    def _raw(self, *a):
+        raise LLMError("request to http://127.0.0.1:11434/api/chat failed: [WinError 10061] connection refused")
+
+
+def test_a_specialist_call_cut_off_at_its_sub_deadline_is_a_partial_card_noted_as_a_deadline():
+    from contextlens.experiments.e2_context import row_state
+    from contextlens.replay.runner import Prediction
+
+    ls = {"memory": TimesOut([]), "consistency": FakeLLM([CON]), "assistance": FakeLLM([PLAN])}
+    team, ctx, _ = build(ls, deadline_s=1.0, specialist_deadline_s=0.3)
+    card = team.answer(req(), ctx)
+    assert card.status == "partial" and [f.agent for f in card.findings] == ["consistency"]
+    assert "memory: deadline reached" in card.missing and not any("llm error" in m for m in card.missing)
+    assert row_state(Prediction(scenario_id="x", card=card)) == "timeout"  # what the runner counts as a timeout, not a failure
+
+
+def test_a_refused_connection_is_still_an_llm_error_and_a_broken_row():
+    from contextlens.experiments.e2_context import row_state
+    from contextlens.replay.runner import Prediction
+
+    ls = {"memory": Refuses([]), "consistency": FakeLLM([CON]), "assistance": FakeLLM([PLAN])}
+    team, ctx, _ = build(ls, deadline_s=1.0, specialist_deadline_s=0.3)
+    card = team.answer(req(), ctx)
+    assert any(m.startswith("memory: llm error") for m in card.missing)
+    assert row_state(Prediction(scenario_id="x", card=card)) == "broken"
+
+
+def test_an_assistance_call_cut_off_at_the_deadline_is_noted_as_a_deadline_too():
+    ls = {"memory": FakeLLM([MEM]), "consistency": FakeLLM([CON]), "assistance": TimesOut([])}
+    team, ctx, _ = build(ls, deadline_s=0.6)
+    card = team.answer(req(), ctx)
+    assert "assistance: deadline reached" in card.missing and not any("llm error" in m for m in card.missing)

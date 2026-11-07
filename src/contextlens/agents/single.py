@@ -113,6 +113,12 @@ class _Abandoned(Exception):
 _ABANDONED: list[threading.Thread] = []
 
 
+def hit_its_time_limit(exc: Exception, started: float, limit_s: float) -> bool:
+    """A model call that failed by timing out after the whole time it was given: the deadline cut it off. That is a
+    deadline (a partial card), not an outage, and is noted as one."""
+    return "timed out" in str(exc) and time.perf_counter() - started >= limit_s - 0.25
+
+
 def _call_llm(fn: Callable[[], Any], timeout_s: float) -> Any:
     """A bounded model call, refused while too many earlier ones are still running."""
     _ABANDONED[:] = [t for t in _ABANDONED if t.is_alive()]

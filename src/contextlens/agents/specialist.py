@@ -18,6 +18,7 @@ from contextlens.agents.single import (
     _TOOL_HELP,
     _user_message,
     fit_turns,
+    hit_its_time_limit,
     tool_result_block,
     verify_card,
 )
@@ -111,7 +112,8 @@ def run_specialist(
             why = "deadline reached"
             break
         t0 = time.perf_counter()
-        call = functools.partial(llm.complete, list(messages), schema=_Step, max_tokens=700, timeout_s=min(10.0, remaining))
+        limit = min(10.0, remaining)
+        call = functools.partial(llm.complete, list(messages), schema=_Step, max_tokens=700, timeout_s=limit)
         try:
             res = _call_llm(call, remaining + MARGIN_S)
         except _Abandoned:
@@ -122,6 +124,9 @@ def run_specialist(
         except LLMError as exc:
             run.llm_ms += (time.perf_counter() - t0) * 1000
             run.results += exc.results
+            if hit_its_time_limit(exc, t0, limit):
+                why = "deadline reached"
+                break
             return Outcome(notes=[f"{name}: llm error: {exc}"], degraded=True)
         run.llm_ms += (time.perf_counter() - t0) * 1000
         run.results.append(res)

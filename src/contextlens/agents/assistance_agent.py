@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from contextlens.agents.single import DEFAULT_ASK, MARGIN_S, _Abandoned, _call_llm, _Run
+from contextlens.agents.single import DEFAULT_ASK, MARGIN_S, _Abandoned, _call_llm, _Run, hit_its_time_limit
 from contextlens.llm.client import LLMClient, LLMError
 from contextlens.llm.untrusted import escape
 from contextlens.schemas import ButtonRequest, Finding
@@ -54,9 +54,8 @@ def decide(
         remaining = end - time.perf_counter()
         if remaining <= 0:
             return "recall", "assistance: deadline reached"
-        call = functools.partial(
-            llm.complete, _messages(get_findings(), req), schema=_Plan, max_tokens=300, timeout_s=min(10.0, remaining)
-        )
+        limit = min(10.0, remaining)
+        call = functools.partial(llm.complete, _messages(get_findings(), req), schema=_Plan, max_tokens=300, timeout_s=limit)
         t0 = time.perf_counter()
         try:
             res = _call_llm(call, remaining + MARGIN_S)
@@ -65,6 +64,8 @@ def decide(
             return "recall", "assistance: deadline reached"
         except LLMError as exc:
             run.results += exc.results
+            if hit_its_time_limit(exc, t0, limit):
+                return "recall", "assistance: deadline reached"
             return "recall", f"assistance: llm error: {exc}"
         finally:
             run.llm_ms += (time.perf_counter() - t0) * 1000
