@@ -31,9 +31,11 @@ MODEL = "qwen3.5:4b-q4_K_M"
 OLLAMA_URL = "http://127.0.0.1:11434"
 PROMPT_VERSION = "v1"
 DEADLINE_S = 8.0
-SPECIALIST_DEADLINE_S = 5.5  # memory and consistency stop here, so assistance always has at least 2.5 s
-# What the shipped team passes to TeamAssistant besides its llms, tools, prompt and deadline; the dev checks read it.
-TEAM_SETTINGS = {"prefetch_memory": True, "specialist_deadline_s": SPECIALIST_DEADLINE_S}
+SPECIALIST_DEADLINE_S = 5.5  # the value the dropped sub-deadline fix was measured at; the code stays, switched off
+# What the shipped team passes to TeamAssistant besides its llms, tools, prompt and deadline. Both team fixes (a search before
+# the memory model call, and a specialist sub-deadline) were tried and dropped under docs/DECISIONS.md entry 64, so both are
+# off; a test pins this.
+TEAM_SETTINGS = {"prefetch_memory": False, "specialist_deadline_s": None}
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
 ASSISTANTS = ("team", "single")

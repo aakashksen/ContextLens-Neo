@@ -55,7 +55,7 @@ def guard(pct: float = 10.0) -> UsageGuard:
 
 def test_every_claim_is_graded_once_and_rates_are_per_system(root: Path):
     llm = Fake()
-    out = e7_judge.judge("E7-1", llm=llm, root=root, guard=guard(), say=lambda m: None, sleep=lambda s: None)
+    out = e7_judge.judge("E7-1", llm=llm, root=root, counter_path=root / "calls.json", guard=guard(), say=lambda m: None, sleep=lambda s: None)
     doc = json.loads(out.read_text(encoding="utf-8"))
     assert llm.calls_made == 6 and doc["complete"] is True and doc["model"] == "fake-haiku"
     assert doc["per_system"]["clean"] == {"claims": 3, "graded": 3, "supported": 2, "grounded_rate": 2 / 3}
@@ -66,22 +66,22 @@ def test_every_claim_is_graded_once_and_rates_are_per_system(root: Path):
 
 
 def test_a_second_run_resumes_and_asks_nothing_new(root: Path):
-    e7_judge.judge("E7-1", llm=Fake(), root=root, guard=guard(), say=lambda m: None, sleep=lambda s: None)
+    e7_judge.judge("E7-1", llm=Fake(), root=root, counter_path=root / "calls.json", guard=guard(), say=lambda m: None, sleep=lambda s: None)
     again = Fake()
-    e7_judge.judge("E7-1", llm=again, root=root, guard=guard(), say=lambda m: None, sleep=lambda s: None)
+    e7_judge.judge("E7-1", llm=again, root=root, counter_path=root / "calls.json", guard=guard(), say=lambda m: None, sleep=lambda s: None)
     assert again.calls_made == 0
 
 
 def test_a_weekly_usage_at_the_limit_refuses_before_any_call(root: Path):
     llm = Fake()
     with pytest.raises(Refused, match="weekly usage"):
-        e7_judge.judge("E7-1", llm=llm, root=root, guard=guard(95.0), say=lambda m: None, sleep=lambda s: None)
+        e7_judge.judge("E7-1", llm=llm, root=root, counter_path=root / "calls.json", guard=guard(95.0), say=lambda m: None, sleep=lambda s: None)
     assert llm.calls_made == 0
 
 
 def test_the_guard_is_required_unless_turned_off(root: Path):
     with pytest.raises(Refused, match="guard"):
-        e7_judge.judge("E7-1", llm=Fake(), root=root, guard=None, say=lambda m: None, sleep=lambda s: None)
+        e7_judge.judge("E7-1", llm=Fake(), root=root, counter_path=root / "calls.json", guard=None, say=lambda m: None, sleep=lambda s: None)
 
 
 def test_a_missing_record_is_refused(root: Path):

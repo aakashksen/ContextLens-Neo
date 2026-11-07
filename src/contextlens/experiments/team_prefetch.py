@@ -1,5 +1,5 @@
 """T9.1's precondition (the coordinator, 2026-11-06): `team_shipping_changed` with retrieval before the memory model call
-and the specialists' sub-deadline (both from `api/production.py`'s `TEAM_SETTINGS`), once, on the new dev cases (`scenarios_extra`, 108), under entry 51's rules, then
+and the specialists' sub-deadline (its own `FIXES`; both fixes were then dropped and production ships neither), once, on the new dev cases (`scenarios_extra`, 108), under entry 51's rules, then
 compared with the earlier arm's rows by one judge.
 
 Two stages. The first holds the GPU and judges nothing; the second runs after the GPU is released.
@@ -51,7 +51,10 @@ EARLIER_RECORD, EARLIER_ARM = "E3TS-20261104T173526710888Z", ta.SHIPPING_CHANGED
 PARTIAL_REL = Path("results/partial/e3tp-rows.jsonl")  # git-ignored; one line per finished row, keyed by commit
 OUT_REL = Path("results/e3tp-judge")
 SONNET = e2.CLOUD_MODEL
-CHANGE = ("both fixes of the shipped team, taken from api/production.py's constants: retrieval before the memory model call (the "
+# The two team fixes this check measured, which were then dropped (docs/DECISIONS.md, entries 64 and 70): production's
+# TEAM_SETTINGS is now off, so the check names them itself and stays a record of what was measured.
+FIXES = {"prefetch_memory": True, "specialist_deadline_s": production.SPECIALIST_DEADLINE_S}
+CHANGE = ("both team fixes (since dropped, see docs/DECISIONS.md entry 70), with the values from api/production.py: retrieval before the memory model call (the "
           "memory specialist's first search is run on the question and shown to the model as its own first tool step, so it "
           "needs one model call less) and a sub-deadline for the memory and consistency specialists' first pass, so assistance "
           "always has the rest of the deadline. Everything else is `team_shipping_changed`.")
@@ -60,7 +63,7 @@ CHANGE = ("both fixes of the shipped team, taken from api/production.py's consta
 def make_assistant(sc, writer: LLMClient, embedder: Any, retrieval_config: dict[str, Any], memory: MemoryStore):
     team = ta.make_assistant(ta.SHIPPING_CHANGED, sc, writer, embedder, retrieval_config, memory)
     team.deadline_s = production.DEADLINE_S
-    for name, value in production.TEAM_SETTINGS.items():  # fix 1 and fix 2, from the shipped team's own settings
+    for name, value in FIXES.items():
         setattr(team, name, value)
     return team
 

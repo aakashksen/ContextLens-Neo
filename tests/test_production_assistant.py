@@ -86,16 +86,9 @@ def test_the_setting_is_read_from_the_environment_and_a_bad_value_is_refused(mon
         _build({}, assistant="both")
 
 
-def test_the_shipped_team_searches_before_the_memory_specialist_asks(monkeypatch):
-    monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
-    llms = {"memory": FakeLLM([{"tool": "final", "findings": [_evidence("memory")]}] * 3),
-            "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
-            "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
-    _press(_build(llms))
-    assert len(llms["memory"].calls) == 1 and '"tool": "search_transcript"' in str(llms["memory"].calls[0])
-
-
-def test_the_shipped_team_gives_its_specialists_a_sub_deadline_that_leaves_assistance_time(monkeypatch):
+def test_the_shipped_team_runs_without_either_team_fix(monkeypatch):
+    """Both fixes were tried and dropped (docs/DECISIONS.md, entries 64 and 70): the shipped team is the one before them. The
+    code and the flags stay, switched off, and this pins production to off."""
     monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
     seen = []
 
@@ -109,5 +102,6 @@ def test_the_shipped_team_gives_its_specialists_a_sub_deadline_that_leaves_assis
             "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
             "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
     _press(_build(llms))
-    assert seen[0]["specialist_deadline_s"] == production.SPECIALIST_DEADLINE_S == 5.5
-    assert production.DEADLINE_S - production.SPECIALIST_DEADLINE_S >= 2.5 and seen[0]["prefetch_memory"] is True
+    assert seen[0] == {"prefetch_memory": False, "specialist_deadline_s": None}
+    assert production.TEAM_SETTINGS == {"prefetch_memory": False, "specialist_deadline_s": None}
+    assert not any(m["content"].startswith("<tool_result>") for m in llms["memory"].calls[0])  # starts with no search result
