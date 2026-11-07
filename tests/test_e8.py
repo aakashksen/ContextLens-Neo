@@ -253,6 +253,15 @@ def _abstain(sid: str) -> Prediction:
 
 @pytest.fixture
 def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
+    return _make_judged(tmp_path, trained_team=True)
+
+
+@pytest.fixture
+def judged_repo_two(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
+    return _make_judged(tmp_path, trained_team=False)
+
+
+def _make_judged(tmp_path: Path, trained_team: bool) -> tuple[Path, str, list[Scenario]]:
     from contextlens.eval.records import write_local_manifest, write_scenarios_manifest
 
     root = tmp_path / "r"
@@ -273,13 +282,15 @@ def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
     models.mkdir()
     (models / "adapter_model.safetensors").write_bytes(b"x")
     (models / "model.safetensors").write_bytes(b"x")
-    freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5)
+    freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5, trained_team=trained_team)
     e8.write_freeze(root, freeze)
     (root / ".gitignore").write_text("results/partial/\nresults/logs/\ndatasets/raw/\n", encoding="utf-8")
     _git(root, "init", "-q")
     _commit_all(root)
     commit = e8.head_commit(root)
-    for n in e8.SYSTEMS:
+    (root / e8.ROWS_REL).parent.mkdir(parents=True, exist_ok=True)
+    (root / e8.ROWS_REL.with_name("e8-write.json")).write_text(json.dumps({"commit": commit, "consistency_checker_device": "cpu"}), encoding="utf-8")
+    for n in e8.systems_of(freeze):
         for sc in cards:
             row = _abstain(sc.id) if sc.gold_label == "insufficient" else _answer(sc.id, f"{n} says w0")
             e2._append_durable(root / e8.ROWS_REL, json.dumps({"commit": commit, "subset": "cards", "winner": n, "model": "E8", "calls": 0,
@@ -291,7 +302,7 @@ def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
             e2._append_durable(root / e8.ROWS_REL, json.dumps({"commit": commit, "subset": part, "winner": system, "model": "E8", "calls": 0,
                                                               "row": json.loads(row.model_dump_json())}))
     for part, scs in (("detector:scenarios", cards), ("detector:decode", dec)):
-        for system in ("trained", freeze["detectors"][part.split(":")[1]]):
+        for system in ("trained", *freeze["detectors"][part.split(":")[1]]):
             for sc in scs:
                 e2._append_durable(root / e8.ROWS_REL, json.dumps({
                     "commit": commit, "subset": part, "winner": system, "model": "E8", "calls": 0,
@@ -313,7 +324,9 @@ def test_judge_writes_one_record_with_every_system_and_each_source_apart(judged_
     cfg = rec["config"]
     assert set(cfg["benchmarks"]) == {"qmsum", "longmemeval", "decode", "consistency_scenarios"}
     assert cfg["benchmarks"]["decode"]["systems"] == ["trained", "tfidf"]
-    assert cfg["benchmarks"]["decode"]["false_alert_comparison"]["mcnemar_p"] is not None
+    assert cfg["benchmarks"]["decode"]["false_alert_comparison"]["tfidf"]["mcnemar_p"] is not None
+    assert cfg["benchmarks"]["consistency_scenarios"]["systems"] == ["trained", "prompted", "tfidf"]
+    assert cfg["consistency_checker_device"] == "cpu" and "first use" in cfg["freeze"]["test_manifests"]["note"]
     assert cfg["sonnet"]["sample"] == 300 and cfg["sonnet"]["claims_graded"] == 9  # fewer claims than the sample: all of them
     assert cfg["sonnet"]["agreement_with_haiku"]["haiku_yes_sonnet_no"] == 3  # Sonnet's rule rejects `single`'s three claims
     assert rec["subset"] == "e8-cards" and cfg["freeze"]["cards_subset"]["name"] == "e8-cards"
@@ -606,3 +619,90 @@ def test_the_base_model_may_be_a_cached_hugging_face_id_and_the_adapter_hash_is_
     (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
     (adapter / "adapter_model.safetensors").write_bytes(b"w")
     assert e8.adapter_digest(adapter) == e5_cards.adapter_hash(adapter)  # the same rule as the E5 record's adapter_hash
+
+
+# ---------------------------------------------------------------- test manifests, the two-system choice, the checker's device (coordinator, 2026-11-07)
+
+FIXTURE_RAW = Path(__file__).parent / "fixtures" / "data"
+
+
+def test_freeze_adds_qmsum_and_decode_test_manifests_with_ids_and_hashes_only(tmp_path: Path) -> None:
+    from contextlens.data.qmsum_scenarios import build_qmsum_dev
+    from contextlens.experiments import e4_consistency as e4
+
+    root = tmp_path / "r"
+    splits = root / "datasets/splits"
+    splits.mkdir(parents=True)
+    (splits / "qmsum.json").write_text(json.dumps({"splits": {"dev": ["qmsum-val-0"], "test": ["qmsum-val-0"]}}), encoding="utf-8")
+    build_qmsum_dev(FIXTURE_RAW, splits, root)
+    e4.prepare_decode_dev(FIXTURE_RAW, root)
+    before = {s: json.loads((root / e8.SCENARIO_SOURCES[s][0]).read_text(encoding="utf-8"))["splits"]["dev"] for s in ("qmsum", "decode")}
+    made = e8.prepare_test_manifests(root, FIXTURE_RAW)
+    assert set(made) == {"qmsum", "decode"} and all(n > 0 for n in made.values())
+    for src in ("qmsum", "decode"):
+        text = (root / e8.SCENARIO_SOURCES[src][0]).read_text(encoding="utf-8")
+        manifest = json.loads(text)
+        assert manifest["splits"]["dev"] == before[src]  # dev is untouched
+        assert set(manifest["splits"]["test"]) == {"hash", "n", "ids"} and manifest["splits"]["test"]["n"] == made[src]
+        assert manifest["splits"]["test"]["hash"] == e8.split_hash(e8.SPLIT, root, src)
+        assert "text" not in text and len(text) < 20_000  # ids and hashes, no raw text
+        assert (root / e8.SCENARIO_SOURCES[src][1] / "test.jsonl").is_file()  # the text itself sits in the git-ignored folder
+    assert all(i.startswith("decode-test-") for i in json.loads(
+        (root / e8.SCENARIO_SOURCES["decode"][0]).read_text(encoding="utf-8"))["splits"]["test"]["ids"])
+
+
+def test_refuses_when_the_test_manifests_are_not_committed_with_the_config(repo: Path, tmp_path: Path) -> None:
+    adapter = tmp_path / "a"
+    adapter.mkdir()
+    (adapter / "adapter_model.safetensors").write_bytes(b"1")
+    (adapter / "model.safetensors").write_bytes(b"1")
+    freeze = _frozen_repo(repo, adapter, adapter)
+    _freeze_file(repo, freeze)
+    _commit_all(repo)
+    assert e8.committed_freeze(repo)["kind"] == "e8-freeze"  # manifests and config in one commit
+    (repo / e8.SCENARIO_SOURCES["qmsum"][0]).write_text('{"splits": {"test": {"hash": "other"}}}', encoding="utf-8")
+    with pytest.raises(Refused, match="differs from the committed"):
+        e8.committed_freeze(repo)
+
+
+def test_two_system_choice_drops_the_adapter_and_keeps_the_consistency_measurement(repo: Path, tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "adapter_model.safetensors").write_bytes(b"1")
+    (tmp_path / "a" / "model.safetensors").write_bytes(b"1")
+    default = _frozen_repo(repo, tmp_path / "a", tmp_path / "a")
+    assert e8.systems_of(default) == (e8.PRIMARY, e8.SINGLE, e8.TRAINED_TEAM) and "adapter" in default["trained"]  # the default is three
+    checker = tmp_path / "c"
+    checker.mkdir()
+    (checker / "model.safetensors").write_bytes(b"1")
+    two = e8.build_freeze(repo, adapter_base="x", adapter=tmp_path / "none", checker=checker, checker_threshold=0.5, trained_team=False)
+    assert e8.systems_of(two) == (e8.PRIMARY, e8.SINGLE) and "adapter" not in two["trained"]
+    assert two["detectors"] == {"scenarios": ["prompted", "tfidf"], "decode": ["tfidf"]} == default["detectors"]
+    e8.check_inputs(repo, two)  # no adapter is needed, and none is looked for
+
+
+def test_judge_with_two_systems_writes_a_record_without_the_trained_team(judged_repo_two: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = judged_repo_two
+    haiku, sonnet = FakeClaude("haiku-x"), FakeClaude("sonnet-x")
+    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0),
+                        counter_path=tmp_path / "calls.json", say=lambda t: None, concurrency=2)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    assert set(rec["predictions"]) == {e8.PRIMARY, e8.SINGLE} and rec["config"]["systems"] == [e8.PRIMARY, e8.SINGLE]
+    assert haiku.n == 6  # 3 answered cards on each of 2 systems
+    from contextlens.eval.check_run import check
+
+    assert check("E8", root=root, min_n=1, split="test") == []
+
+
+def test_detector_order_puts_prompted_last_so_the_checker_can_leave_the_gpu_first() -> None:
+    plan = e8.detector_plan({"scenarios": ["prompted", "tfidf"], "decode": ["tfidf"]})
+    assert plan == [("scenarios", "trained"), ("decode", "trained"), ("scenarios", "tfidf"), ("decode", "tfidf"), ("scenarios", "prompted")]
+
+
+def test_the_checker_uses_the_gpu_only_if_it_fits_under_5500_mb_and_says_which() -> None:
+    assert e8.checker_device(700) == "cuda"  # the desktop alone
+    assert e8.checker_device(3500) == "cuda"  # 3500 + 2000 = 5500 fits exactly
+    assert e8.checker_device(3501) == "cpu" and e8.checker_device(5300) == "cpu"  # the adapter or the writer is loaded
+    assert e8.checker_device(None) == "cpu"  # GPU use cannot be read: do not guess

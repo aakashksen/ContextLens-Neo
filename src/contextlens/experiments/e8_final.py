@@ -21,6 +21,7 @@ earlier test record or rows of another commit exist (an `--override-note` allows
 """
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -39,8 +40,9 @@ from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.tools import Tools
 from contextlens.eval import series
 from contextlens.eval.check_run import recompute_metrics
+from contextlens.data.qmsum_scenarios import qmsum_scenarios
 from contextlens.eval.records import (ROOT, RUNS_REL, SCENARIO_SOURCES, git, head_commit, is_dirty, label_text, load_verified,
-                                      write_atomic, write_run)
+                                      split_hash, write_atomic, write_run)
 from contextlens.eval.stats import mcnemar_exact, paired_bootstrap_diff
 from contextlens.experiments import e1_retrieval as e1
 from contextlens.experiments import e2_context as e2
@@ -67,7 +69,8 @@ ROWS_REL = Path("results/partial/e8-rows.jsonl")  # git-ignored; one line per fi
 JUDGE_DIR_REL = Path("results/partial/e8-judge")
 EXTRA_PREFIX = "E8X"  # public-benchmark and detector rows: results/runs/E8X-<stamp>Z.<part>-<system>.predictions.jsonl (a name is_dirty allows)
 PRIMARY, SINGLE, TRAINED_TEAM = "team_shipping_changed", "single", "team_trained"
-SYSTEMS = (PRIMARY, SINGLE, TRAINED_TEAM)
+SYSTEMS = (PRIMARY, SINGLE, TRAINED_TEAM)  # the default; a freeze made without the trained team lists two (`systems_of`)
+CHECKER_NEEDS_MB, GPU_BUDGET_MB = 2000, 5500  # the checker's inference budget (consistency/model.py) and what the stages may hold together
 PROMPT = production.PROMPT_VERSION  # v3, E6's choice (entry 58); a test pins it
 SUBSET_NAME = "e8-cards"  # the ids of the test cases that get written answers (check_run's subset manifest)
 SUBSET_REL = Path("datasets/splits/subsets") / f"{SUBSET_NAME}.json"
@@ -122,6 +125,43 @@ def _base_present(base: str | Path, root: Path | None = None) -> bool:
     return "/" in str(base) and hub.exists()
 
 
+def systems_of(freeze: dict[str, Any]) -> tuple[str, ...]:
+    return (freeze["systems"]["primary"], *freeze["systems"]["others"])
+
+
+def add_split_manifest(source: str, split: str, scs: list[Scenario], root: Path) -> None:
+    """Write one split's scenario file (git-ignored) and add its hash, count and ids to the source's manifest; other splits stay."""
+    manifest_rel, directory = SCENARIO_SOURCES[source]
+    (root / directory).mkdir(parents=True, exist_ok=True)
+    write_atomic(root / directory / f"{split}.jsonl", "".join(s.model_dump_json() + "\n" for s in scs))
+    path = root / manifest_rel
+    doc = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"kind": "scenarios", "source": source, "splits": {}}
+    doc["splits"][split] = {"hash": split_hash(split, root, source), "n": len(scs), "ids": [s.id for s in scs]}
+    write_atomic(path, json.dumps(doc, indent=1) + "\n")
+
+
+def prepare_test_manifests(root: Path, raw_root: Path | None = None) -> dict[str, int]:
+    """Build the QMSum and DECODE test scenario files with the loaders and rules used for dev, and put their ids and hashes in the
+    committed manifests. The text stays in the git-ignored folders; only `freeze` calls this, once."""
+    raw = raw_root or root / "datasets/raw"
+    built = {"qmsum": qmsum_scenarios(SPLIT, raw, root / "datasets/splits"), "decode": e4.decode_scenarios(SPLIT, raw, root)}
+    for source, scs in built.items():
+        add_split_manifest(source, SPLIT, scs, root)
+    return {source: len(scs) for source, scs in built.items()}
+
+
+def checker_device(used_mb: int | None) -> str:
+    """cuda if the checker fits under the GPU budget beside what is already in use, else cpu; unreadable use counts as no room."""
+    return "cuda" if used_mb is not None and used_mb + CHECKER_NEEDS_MB <= GPU_BUDGET_MB else "cpu"
+
+
+def detector_plan(detectors: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """(source, detector) in the order they run: the trained checker first, `prompted` (which needs the Ollama writer) last, so the
+    checker can leave the GPU before the writer comes back."""
+    first = [(s, "trained") for s in detectors] + [(s, n) for s, ns in detectors.items() for n in ns if n != "prompted"]
+    return first + [(s, n) for s, ns in detectors.items() for n in ns if n == "prompted"]
+
+
 def write_cards_subset(root: Path) -> Path:
     """The ids-only manifest of the test cases that get cards: every case whose conversation is not LongMemEval. It reads
     only `id` and `conversation.source` from each line of the test file, never the text."""
@@ -137,12 +177,15 @@ def write_cards_subset(root: Path) -> Path:
     return path
 
 
-def build_freeze(root: Path, *, adapter_base: str | Path, adapter: Path, checker: Path, checker_threshold: float,
-                 baselines: dict[str, str] | None = None) -> dict[str, Any]:
+def build_freeze(root: Path, *, adapter_base: str | Path | None, adapter: Path | None, checker: Path, checker_threshold: float,
+                 trained_team: bool = True, baselines: dict[str, list[str]] | None = None) -> dict[str, Any]:
     """The choices made on dev. Reads only the committed manifests (hashes), never a test file."""
-    if not _base_present(adapter_base):
-        raise Refused(f"the adapter's base model {adapter_base} is neither a directory nor in the local Hugging Face cache")
-    _need(adapter, "the T6.2 adapter")
+    if trained_team:
+        if adapter is None or adapter_base is None:
+            raise Refused("the trained team needs --adapter-base and --adapter (or freeze without it)")
+        if not _base_present(adapter_base):
+            raise Refused(f"the adapter's base model {adapter_base} is neither a directory nor in the local Hugging Face cache")
+        _need(adapter, "the T6.2 adapter")
     _need(checker, "the T5.2 consistency checkpoint")
     test_hashes = {src: json.loads((root / SCENARIO_SOURCES[src][0]).read_text(encoding="utf-8"))["splits"][SPLIT]["hash"]
                    for src in ("scenarios", "qmsum", "decode")}
@@ -150,18 +193,23 @@ def build_freeze(root: Path, *, adapter_base: str | Path, adapter: Path, checker
     subset = write_cards_subset(root)
     return {
         "kind": "e8-freeze", "experiment": EXPERIMENT, "chosen_on": "dev", "decision_entries": list(DECISION_ENTRIES),
-        "systems": {"primary": PRIMARY, "others": [SINGLE, TRAINED_TEAM]},
+        "systems": {"primary": PRIMARY, "others": [SINGLE, TRAINED_TEAM] if trained_team else [SINGLE]}, "trained_team": trained_team,
         "assistant_setting": {"env": "CONTEXTLENS_ASSISTANT", "value": PRIMARY},
         "prompt_version": PROMPT, "team_settings": dict(production.TEAM_SETTINGS), "writer_model": e2.WRITER_MODEL, "embedder_model": e2.EMBED_MODEL, "deadline_s": e2.DEADLINE_S,
         "retrieval": {"path": e2.CONFIG_REL.as_posix(), "sha256": sha256_path(retrieval)},
-        "trained": {"adapter": {"base_model_path": Path(adapter_base).as_posix(), "adapter_path": adapter.as_posix(),
-                                "sha256": adapter_digest(adapter), "hash_rule": "E5's adapter_hash (config and weights)"},
+        "trained": {**({"adapter": {"base_model_path": Path(adapter_base).as_posix(), "adapter_path": adapter.as_posix(),
+                                    "sha256": adapter_digest(adapter), "hash_rule": "E5's adapter_hash (config and weights)"}}
+                       if trained_team and adapter is not None and adapter_base is not None else {}),
                     "checker": {"path": checker.as_posix(), "sha256": checker_digest(checker), "hash_rule": "model.safetensors", "threshold": checker_threshold}},
-        "detectors": baselines or {"scenarios": "prompted", "decode": "tfidf"},
+        "detectors": baselines or {"scenarios": ["prompted", "tfidf"], "decode": ["tfidf"]},
         "search_only": ["qmsum", LME],
         "judging": {"haiku": pg.HAIKU_MODEL, "sonnet": e2.CLOUD_MODEL, "sonnet_sample": SONNET_SAMPLE, "sample_seed": SAMPLE_SEED,
                     "max_weekly_pct": MAX_WEEKLY_PCT, "rubric": e2.RUBRIC_VERSION},
         "test_hashes": test_hashes,
+        "test_manifests": {
+            "paths": [SCENARIO_SOURCES[src][0].as_posix() for src in ("qmsum", "decode")],
+            "note": "The QMSum and DECODE test manifests (ids and hashes only, never text) were built by `freeze` with the same loaders and "
+                    "rules as dev. This is their first use, and they are committed in the same commit as this config file."},
         "cards_subset": {"name": SUBSET_NAME, "path": SUBSET_REL.as_posix(), "sha256": sha256_path(subset),
                          "reads": "only `id` and `conversation.source` of each line of the test file; no text",
                          "committed": "in the same commit as this config file; committed_freeze refuses otherwise"},
@@ -182,7 +230,7 @@ def committed_freeze(root: Path) -> dict[str, Any]:
     freeze = json.loads((root / FREEZE_REL).read_text(encoding="utf-8"))
     if freeze.get("kind") != "e8-freeze":
         raise Refused(f"{rel} is not an E8 freeze file")
-    paths = [rel, *([freeze["cards_subset"]["path"]] if "cards_subset" in freeze else [])]
+    paths = [rel, *([freeze["cards_subset"]["path"]] if "cards_subset" in freeze else []), *freeze.get("test_manifests", {}).get("paths", [])]
     for r in paths:
         if git(root, "ls-files", "--error-unmatch", r).returncode != 0:
             raise Refused(f"{r} is not committed; commit it before the test is touched")
@@ -196,13 +244,15 @@ def check_inputs(root: Path, freeze: dict[str, Any]) -> None:
     if freeze["team_settings"] != production.TEAM_SETTINGS or freeze["prompt_version"] != production.PROMPT_VERSION:
         raise Refused("the frozen team settings or prompt are not the ones the product ships now (api/production.py)")
     t = freeze["trained"]
-    for what, p, want, digest in (("adapter", t["adapter"]["adapter_path"], t["adapter"]["sha256"], adapter_digest),
-                                  ("consistency checkpoint", t["checker"]["path"], t["checker"]["sha256"], checker_digest)):
+    checked = [("consistency checkpoint", t["checker"]["path"], t["checker"]["sha256"], checker_digest)]
+    if "adapter" in t:
+        checked.insert(0, ("adapter", t["adapter"]["adapter_path"], t["adapter"]["sha256"], adapter_digest))
+    for what, p, want, digest in checked:
         path = Path(p) if Path(p).is_absolute() else root / p
         _need(path, f"the {what}")
         if digest(path) != want:
             raise Refused(f"the {what} at {path} is not the one that was frozen (hash differs)")
-    if not _base_present(t["adapter"]["base_model_path"], root):
+    if "adapter" in t and not _base_present(t["adapter"]["base_model_path"], root):
         raise Refused(f"the adapter's base model {t['adapter']['base_model_path']} not found")
     if sha256_path(root / freeze["retrieval"]["path"]) != freeze["retrieval"]["sha256"]:
         raise Refused("the retrieval config is not the one that was frozen")
@@ -367,9 +417,19 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
     names = e2.Models()
     mine = [(names.writer, False), (names.embedder, True)]
     counts: dict[str, int] = {}
+    systems = systems_of(freeze)
+    box: dict[str, Any] = {}
+
+    def trained_checker() -> ConsistencyChecker:
+        if "checker" not in box:
+            box["device"] = checker_device(e2.gpu_used_mb())
+            say(f"consistency checker loads on {box['device']} (GPU in use {e2.gpu_used_mb()} MB, budget {GPU_BUDGET_MB} MB)")
+            box["checker"] = make_checker("trained", {**freeze["trained"]["checker"], "device": box["device"]})
+        return box["checker"]
+
     try:
-        have = {n: _saved(root, commit, "cards", n, {s.id for s in cards}) for n in SYSTEMS}
-        todo = [s for s in cards if any(s.id not in have[n] for n in SYSTEMS)]
+        have = {n: _saved(root, commit, "cards", n, {s.id for s in cards}) for n in systems}
+        todo = [s for s in cards if any(s.id not in have[n] for n in systems)]
         say(f"cards: {len(cards)} cases, building memory for {len(todo)}")
         memories: dict[str, MemoryStore] = {}
         for sc in todo:
@@ -377,26 +437,34 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
         for system in (PRIMARY, SINGLE):
             counts[system] = len(run_part(root, commit, "cards", system, cards, lambda sc, system=system: build_system(
                 system, sc, writer, embedder, memories.get(sc.id, MemoryStore())), say))
-        say("trained-team stage: the writer is unloaded, the adapter loads")
-        ctl.unload(names.writer)  # the adapter needs the GPU the writer held
-        hf = make_hf_writer(freeze["trained"]["adapter"])
-        trained = make_checker("trained", freeze["trained"]["checker"])
-        counts[TRAINED_TEAM] = len(run_part(root, commit, "cards", TRAINED_TEAM, cards, lambda sc: build_team_trained(
-            sc, hf, trained, embedder, memories.get(sc.id, MemoryStore())), say))
+        if TRAINED_TEAM in systems:
+            say("trained-team stage: the writer is unloaded, the adapter loads")
+            ctl.unload(names.writer)  # the adapter needs the GPU the writer held
+            hf = make_hf_writer(freeze["trained"]["adapter"])
+            counts[TRAINED_TEAM] = len(run_part(root, commit, "cards", TRAINED_TEAM, cards, lambda sc: build_team_trained(
+                sc, hf, trained_checker(), embedder, memories.get(sc.id, MemoryStore())), say))
         say("search stage")
         for source, scs in (("qmsum", loaded["qmsum"][0]), (LME, lme)):
             counts[f"search:{source}"] = len(run_rows(
                 root, commit, f"search:{source}", SEARCH_SYSTEM, scs, lambda sc: search_rows([sc], embedder, cfg, say)[0], say))
-        say("detector stage")
-        for source, scs in (("scenarios", cards), ("decode", loaded["decode"][0])):
+        say("detector stage: the writer is unloaded so the checker may use the GPU; `prompted` runs last")
+        ctl.unload(names.writer)
+        by_source = {"scenarios": cards, "decode": loaded["decode"][0]}
+        for source, name in detector_plan(freeze["detectors"]):
+            if name == "prompted" and "checker" in box:
+                del box["checker"]  # leave the GPU before the Ollama writer is needed again
+                gc.collect()
+                if "torch" in sys.modules:
+                    sys.modules["torch"].cuda.empty_cache()
+            checker = trained_checker() if name == "trained" else make_checker(name, freeze["trained"]["checker"])
             predict = e4.predict_scenarios if source == "scenarios" else e4.predict_decode
-            for name in ("trained", freeze["detectors"][source]):
-                checker = trained if name == "trained" else make_checker(name, freeze["trained"]["checker"])
-                counts[f"detector:{source}:{name}"] = len(run_rows(
-                    root, commit, f"detector:{source}", name, scs, lambda sc, checker=checker, predict=predict: predict(checker, [sc])[0], say))
-        write_atomic(root / ROWS_REL.with_name("e8-write.json"), json.dumps({"commit": commit, "run_conditions": run_conditions,
-                                                                           "override_note": override_note,
-                                                                           "finished_at": datetime.now(timezone.utc).isoformat()}))
+            counts[f"detector:{source}:{name}"] = len(run_rows(
+                root, commit, f"detector:{source}", name, by_source[source],
+                lambda sc, checker=checker, predict=predict: predict(checker, [sc])[0], say))
+        write_atomic(root / ROWS_REL.with_name("e8-write.json"), json.dumps({
+            "commit": commit, "run_conditions": run_conditions, "override_note": override_note,
+            "consistency_checker_device": box.get("device", "not loaded (rows were already saved)"),
+            "finished_at": datetime.now(timezone.utc).isoformat()}))
     finally:
         e2._unload_models(ctl, mine, say)
     return counts
@@ -499,11 +567,11 @@ def false_alert_compare(scs: list[Scenario], rows_a: list[Prediction], rows_b: l
             "verdict": pair_verdict(diff, lo, hi, p, True, higher_is_better=False)}
 
 
-def detector_block(source: str, scs: list[Scenario], rows: dict[str, list[Prediction]], baseline: str) -> dict[str, Any]:
+def detector_block(source: str, scs: list[Scenario], rows: dict[str, list[Prediction]], baselines: list[str]) -> dict[str, Any]:
     metrics = {n: e4._saved(recompute_metrics(scs, p), source) for n, p in rows.items()}
-    return {"cases": len(scs), "systems": list(rows), "baseline": baseline, "metrics": metrics,
-            "false_alert_comparison": false_alert_compare(scs, rows["trained"], rows[baseline], "trained", baseline),
-            "note": e4.DECODE_CAVEAT if source == "decode" else "four-label macro-F1 on our scenarios; the baseline is the dev winner"}
+    return {"cases": len(scs), "systems": list(rows), "baselines": baselines, "metrics": metrics,
+            "false_alert_comparison": {b: false_alert_compare(scs, rows["trained"], rows[b], "trained", b) for b in baselines},
+            "note": e4.DECODE_CAVEAT if source == "decode" else "four-label macro-F1 on our scenarios; the trained checker against the baselines"}
 
 
 def search_block(scs: list[Scenario], rows: list[Prediction]) -> dict[str, Any]:
@@ -521,6 +589,16 @@ def primary_vs_single(comparisons: list[dict[str, Any]]) -> dict[str, str]:
             out[c["metric"]] = pair_verdict(c["diff"], *c["ci"], c["mcnemar_p"], c["metric"] in e3.BINARY_METRICS,
                                             c["metric"] in e3.HIGHER_IS_BETTER)
     return out
+
+
+def _checker_device(root: Path, commit: str) -> str:
+    """Where the trained checker ran, from the write stage's note for this commit."""
+    path = root / ROWS_REL.with_name("e8-write.json")
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        return meta["consistency_checker_device"] if meta.get("commit") == commit else "not recorded for this commit"
+    except (OSError, ValueError, KeyError):
+        return "not recorded"
 
 
 def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, guard: UsageGuard, override_note: str | None = None,
@@ -541,13 +619,14 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
         raise Refused(f"the prompts or card code changed between {commit[:12]} and HEAD: {changed[:8]}")
     loaded = {src: load_verified(src, SPLIT, root) for src in ("scenarios", "qmsum", "decode")}
     cards, lme = split_cards(loaded["scenarios"][0])
-    rows = {n: load_part(root, commit, "cards", n, cards) for n in SYSTEMS}
+    systems = systems_of(freeze)
+    rows = {n: load_part(root, commit, "cards", n, cards) for n in systems}
     extra_rows: dict[tuple[str, str], list[Prediction]] = {
         ("search:qmsum", SEARCH_SYSTEM): load_part(root, commit, "search:qmsum", SEARCH_SYSTEM, loaded["qmsum"][0]),
         (f"search:{LME}", SEARCH_SYSTEM): load_part(root, commit, f"search:{LME}", SEARCH_SYSTEM, lme)}
     detectors = {"scenarios": cards, "decode": loaded["decode"][0]}
     for source, scs in detectors.items():
-        for n in ("trained", freeze["detectors"][source]):
+        for n in ("trained", *freeze["detectors"][source]):
             extra_rows[(f"detector:{source}", n)] = load_part(root, commit, f"detector:{source}", n, scs)
 
     if guard.limit != freeze["judging"]["max_weekly_pct"]:
@@ -584,7 +663,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
                  f"(seed {freeze['judging']['sample_seed']}), so Sonnet's figure is agreement with Haiku on the sample, not a second score. "
                  "If the weekly stop interrupted it (`complete` false), or more claims are wanted, the separate `sonnet-extra` step grades the rest "
                  "without regrading, keeps this figure and reports the rest apart.")}
-    detectors_out = {s: detector_block(s, scs, {n: extra_rows[(f"detector:{s}", n)] for n in ("trained", freeze["detectors"][s])},
+    detectors_out = {s: detector_block(s, scs, {n: extra_rows[(f"detector:{s}", n)] for n in ("trained", *freeze["detectors"][s])},
                                        freeze["detectors"][s]) for s, scs in detectors.items()}
     benchmarks = {"qmsum": search_block(loaded["qmsum"][0], extra_rows[("search:qmsum", SEARCH_SYSTEM)]),
                   LME: search_block(lme, extra_rows[(f"search:{LME}", SEARCH_SYSTEM)]),
@@ -600,7 +679,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
     n_claims = len(items)
     config: dict[str, Any] = {
         "experiment": EXPERIMENT, "freeze": {"path": FREEZE_REL.as_posix(), "sha256": sha256_path(root / FREEZE_REL), **freeze},
-        "generating_commit": commit, "systems": list(SYSTEMS), "primary": PRIMARY, "prompt_note": f"prompt {PROMPT} for every system",
+        "generating_commit": commit, "systems": list(systems), "primary": PRIMARY, "consistency_checker_device": _checker_device(root, commit), "prompt_note": f"prompt {PROMPT} for every system",
         "cards_subset": freeze["cards_subset"], "cards_cases": len(cards), "search_only_cases": {LME: len(lme), "qmsum": len(loaded["qmsum"][0])},
         "written_score": {n: e3.score(m) for n, m in metrics.items()}, "primary_vs_single": primary_vs_single(comparisons),
         "judge": {"model": haiku.model, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False, "via": "claude -p, one claim per call, in parallel", "claims": n_claims,
@@ -611,13 +690,16 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
         "notes": [CAL_NOTE, "answer_when_answerable counts cards that did not abstain, not cards that answered correctly",
                   "Public benchmarks are reported separately under config.benchmarks; their rows are in config.extra_rows and are "
                   "not recomputed by check_run.", labels,
-                  "The trained-model team is T6.2's adapter, which may lose to the prompted writer; its result stands as measured."],
+                  *(["The trained-model team is T6.2's adapter, which may lose to the prompted writer; its result stands as measured."]
+                    if TRAINED_TEAM in systems else []),
+                  "The trained consistency checker is compared with `prompted` and TF-IDF in config.benchmarks (four-label macro-F1 on our "
+                  "scenarios, binary on DECODE); it needs no adapter and no team."],
         "claude_calls": n_claims + len(s_verdicts), "started_at": started, "run_conditions": "judging only, no GPU"}
     if override_note:
         config["override_note"] = override_note
     names = e2.Models()
     attempts = [{"setting": n, "kind": "card system", "ok": True, "error": None,
-                 "health": e2.check_health(n, rows[n])} for n in SYSTEMS]
+                 "health": e2.check_health(n, rows[n])} for n in systems]
     return write_run(EXPERIMENT, SPLIT, config, {"writer": names.writer, "judge": haiku.model, "cloud_grader": sonnet.model,
                                                  "embedder": names.embedder}, {"recall": PROMPT}, metrics, intervals, attempts, judged,
                      loaded["scenarios"][1], comparisons=comparisons, scenario_source="scenarios", subset=SUBSET_NAME, root=root)
@@ -659,7 +741,7 @@ def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: 
     record = json.loads((root / RUNS_REL / f"{records[-1]}.json").read_text(encoding="utf-8"))
     at_record = {"claims": record["config"]["sonnet"]["claims_graded"], **record["config"]["sonnet"]["agreement_with_haiku"]}
     cards, _ = split_cards(load_verified("scenarios", SPLIT, root)[0])
-    items = items_of({n: load_part(root, commit, "cards", n, cards) for n in SYSTEMS})
+    items = items_of({n: load_part(root, commit, "cards", n, cards) for n in systems_of(freeze)})
     seed, done = freeze["judging"]["sample_seed"], freeze["judging"]["sonnet_sample"]
     stem = commit[:12]
     header = {"kind": "e8-judge-rows", "commit": commit, "rubric": e2.RUBRIC_VERSION, "model": sonnet.model}
@@ -716,8 +798,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("freeze", help="write configs/e8_freeze.json (then commit it)")
-    f.add_argument("--adapter-base", required=True, help="a directory, or a cached Hugging Face id such as Qwen/Qwen3.5-2B")
-    f.add_argument("--adapter", type=Path, required=True)
+    f.add_argument("--adapter-base", help="a directory, or a cached Hugging Face id such as Qwen/Qwen3.5-2B")
+    f.add_argument("--adapter", type=Path)
+    f.add_argument("--without-trained-team", action="store_true",
+                   help="the two-system choice: the primary and `single` only; no adapter. Default: the three systems")
     f.add_argument("--checker", type=Path, required=True)
     f.add_argument("--checker-threshold", type=float, default=0.5)
     w = sub.add_parser("write", help="GPU: run the test and save rows")
@@ -734,9 +818,13 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     try:
         if args.cmd == "freeze":
+            if not args.without_trained_team and not (args.adapter and args.adapter_base):
+                ap.error("freeze needs --adapter-base and --adapter, or --without-trained-team")
+            made = prepare_test_manifests(ROOT)
             path = write_freeze(ROOT, build_freeze(ROOT, adapter_base=args.adapter_base, adapter=args.adapter, checker=args.checker,
-                                                   checker_threshold=args.checker_threshold))
-            print(f"wrote {path.as_posix()}; commit it before `write`")
+                                                   checker_threshold=args.checker_threshold, trained_team=not args.without_trained_team))
+            print(f"test manifests built: {made}; wrote {path.as_posix()}; commit the config, the card manifest and the two test "
+                  "manifests together before `write`")
             return 0
         if args.cmd == "write":
             from contextlens.llm.client import Embedder, OllamaClient

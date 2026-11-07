@@ -110,23 +110,28 @@ def _speaker(m: int, j: int) -> str:
     return "A" if (m - j) % 2 == 0 else "B"
 
 
-def decode_scenario(p: Pair) -> Scenario:
-    """A DECODE dev pair as a scenario: the statement is the last turn. The text stays in git-ignored datasets/raw/."""
-    sid = f"decode-dev-{_rank(p.conversation_id, p.label, p.statement)[:12]}"
+def decode_scenario(p: Pair, split: str = "dev") -> Scenario:
+    """A DECODE pair as a scenario: the statement is the last turn. The text stays in git-ignored datasets/raw/."""
+    sid = f"decode-{split}-{_rank(p.conversation_id, p.label, p.statement)[:12]}"
     texts = [*p.earlier, p.statement]
     m = len(p.earlier)
     turns = [Turn(id=f"{sid}:t{i}", conversation_id=p.conversation_id, seq=i, speaker=_speaker(m, i), text=t,
                   start_ms=i * 1000, end_ms=i * 1000 + 900, source="dataset") for i, t in enumerate(texts)]
     return Scenario(
-        id=sid, conversation=Conversation(id=p.conversation_id, turns=turns, source="decode", split="dev"),
+        id=sid, conversation=Conversation(id=p.conversation_id, turns=turns, source="decode", split=split),
         request=ButtonRequest(conversation_id=p.conversation_id, as_of_seq=m), category="decode",
         gold_evidence_turn_ids=[], gold_label=p.label, gold_answer=None, origin="dataset")  # type: ignore[arg-type]
 
 
+def decode_scenarios(split: str, raw_root: Path = RAW_DIR, root: Path = ROOT, n: int = DECODE_DEV_N) -> list[Scenario]:
+    """The fixed sample of one split's DECODE pairs; the same rule for dev and for E8's test."""
+    pairs = [p for p in build_pairs(split, raw_root, root / "datasets/none") if p.source == "decode"]
+    return [decode_scenario(p, split) for p in sample_pairs(pairs, n)]
+
+
 def prepare_decode_dev(raw_root: Path = RAW_DIR, root: Path = ROOT, n: int = DECODE_DEV_N) -> int:
     """Write the DECODE dev sample (git-ignored) and its manifest of hash, count and ids (commit it before the run)."""
-    pairs = [p for p in build_pairs(SPLIT, raw_root, root / "datasets/none") if p.source == "decode"]
-    scs = [decode_scenario(p) for p in sample_pairs(pairs, n)]
+    scs = decode_scenarios(SPLIT, raw_root, root, n)
     write_local_manifest("decode", {SPLIT: scs}, root)
     return len(scs)
 
