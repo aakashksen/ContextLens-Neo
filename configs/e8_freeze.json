@@ -1,0 +1,83 @@
+{
+ "kind": "e8-freeze",
+ "experiment": "E8",
+ "chosen_on": "dev",
+ "decision_entries": [
+  49,
+  51,
+  56,
+  57,
+  58
+ ],
+ "systems": {
+  "primary": "team_shipping_changed",
+  "others": [
+   "single"
+  ]
+ },
+ "trained_team": false,
+ "assistant_setting": {
+  "env": "CONTEXTLENS_ASSISTANT",
+  "value": "team_shipping_changed"
+ },
+ "prompt_version": "v3",
+ "team_settings": {
+  "prefetch_memory": false,
+  "specialist_deadline_s": null
+ },
+ "writer_model": "qwen3.5:4b-q4_K_M",
+ "embedder_model": "nomic-embed-text",
+ "deadline_s": 8.0,
+ "retrieval": {
+  "path": "configs/retrieval.json",
+  "sha256": "da997da393bf5b89952ef7ab02603c580c187dead5cf55babab8e66bcb26f71e"
+ },
+ "trained": {
+  "checker": {
+   "path": "<local path>",
+   "sha256": "6f0cc95019bfc44a14adb8ccf13b52fdec05870392858b8e0fc7574cb2f4eba9",
+   "hash_rule": "model.safetensors",
+   "threshold": 0.5
+  }
+ },
+ "detectors": {
+  "scenarios": [
+   "prompted",
+   "tfidf"
+  ],
+  "decode": [
+   "tfidf"
+  ]
+ },
+ "search_only": [
+  "qmsum",
+  "longmemeval"
+ ],
+ "judging": {
+  "haiku": "claude-haiku-5-5",
+  "sonnet": "sonnet",
+  "sonnet_sample": 300,
+  "sample_seed": 13,
+  "max_weekly_pct": 98.0,
+  "rubric": "e2-v1"
+ },
+ "test_hashes": {
+  "scenarios": "9c6e5a2088e88632a65d80f9be03110cb849c57298802ffec6ef149eb7ee6692",
+  "qmsum": "82e97ba65aa194e38ac00f8f4d08741d650e565ae164b57c50de8ca72d12cec5",
+  "decode": "3d199f6223132363ae6b90ba2f3595278da0c1a2e19a961f1bdbd81cec49dd35"
+ },
+ "test_manifests": {
+  "paths": [
+   "datasets/splits/qmsum-scenarios.json",
+   "datasets/splits/decode-scenarios.json"
+  ],
+  "note": "The QMSum and DECODE test manifests (ids and hashes only, never text) were built by `freeze` with the same loaders and rules as dev. This is their first use, and they are committed in the same commit as this config file."
+ },
+ "cards_subset": {
+  "name": "e8-cards",
+  "path": "datasets/splits/subsets/e8-cards.json",
+  "sha256": "377f66769fb48648017e7a4ab95c2685216f5f451f6543bfae3595895e68aa72",
+  "reads": "only `id` and `conversation.source` of each line of the test file; no text",
+  "committed": "in the same commit as this config file; committed_freeze refuses otherwise"
+ }
+}
