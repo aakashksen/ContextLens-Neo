@@ -1069,7 +1069,7 @@ def run_e7(
 
 SPEECH_ONLY_REASON = ("The earlier record's WER, DER, pipeline and oracle numbers were invalid: the speech service's fixed "
                       "voice gate (RMS 0.01) dropped most of the quiet rebuilt audio, so the streamed text held far less "
-                      "than the audio said (see docs/DECISIONS.md, entry 60). The clean system's cards and the press "
+                      "than the audio said (see docs/DECISIONS.md, entry 68). The clean system's cards and the press "
                       "latencies of that record do not depend on the speech path and still stand there.")
 SPEECH_ONLY_INVALIDATES = ("The earlier E7 records' WER, DER, asr_pipeline and asr_oracle_speakers quality and their speech and "
                            "speaker timings were invalid because of the voice gate bug (the gate dropped quiet speech); this "

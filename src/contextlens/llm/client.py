@@ -35,7 +35,7 @@ def shared_root(repo_root: Path) -> Path:
 
 
 CLAUDE_CALLS_PATH = shared_root(REPO_ROOT) / "results" / "claude_calls.json"  # one counter for every worktree
-CLAUDE_CALL_CAP = 5000  # a runaway guard, not a budget
+CLAUDE_CALL_CAP = 7000  # a runaway guard, not a budget (raised from 5,000 by the person, 2026-11-05)
 
 
 _caller = threading.local()

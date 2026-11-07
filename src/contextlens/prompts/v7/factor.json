@@ -1,0 +1,12 @@
+{
+ "version": "v7",
+ "baseline": "v1",
+ "factor": "role_split",
+ "summary": "Two named roles inside the one call: a Finder picks turns, a Writer writes only from them.",
+ "removed": [],
+ "added": [
+  "Do the work in two roles, in order, and show only the card.",
+  "Finder: look through the turns and pick the ones that state the answer, or decide that none does.",
+  "Writer: write each finding only from the turns the Finder picked, citing and quoting them. If the Finder picked none, abstain."
+ ]
+}

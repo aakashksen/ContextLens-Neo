@@ -115,8 +115,8 @@ def test_call_cap_refuses_and_makes_no_call(tmp_path, monkeypatch):
     assert json.loads(path.read_text())["count"] == c.CLAUDE_CALL_CAP
 
 
-def test_the_cap_is_5000_and_the_default_model_is_sonnet():
-    assert c.CLAUDE_CALL_CAP == 5000
+def test_the_cap_is_7000_and_the_default_model_is_sonnet():
+    assert c.CLAUDE_CALL_CAP == 7000
     assert ClaudeCodeClient().model == "sonnet"
 
 

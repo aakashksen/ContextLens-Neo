@@ -1,0 +1,10 @@
+{
+ "version": "v3",
+ "baseline": "v1",
+ "factor": "evidence_format",
+ "summary": "How a finding cites: one turn, the shortest exact span, nothing in the statement beyond the quote.",
+ "removed": [],
+ "added": [
+  "Cite each finding with the one turn that states it. Quote only the shortest span of that turn that carries the fact, with every number, name and date the statement uses, and make the statement say no more than the quote does."
+ ]
+}
