@@ -642,15 +642,59 @@ def search_block(scs: list[Scenario], rows: list[Prediction]) -> dict[str, Any]:
             "note": "search only: no written answer exists for these cases"}
 
 
-def primary_vs_single(comparisons: list[dict[str, Any]]) -> dict[str, str]:
-    """The written verdict of each compared metric, the primary against `single`: better or worse only when the interval
-    and, for a yes/no metric, McNemar agrees."""
+def _primary_minus_single(c: dict[str, Any]) -> tuple[float, list[float]] | None:
+    """A comparison's difference and interval as primary minus `single`, whichever way the pair was saved (E3's card_stats saves
+    `single` then the primary, a minus b); None for any other pair."""
+    if (c["a"], c["b"]) == (PRIMARY, SINGLE):
+        return c["diff"], list(c["ci"])
+    if (c["a"], c["b"]) == (SINGLE, PRIMARY):
+        return -c["diff"], [-c["ci"][1], -c["ci"][0]]
+    return None
+
+
+def primary_vs_single_detail(comparisons: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Per compared metric: the difference (primary minus `single`), its interval, McNemar, and the written verdict. Better or worse
+    only when the interval and, for a yes/no metric, McNemar agree; McNemar is symmetric, so the order does not change it."""
     out = {}
     for c in comparisons:
-        if (c["a"], c["b"]) == (PRIMARY, SINGLE) and c["metric"] in e3.COMPARE and "[" not in c["metric"]:
-            out[c["metric"]] = pair_verdict(c["diff"], *c["ci"], c["mcnemar_p"], c["metric"] in e3.BINARY_METRICS,
-                                            c["metric"] in e3.HIGHER_IS_BETTER)
+        oriented = _primary_minus_single(c)
+        if oriented is None or c["metric"] not in e3.COMPARE or "[" in c["metric"]:
+            continue
+        diff, ci = oriented
+        out[c["metric"]] = {"difference": f"{PRIMARY} minus {SINGLE}", "diff": diff, "ci": ci, "mcnemar_p": c["mcnemar_p"],
+                            "verdict": pair_verdict(diff, ci[0], ci[1], c["mcnemar_p"], c["metric"] in e3.BINARY_METRICS,
+                                                    c["metric"] in e3.HIGHER_IS_BETTER)}
     return out
+
+
+def primary_vs_single(comparisons: list[dict[str, Any]]) -> dict[str, str]:
+    return {metric: d["verdict"] for metric, d in primary_vs_single_detail(comparisons).items()}
+
+
+def restate(run_id: str, reason: str, override_note: str, root: Path = ROOT) -> Path:
+    """A superseding E8 record with exactly the saved, already-judged rows, metrics and comparisons of `run_id`, and the written
+    primary-against-`single` verdict recomputed from its comparisons. Nothing is regenerated, regraded or asked again. The note says
+    it is a restatement of the same single test run, which the test-once rule needs."""
+    if not reason.strip():
+        raise ValueError("a superseding record needs a reason")
+    if not override_note.strip():
+        raise ValueError("a restatement of the test record needs an override note saying it is the same run, not a second one")
+    if is_dirty(root):
+        raise Refused("the working tree has uncommitted changes; commit first, or the record cannot be written")
+    old = json.loads((root / RUNS_REL / f"{run_id}.json").read_text(encoding="utf-8"))
+    if old["experiment"] != EXPERIMENT or old["split"] != SPLIT:
+        raise ValueError(f"{run_id} is not an E8 test record")
+    preds = {n: [Prediction.model_validate_json(x) for x in (root / rel).read_text(encoding="utf-8").splitlines() if x.strip()]
+             for n, rel in old["predictions"].items()}
+    cfg = {**old["config"], "primary_vs_single": primary_vs_single(old["comparisons"]),
+           "primary_vs_single_detail": primary_vs_single_detail(old["comparisons"]), "restated_from": run_id,
+           "override_note": override_note, "claude_calls_in_original": old["claude_calls"], "claude_calls": 0,
+           "restatement": "Rows, claim grades, metrics and comparisons are those of the superseded record; only the written "
+                          "primary-against-single verdict was recomputed, from the comparisons, with the difference oriented as "
+                          "primary minus single. No model was run and no call was made."}
+    return write_run(EXPERIMENT, SPLIT, cfg, old["models"], old["prompt_versions"], old["metrics"], old["intervals"], old["attempts"],
+                     preds, old["dataset_hash"], comparisons=old["comparisons"], supersedes=[{"run_id": run_id, "reason": reason}],
+                     subset=old.get("subset"), scenario_source=old["scenario_source"], root=root)
 
 
 def recorded_cards_commit(root: Path, commit: str) -> str:
@@ -763,6 +807,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
         "resume_note": _resume_note(cards_commit, commit), "systems": list(systems), "primary": PRIMARY, "consistency_checker_device": _checker_device(root, commit), "prompt_note": f"prompt {PROMPT} for every system",
         "cards_subset": freeze["cards_subset"], "cards_cases": len(cards), "search_only_cases": {LME: len(lme), "qmsum": len(loaded["qmsum"][0])},
         "written_score": {n: e3.score(m) for n, m in metrics.items()}, "primary_vs_single": primary_vs_single(comparisons),
+        "primary_vs_single_detail": primary_vs_single_detail(comparisons),
         "judge": {"model": haiku.model, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False, "via": "claude -p, one claim per call, in parallel", "claims": n_claims,
                   "share_supported": sum(h_verdicts.values()) / n_claims, "calibration": "failed the written test (entry 56)"},
         "judge_note": CAL_NOTE, "sonnet": {"model": sonnet.model, **sonnet_view},
@@ -893,6 +938,10 @@ def main(argv: list[str] | None = None) -> int:
     jd.add_argument("--from-commit", required=True, help="the commit that wrote the rows")
     jd.add_argument("--override-note")
     jd.add_argument("--concurrency", type=int, default=pg.DEFAULT_CONCURRENCY)
+    rs = sub.add_parser("restate", help="no GPU, no calls: a superseding record from the saved rows with the verdict recomputed")
+    rs.add_argument("--run-id", required=True)
+    rs.add_argument("--reason", required=True)
+    rs.add_argument("--override-note", required=True, help="why this is the same single test run, not a second one")
     ex = sub.add_parser("sonnet-extra", help="no GPU: grade more Sonnet claims after the E8 record, apart from it (additive)")
     ex.add_argument("--from-commit", required=True)
     ex.add_argument("--more", type=int, default=0, help="further claims beyond the original sample (0: only finish the sample)")
@@ -915,6 +964,9 @@ def main(argv: list[str] | None = None) -> int:
                                make_hf_writer=_real_hf_writer, make_checker=_real_checker, run_conditions=args.run_conditions,
                                override_note=args.override_note)
             print(json.dumps(counts, indent=1))
+            return 0
+        if args.cmd == "restate":
+            print(restate(args.run_id, args.reason, args.override_note).as_posix())
             return 0
         if args.cmd == "sonnet-extra":
             out = run_sonnet_extra(from_commit=args.from_commit, sonnet=pg.CountedClaude(model=e2.CLOUD_MODEL), more=args.more,

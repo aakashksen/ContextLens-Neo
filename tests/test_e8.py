@@ -814,3 +814,67 @@ def test_judge_uses_cards_from_the_earlier_commit_and_the_record_says_so(tmp_pat
     cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
     assert cfg["generating_commit"] == cards_commit and cfg["search_and_detector_commit"] == search_commit
     assert "reran at" in cfg["resume_note"] and cards_commit[:12] in cfg["resume_note"] and search_commit[:12] in cfg["resume_note"]
+
+
+# ---------------------------------------------------------------- the written verdict and the restatement (verifier, 2026-11-07)
+
+def _cmp(a: str, b: str, metric: str, diff: float, ci: list[float], p: float | None) -> dict:
+    return {"a": a, "b": b, "metric": metric, "diff": diff, "ci": ci, "mcnemar_p": p}
+
+
+def test_primary_vs_single_reads_comparisons_ordered_either_way_with_the_sign_turned_to_primary_minus_single() -> None:
+    P, S = e8.PRIMARY, e8.SINGLE
+    as_saved = [_cmp(S, P, "grounded_rate", -0.10, [-0.20, -0.05], None),               # single minus primary, as every E8 comparison is
+                _cmp(S, P, "abstain_when_insufficient", -0.0625, [-0.211, 0.0], 1.0),   # the real record's shape: interval touches zero
+                _cmp(S, P, "unsupported_claim_rate", 0.10, [0.04, 0.2], None),          # lower is better: single worse, so primary better
+                _cmp(S, P, "answer_when_answerable", -0.30, [-0.40, -0.20], 0.40)]      # interval clear but McNemar disagrees
+    got = e8.primary_vs_single(as_saved)
+    assert got == {"grounded_rate": "better", "abstain_when_insufficient": "no clear difference",
+                   "unsupported_claim_rate": "better", "answer_when_answerable": "no clear difference"}
+    assert e8.primary_vs_single([_cmp(P, S, "grounded_rate", 0.10, [0.05, 0.20], None)]) == {"grounded_rate": "better"}  # saved the other way
+    detail = e8.primary_vs_single_detail(as_saved)["grounded_rate"]
+    assert detail["diff"] == pytest.approx(0.10) and detail["ci"] == pytest.approx([0.05, 0.20]) and detail["verdict"] == "better"
+    assert detail["difference"] == "team_shipping_changed minus single"
+
+
+def test_a_judge_record_carries_a_non_empty_primary_vs_single(judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    rec = _judge_fixture(judged_repo, tmp_path)
+    cfg = json.loads(rec.read_text(encoding="utf-8"))["config"]
+    assert cfg["primary_vs_single"] and set(cfg["primary_vs_single"]) <= {"grounded_rate", "unsupported_claim_rate",
+                                                                          "abstain_when_insufficient", "answer_when_answerable",
+                                                                          "tokens_per_card", "latency_p50_ms", "latency_p95_ms"}
+
+
+def _judge_fixture(fix: tuple[Path, str, list[Scenario]], tmp_path: Path) -> Path:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = fix
+    return e8.run_judge(root=root, from_commit=commit, haiku=FakeClaude("h"), sonnet=FakeClaude("s"),
+                        guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "calls.json",
+                        say=lambda t: None, concurrency=2)
+
+
+def test_restate_rewrites_the_verdict_from_saved_rows_with_no_new_call_and_supersedes_the_old_record(
+        judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    from contextlens.eval.check_run import check
+
+    root = judged_repo[0]
+    old_path = _judge_fixture(judged_repo, tmp_path)
+    old = json.loads(old_path.read_text(encoding="utf-8"))
+    old["config"]["primary_vs_single"] = {}  # the record as it was saved, with the wrong orientation
+    old_path.write_text(json.dumps(old, indent=1) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="override note"):
+        e8.restate(old["run_id"], "orientation", "", root=root)
+    with pytest.raises(ValueError, match="reason"):
+        e8.restate(old["run_id"], " ", "same single run", root=root)
+    new_path = e8.restate(old["run_id"], "primary_vs_single was empty: wrong orientation", "a restatement of the same single test run, not a second run", root=root)
+    new = json.loads(new_path.read_text(encoding="utf-8"))
+    assert new["run_id"] != old["run_id"] and new["supersedes"] == [{"run_id": old["run_id"], "reason": "primary_vs_single was empty: wrong orientation"}]
+    assert new["config"]["override_note"].startswith("a restatement") and new["config"]["restated_from"] == old["run_id"]
+    assert new["config"]["primary_vs_single"] and new["config"]["primary_vs_single_detail"]
+    assert new["claude_calls"] == 0 and new["config"]["claude_calls_in_original"] == old["claude_calls"]  # nothing was asked again
+    for system, rel in old["predictions"].items():  # the same saved, already-judged rows
+        assert (root / new["predictions"][system]).read_bytes() == (root / rel).read_bytes()
+    assert new["metrics"] == old["metrics"] and new["subset"] == old["subset"] and new["dataset_hash"] == old["dataset_hash"]
+    assert check("E8", root=root, min_n=1, split="test") == []
