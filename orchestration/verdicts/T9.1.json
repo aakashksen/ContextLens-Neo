@@ -1,0 +1,25 @@
+{
+  "task": "T9.1",
+  "commit": "923f4ab897b4e68bd93adb462279d52772c0e379",
+  "verdict": "FAIL",
+  "checks": [
+    {"item": "HEAD equals commit, tree clean", "result": "pass", "evidence": "git rev-parse HEAD = 923f4ab...; git status clean"},
+    {"item": "check_run E8 --min-n 100 --split test --all; only test record", "result": "pass", "evidence": "prints 'E8 ok'; grep of results/runs for split test finds only E8-20261107T072458163837Z.json"},
+    {"item": "Freeze before test rows", "result": "pass", "evidence": "freeze a79dec7 at 22:36 PT; record started 07:24Z (23:24 PT); search/detector rerun fe53f0d at 23:08"},
+    {"item": "Card reuse a79dec7..fe53f0d", "result": "pass", "evidence": "git diff a79dec7 fe53f0d touches only e8_final.py and tests/test_e8.py; build_system and arm building unchanged; changes are EmbedCache batching, preflight, cards_commit plumbing. production.py PROMPT v3 change predates the freeze. Record names generating_commit a79dec7 and states the reuse."},
+    {"item": "Systems and arms", "result": "pass", "evidence": "systems [team_shipping_changed, single], primary team_shipping_changed; trained-team arm absent (entry 75)"},
+    {"item": "Benchmarks separate; DECODE false_alert McNemar", "result": "pass", "evidence": "config.benchmarks has qmsum (367, search only), longmemeval (10, search only), decode (1000; trained 0.135 vs tfidf 0.264, mcnemar_p 1.6e-7), consistency_scenarios (trained, prompted, tfidf)"},
+    {"item": "Haiku calibration failure and Sonnet agreement stated", "result": "pass", "evidence": "config.notes cites entry 56 and the -0.057 interval; config.sonnet: 300 claims, agreement 0.8733, kappa 0.3546, haiku_yes_sonnet_no 3, haiku_no_sonnet_yes 35"},
+    {"item": "No test text committed", "result": "pass", "evidence": "Split manifests hold ids and hashes only. The DECODE and QMSum rows are ids and labels only. Card rows quote our own synthetic scenarios (syn-*), not public test text."},
+    {"item": "Written primary-vs-single verdict", "result": "fail", "evidence": "record config.primary_vs_single is {}; see failures"}
+  ],
+  "own_tests": [
+    {"input": "Read comparisons list orientation in the record", "result": "every card comparison has a='single', b='team_shipping_changed'"},
+    {"input": "Read primary_vs_single (e8_final.py:645-653)", "result": "it filters on (a, b) == (PRIMARY, SINGLE), which no comparison matches, so it returns an empty dict"},
+    {"input": "Looked for committed test text in the E8X DECODE and QMSum rows", "result": "ids, labels and ranked turn ids only"}
+  ],
+  "failures": [
+    "src/contextlens/experiments/e8_final.py:650: primary_vs_single matches (c['a'], c['b']) == (PRIMARY, SINGLE), but the compared pairs are a=single, b=team_shipping_changed. The record's config.primary_vs_single is therefore empty ({}) and the written better/worse/no-difference verdict of the primary against single is missing from the final record. Reproduce: open results/runs/E8-20261107T072458163837Z.json and read config.primary_vs_single. Fix the orientation and diff sign, then restate the record (the judged rows are saved, so no regrading is needed). Note that a pytest that passes against this suggests the test does not pin a non-empty verdict."
+  ],
+  "notes": "Everything else I checked held. I did not rerun anything or recompute the metrics from the predictions, which is a limit of this review. Wall-clock shows the person's entry 75 (arm dropped) landed before the freeze. The card_code_changed reuse guard deliberately excludes e8_final.py; this is acceptable here because the diff shows no change to arm building."
+}
