@@ -134,7 +134,7 @@ def test_freeze_records_the_choices_and_checks_the_trained_files_again(repo: Pat
     adapter, checker = tmp_path / "adapter", tmp_path / "checker"
     adapter.mkdir()
     checker.mkdir()
-    (adapter / "w.bin").write_bytes(b"adapter-v1")
+    (adapter / "adapter_model.safetensors").write_bytes(b"adapter-v1")
     (checker / "model.safetensors").write_bytes(b"checker-v1")
     freeze = _frozen_repo(repo, adapter, checker)
     assert freeze["systems"] == {"primary": "team_shipping_changed", "others": ["single", "team_trained"]}
@@ -142,12 +142,11 @@ def test_freeze_records_the_choices_and_checks_the_trained_files_again(repo: Pat
     assert freeze["prompt_version"] == "v3"
     assert freeze["test_hashes"] == {"scenarios": "h-scenarios", "qmsum": "h-qmsum", "decode": "h-decode"}
     e8.check_inputs(repo, freeze)
-    (adapter / "w.bin").write_bytes(b"adapter-v2")
+    (adapter / "adapter_model.safetensors").write_bytes(b"adapter-v2")
     with pytest.raises(Refused, match="not the one that was frozen"):
         e8.check_inputs(repo, freeze)
-    (adapter / "w.bin").write_bytes(b"adapter-v1")
-    (checker / "model.safetensors").unlink()
-    (checker / "other.bin").write_bytes(b"x")
+    (adapter / "adapter_model.safetensors").write_bytes(b"adapter-v1")
+    (checker / "model.safetensors").write_bytes(b"checker-v2")
     with pytest.raises(Refused, match="not the one that was frozen"):
         e8.check_inputs(repo, freeze)
     for gone in (adapter, checker):
@@ -175,7 +174,8 @@ def test_freeze_fixes_the_sonnet_sample_the_seed_and_the_weekly_stop(repo: Path,
 
     adapter = tmp_path / "a"
     adapter.mkdir()
-    (adapter / "w").write_bytes(b"1")
+    (adapter / "adapter_model.safetensors").write_bytes(b"1")
+    (adapter / "model.safetensors").write_bytes(b"1")
     judging = _frozen_repo(repo, adapter, adapter)["judging"]
     assert (judging["sonnet_sample"], judging["sample_seed"], judging["max_weekly_pct"]) == (300, 13, 98.0)
     assert "sonnet_scope" not in inspect.signature(e8.build_freeze).parameters  # no other way to choose
@@ -271,7 +271,8 @@ def judged_repo(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
     (root / e2.CONFIG_REL).write_text('{"mode": "hybrid"}', encoding="utf-8")
     models = tmp_path / "m"
     models.mkdir()
-    (models / "w.bin").write_bytes(b"x")
+    (models / "adapter_model.safetensors").write_bytes(b"x")
+    (models / "model.safetensors").write_bytes(b"x")
     freeze = e8.build_freeze(root, adapter_base=models, adapter=models, checker=models, checker_threshold=0.5)
     e8.write_freeze(root, freeze)
     (root / ".gitignore").write_text("results/partial/\nresults/logs/\ndatasets/raw/\n", encoding="utf-8")
@@ -354,7 +355,8 @@ def test_cards_manifest_holds_ids_only_and_leaves_out_longmemeval(repo: Path) ->
 def test_freeze_names_the_manifest_and_the_record_uses_it(repo: Path, tmp_path: Path) -> None:
     adapter = tmp_path / "a"
     adapter.mkdir()
-    (adapter / "w").write_bytes(b"1")
+    (adapter / "adapter_model.safetensors").write_bytes(b"1")
+    (adapter / "model.safetensors").write_bytes(b"1")
     freeze = _frozen_repo(repo, adapter, adapter)
     sub = freeze["cards_subset"]
     assert sub["name"] == "e8-cards" and sub["path"] == "datasets/splits/subsets/e8-cards.json"
@@ -365,7 +367,8 @@ def test_freeze_names_the_manifest_and_the_record_uses_it(repo: Path, tmp_path: 
 def test_refuses_when_the_manifest_is_not_committed_with_the_config(repo: Path, tmp_path: Path) -> None:
     adapter = tmp_path / "a"
     adapter.mkdir()
-    (adapter / "w").write_bytes(b"1")
+    (adapter / "adapter_model.safetensors").write_bytes(b"1")
+    (adapter / "model.safetensors").write_bytes(b"1")
     freeze = _frozen_repo(repo, adapter, adapter)
     _freeze_file(repo, freeze)
     _git(repo, "add", str(e8.FREEZE_REL))
@@ -514,3 +517,92 @@ def test_a_weekly_stop_in_the_sonnet_sample_still_writes_the_record_and_sonnet_e
     assert add["finishes_original_sample"] == 9 - done_before and add["sample_complete"] is True
     assert add["at_record"]["claims"] == done_before  # the record's own figure is reported unchanged
     assert json.loads(path.read_text(encoding="utf-8"))["config"]["sonnet"]["claims_graded"] == done_before
+
+
+# ---------------------------------------------------------------- the primary arm is the shipped one (entries 64 and 70)
+
+def _press_parts(sc: Scenario):
+    from contextlens.replay.runner import Context
+    from contextlens.memory.store import InMemoryTranscriptStore
+
+    store = InMemoryTranscriptStore()
+    for t in sc.conversation.turns:
+        store.add(t)
+    return sc.request, Context(store=store, as_of_seq=sc.request.as_of_seq)
+
+
+def test_primary_arm_is_built_from_the_shipped_settings_with_both_e7_fixes_off() -> None:
+    from contextlens.agents.consistency_check import PromptedChecker
+    from contextlens.agents.graph import TeamAssistant
+    from contextlens.llm.client import FakeLLM
+    from contextlens.memory.extract import MemoryStore
+    from tests.test_e1 import HashEmbedder
+
+    sc = _scenario("p1", "consistent")
+    llm = FakeLLM([])
+    arm = e8.build_system(e8.PRIMARY, sc, llm, HashEmbedder(), MemoryStore())
+    assert type(arm).__name__ == "_TeamChangedPerPress"  # production's own class for CONTEXTLENS_ASSISTANT=team_shipping_changed
+    req, ctx = _press_parts(sc)
+    team = arm.team(req, ctx)
+    assert isinstance(team.tools.checker, PromptedChecker) and team.memory_gap_abstains is True
+    assert team.prefetch_memory is False and team.specialist_deadline_s is None  # entries 64 and 70: both fixes off
+    assert production.TEAM_SETTINGS == {"prefetch_memory": False, "specialist_deadline_s": None}
+    assert team.deadline_s == production.DEADLINE_S
+    same = TeamAssistant({"memory": llm, "consistency": llm, "assistance": llm}, team.tools, "v3", production.DEADLINE_S,
+                         memory_gap_abstains=True, **production.TEAM_SETTINGS)
+    assert team._specs == same._specs  # prompt v3 in every agent's system message
+
+
+def test_single_arm_is_the_shipped_single_and_the_trained_team_uses_the_same_settings() -> None:
+    from contextlens.agents.single import SingleAgent
+    from contextlens.llm.client import FakeLLM
+    from contextlens.memory.extract import MemoryStore
+    from tests.test_e1 import HashEmbedder
+
+    sc = _scenario("p2", "consistent")
+    req, ctx = _press_parts(sc)
+    single = e8.build_system(e8.SINGLE, sc, FakeLLM([]), HashEmbedder(), MemoryStore())
+    assert type(single).__name__ == "_SinglePerPress" and SingleAgent  # production's single, no checker
+    seen: dict = {}
+
+    class Spy:
+        def __init__(self, *a, **kw):
+            seen.update(kw)
+
+    import contextlens.experiments.e8_final as mod
+
+    orig = mod.TeamAssistant
+    mod.TeamAssistant = Spy  # type: ignore[misc]
+    try:
+        e8.build_team_trained(sc, FakeLLM([]), object(), HashEmbedder(), MemoryStore())
+    finally:
+        mod.TeamAssistant = orig  # type: ignore[misc]
+    assert seen["memory_gap_abstains"] is True and seen["prefetch_memory"] is False and seen["specialist_deadline_s"] is None
+    assert req and ctx
+
+
+def test_run_refuses_a_freeze_whose_team_settings_are_not_the_shipped_ones(repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    adapter = tmp_path / "a"
+    adapter.mkdir()
+    (adapter / "adapter_model.safetensors").write_bytes(b"1")
+    (adapter / "model.safetensors").write_bytes(b"1")
+    freeze = _frozen_repo(repo, adapter, adapter)
+    assert freeze["team_settings"] == production.TEAM_SETTINGS and freeze["prompt_version"] == production.PROMPT_VERSION
+    e8.check_inputs(repo, freeze)
+    monkeypatch.setattr(production, "TEAM_SETTINGS", {"prefetch_memory": True, "specialist_deadline_s": 5.5})
+    with pytest.raises(Refused, match="ships now"):
+        e8.check_inputs(repo, freeze)
+
+
+def test_the_base_model_may_be_a_cached_hugging_face_id_and_the_adapter_hash_is_e5s(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlens.experiments import e5_cards
+
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    assert not e8._base_present("Qwen/Qwen3.5-2B")
+    (tmp_path / "hf/hub/models--Qwen--Qwen3.5-2B").mkdir(parents=True)
+    assert e8._base_present("Qwen/Qwen3.5-2B") and not e8._base_present("Qwen/Other")
+    adapter = tmp_path / "ad"
+    adapter.mkdir()
+    (adapter / "adapter_config.json").write_text("{}", encoding="utf-8")
+    (adapter / "adapter_model.safetensors").write_bytes(b"w")
+    assert e8.adapter_digest(adapter) == e5_cards.adapter_hash(adapter)  # the same rule as the E5 record's adapter_hash

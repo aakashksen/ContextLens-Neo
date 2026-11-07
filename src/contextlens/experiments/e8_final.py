@@ -23,6 +23,7 @@ earlier test record or rows of another commit exist (an `--override-note` allows
 import argparse
 import hashlib
 import json
+import os
 import random
 import sys
 import time
@@ -33,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.agents.consistency_check import ConsistencyChecker
+from contextlens.api import production
 from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.tools import Tools
 from contextlens.eval import series
@@ -66,7 +68,7 @@ JUDGE_DIR_REL = Path("results/partial/e8-judge")
 EXTRA_PREFIX = "E8X"  # public-benchmark and detector rows: results/runs/E8X-<stamp>Z.<part>-<system>.predictions.jsonl (a name is_dirty allows)
 PRIMARY, SINGLE, TRAINED_TEAM = "team_shipping_changed", "single", "team_trained"
 SYSTEMS = (PRIMARY, SINGLE, TRAINED_TEAM)
-PROMPT = "v3"
+PROMPT = production.PROMPT_VERSION  # v3, E6's choice (entry 58); a test pins it
 SUBSET_NAME = "e8-cards"  # the ids of the test cases that get written answers (check_run's subset manifest)
 SUBSET_REL = Path("datasets/splits/subsets") / f"{SUBSET_NAME}.json"
 LME = "longmemeval"
@@ -97,6 +99,29 @@ def _need(path: Path, what: str) -> Path:
     return path
 
 
+def adapter_digest(path: Path) -> str:
+    """E5's own hash of the adapter (config and weights, names and bytes), so it equals `adapter_hash` in the E5 record."""
+    from contextlens.experiments.e5_cards import adapter_hash
+
+    return adapter_hash(path)
+
+
+def checker_digest(path: Path) -> str:
+    """The hash of the checkpoint's weights file, as `configs/cascade.json` and the E4 record state it."""
+    from contextlens.consistency.rescore import sha256_file
+
+    return sha256_file(path / "model.safetensors")
+
+
+def _base_present(base: str | Path, root: Path | None = None) -> bool:
+    """A local directory, or a Hugging Face id (`org/name`) whose files are in the local cache (it is loaded from there)."""
+    p = Path(base)
+    if p.exists() or (root is not None and (root / p).exists()):
+        return True
+    hub = Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")) / "hub" / ("models--" + str(base).replace("/", "--"))
+    return "/" in str(base) and hub.exists()
+
+
 def write_cards_subset(root: Path) -> Path:
     """The ids-only manifest of the test cases that get cards: every case whose conversation is not LongMemEval. It reads
     only `id` and `conversation.source` from each line of the test file, never the text."""
@@ -112,10 +137,11 @@ def write_cards_subset(root: Path) -> Path:
     return path
 
 
-def build_freeze(root: Path, *, adapter_base: Path, adapter: Path, checker: Path, checker_threshold: float,
+def build_freeze(root: Path, *, adapter_base: str | Path, adapter: Path, checker: Path, checker_threshold: float,
                  baselines: dict[str, str] | None = None) -> dict[str, Any]:
     """The choices made on dev. Reads only the committed manifests (hashes), never a test file."""
-    _need(adapter_base, "the adapter's base model")
+    if not _base_present(adapter_base):
+        raise Refused(f"the adapter's base model {adapter_base} is neither a directory nor in the local Hugging Face cache")
     _need(adapter, "the T6.2 adapter")
     _need(checker, "the T5.2 consistency checkpoint")
     test_hashes = {src: json.loads((root / SCENARIO_SOURCES[src][0]).read_text(encoding="utf-8"))["splits"][SPLIT]["hash"]
@@ -126,11 +152,11 @@ def build_freeze(root: Path, *, adapter_base: Path, adapter: Path, checker: Path
         "kind": "e8-freeze", "experiment": EXPERIMENT, "chosen_on": "dev", "decision_entries": list(DECISION_ENTRIES),
         "systems": {"primary": PRIMARY, "others": [SINGLE, TRAINED_TEAM]},
         "assistant_setting": {"env": "CONTEXTLENS_ASSISTANT", "value": PRIMARY},
-        "prompt_version": PROMPT, "writer_model": e2.WRITER_MODEL, "embedder_model": e2.EMBED_MODEL, "deadline_s": e2.DEADLINE_S,
+        "prompt_version": PROMPT, "team_settings": dict(production.TEAM_SETTINGS), "writer_model": e2.WRITER_MODEL, "embedder_model": e2.EMBED_MODEL, "deadline_s": e2.DEADLINE_S,
         "retrieval": {"path": e2.CONFIG_REL.as_posix(), "sha256": sha256_path(retrieval)},
-        "trained": {"adapter": {"base_model_path": adapter_base.as_posix(), "adapter_path": adapter.as_posix(),
-                                "sha256": sha256_path(adapter)},
-                    "checker": {"path": checker.as_posix(), "sha256": sha256_path(checker), "threshold": checker_threshold}},
+        "trained": {"adapter": {"base_model_path": Path(adapter_base).as_posix(), "adapter_path": adapter.as_posix(),
+                                "sha256": adapter_digest(adapter), "hash_rule": "E5's adapter_hash (config and weights)"},
+                    "checker": {"path": checker.as_posix(), "sha256": checker_digest(checker), "hash_rule": "model.safetensors", "threshold": checker_threshold}},
         "detectors": baselines or {"scenarios": "prompted", "decode": "tfidf"},
         "search_only": ["qmsum", LME],
         "judging": {"haiku": pg.HAIKU_MODEL, "sonnet": e2.CLOUD_MODEL, "sonnet_sample": SONNET_SAMPLE, "sample_seed": SAMPLE_SEED,
@@ -167,15 +193,17 @@ def committed_freeze(root: Path) -> dict[str, Any]:
 
 def check_inputs(root: Path, freeze: dict[str, Any]) -> None:
     """The trained models and the retrieval config are what was frozen, or the run is refused."""
+    if freeze["team_settings"] != production.TEAM_SETTINGS or freeze["prompt_version"] != production.PROMPT_VERSION:
+        raise Refused("the frozen team settings or prompt are not the ones the product ships now (api/production.py)")
     t = freeze["trained"]
-    for what, p, want in (("adapter", t["adapter"]["adapter_path"], t["adapter"]["sha256"]),
-                          ("consistency checkpoint", t["checker"]["path"], t["checker"]["sha256"])):
+    for what, p, want, digest in (("adapter", t["adapter"]["adapter_path"], t["adapter"]["sha256"], adapter_digest),
+                                  ("consistency checkpoint", t["checker"]["path"], t["checker"]["sha256"], checker_digest)):
         path = Path(p) if Path(p).is_absolute() else root / p
         _need(path, f"the {what}")
-        if sha256_path(path) != want:
+        if digest(path) != want:
             raise Refused(f"the {what} at {path} is not the one that was frozen (hash differs)")
-    base = Path(t["adapter"]["base_model_path"])
-    _need(base if base.is_absolute() else root / base, "the adapter's base model")
+    if not _base_present(t["adapter"]["base_model_path"], root):
+        raise Refused(f"the adapter's base model {t['adapter']['base_model_path']} not found")
     if sha256_path(root / freeze["retrieval"]["path"]) != freeze["retrieval"]["sha256"]:
         raise Refused("the retrieval config is not the one that was frozen")
     if sha256_path(root / freeze["cards_subset"]["path"]) != freeze["cards_subset"]["sha256"]:
@@ -304,12 +332,21 @@ def search_rows(scenarios: list[Scenario], embedder: Any, config: dict[str, Any]
     return [rows[s.id] for s in scenarios]
 
 
+def build_system(system: str, sc: Scenario, writer: LLMClient, embedder: Any, memory: MemoryStore) -> Any:
+    """The primary and `single`, built by the product's own classes with its shipped settings (`production.TEAM_SETTINGS`, both E7
+    fixes off per entries 64 and 70, and `production.PROMPT_VERSION`), the writer behind every role as `local_llms()` does."""
+    retriever = e6._retriever(sc, embedder)
+    llms = {"memory": writer, "consistency": writer, "assistance": writer}
+    cls = {PRIMARY: production._TeamChangedPerPress, SINGLE: production._SinglePerPress}[system]
+    return cls(retriever.store, retriever, memory, llms, production.DEADLINE_S)
+
+
 def build_team_trained(sc: Scenario, hf_writer: LLMClient, checker: ConsistencyChecker, embedder: Any, memory: MemoryStore) -> Any:
-    """The shipping team (checker, memory_gap_abstains on, prompt v3) with the adapter as every role's model."""
+    """The primary's build (same prompt, settings and flag) with the adapter as every role's model and the trained checker."""
     retriever = e6._retriever(sc, embedder)
     tools = Tools(retriever.store, retriever, memory, sc.request.as_of_seq, sc.conversation.id, checker)
     return TeamAssistant({"memory": hf_writer, "consistency": hf_writer, "assistance": hf_writer}, tools, PROMPT,
-                         deadline_s=e2.DEADLINE_S, memory_gap_abstains=True)
+                         deadline_s=production.DEADLINE_S, memory_gap_abstains=True, **production.TEAM_SETTINGS)
 
 
 # ---------------------------------------------------------------- the write command (GPU)
@@ -338,8 +375,8 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
         for sc in todo:
             memories[sc.id], _ = e2.build_memory(sc, writer)
         for system in (PRIMARY, SINGLE):
-            counts[system] = len(run_part(root, commit, "cards", system, cards, lambda sc, system=system: e6._build_assistant(
-                system, PROMPT, sc, writer, e6._retriever(sc, embedder), memories.get(sc.id, MemoryStore()), cfg), say))
+            counts[system] = len(run_part(root, commit, "cards", system, cards, lambda sc, system=system: build_system(
+                system, sc, writer, embedder, memories.get(sc.id, MemoryStore())), say))
         say("trained-team stage: the writer is unloaded, the adapter loads")
         ctl.unload(names.writer)  # the adapter needs the GPU the writer held
         hf = make_hf_writer(freeze["trained"]["adapter"])
@@ -679,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     f = sub.add_parser("freeze", help="write configs/e8_freeze.json (then commit it)")
-    f.add_argument("--adapter-base", type=Path, required=True)
+    f.add_argument("--adapter-base", required=True, help="a directory, or a cached Hugging Face id such as Qwen/Qwen3.5-2B")
     f.add_argument("--adapter", type=Path, required=True)
     f.add_argument("--checker", type=Path, required=True)
     f.add_argument("--checker-threshold", type=float, default=0.5)
