@@ -1,0 +1,204 @@
+{
+ "run_id": "E7-20261107T003136847403Z",
+ "experiment": "E7",
+ "git_commit": "4b3d50bd5f9c5ab6ef90036f8d9acfee53672eff",
+ "dirty": false,
+ "dataset_hash": "ac055926561034f8bd9a35f0d540348952c02144db63055911f3f860777bd2dc",
+ "split": "dev",
+ "scenario_source": "ami",
+ "config": {
+  "experiment": "E7",
+  "phase": "speech_only",
+  "systems": [
+   "asr_pipeline"
+  ],
+  "step_ms": 60000,
+  "speedup": 4.0,
+  "latency_basis": "not measured: speech and speaker timings come only from a real-time segment, not from a sped-up pass",
+  "audio_source": {
+   "method": "rebuilt from segmented utterances",
+   "level": "each meeting gets one gain so that the median RMS of its 20 ms frames above 0.002 is 0.02 (twice the speech service's fixed voice-gate threshold of 0.01); samples saturate at 16 bits, silence stays silence. The gain is computed over the whole meeting, which a live system cannot do: this is a normalization of the rebuilt audio, not a live feature",
+   "note": "gaps between utterances are silence, so latency and diarization error may be easier than on the original recordings",
+   "dataset": "edinburghcstr/ami",
+   "config": "ihm",
+   "revision": "46f28f2503e2ec48f8867a84eef356c70476beab",
+   "sample_rate": 16000,
+   "rule": "(also stated in each manifest and in the E7 record):\n- Each speaker (or channel) gets its own track. An utterance is written at round(begin_time * rate) samples; a later\n  utterance of the same speaker replaces an overlapping earlier one, since both are the same microphone.\n- Tracks are summed in 32 bits. If the sum ever passes the 16-bit range, the whole meeting is scaled by one gain\n  (32767 / peak), so nothing is clipped and relative levels are kept; the gain is recorded (1.0 when none was needed).\n- Time between utterances is digital silence. The meeting ends at its last utterance.\n- Every utterance must be at the expected sample rate (no resampling) and mono, or several identical channels (the\n  data has stereo files repeating one signal), which count as that one signal; channels that differ stop the run. 16-bit PCM is used as is; 32-bit float\n  WAV, which part of this data uses, becomes 16-bit by x * 32767 (the count is recorded). Other formats stop the run."
+  },
+  "speech_address": "127.0.0.1:50052",
+  "devices": {
+   "whisper": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "gpu:CUDA0"
+   },
+   "pyannote": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "cuda"
+   }
+  },
+  "stages_not_on_cuda": [],
+  "ran_alone": true,
+  "processing_order": [
+   "ES2010d",
+   "ES2003a",
+   "ES2016a",
+   "TS3007a",
+   "ES2013d",
+   "ES2011d",
+   "TS3010c",
+   "TS3012d",
+   "TS3008c",
+   "TS3006b",
+   "ES2013c"
+  ],
+  "per_meeting": {
+   "ES2010d": {
+    "turns": 345,
+    "turns_still_unknown": 1,
+    "audio_s": 960.03,
+    "asr_wall_s": 250.96815200000128,
+    "asr_segments": 346,
+    "gain": 2.185378074645996
+   },
+   "ES2003a": {
+    "turns": 222,
+    "turns_still_unknown": 0,
+    "audio_s": 1088.16,
+    "asr_wall_s": 282.83692649999284,
+    "asr_segments": 222,
+    "gain": 2.4282944202423096
+   },
+   "ES2016a": {
+    "turns": 366,
+    "turns_still_unknown": 0,
+    "audio_s": 1364.88,
+    "asr_wall_s": 352.0073088000063,
+    "asr_segments": 366,
+    "gain": 1.6041247844696045
+   },
+   "TS3007a": {
+    "turns": 429,
+    "turns_still_unknown": 0,
+    "audio_s": 1511.12,
+    "asr_wall_s": 388.5773801000032,
+    "asr_segments": 429,
+    "gain": 1.8062193393707275
+   },
+   "ES2013d": {
+    "turns": 538,
+    "turns_still_unknown": 2,
+    "audio_s": 1867.84,
+    "asr_wall_s": 477.73249670000223,
+    "asr_segments": 538,
+    "gain": 4.458829879760742
+   },
+   "ES2011d": {
+    "turns": 539,
+    "turns_still_unknown": 2,
+    "audio_s": 1968.61,
+    "asr_wall_s": 502.9338904000033,
+    "asr_segments": 540,
+    "gain": 2.596386671066284
+   },
+   "TS3010c": {
+    "turns": 528,
+    "turns_still_unknown": 1,
+    "audio_s": 2021.34,
+    "asr_wall_s": 516.2778032999922,
+    "asr_segments": 528,
+    "gain": 1.9559050798416138
+   },
+   "TS3012d": {
+    "turns": 733,
+    "turns_still_unknown": 2,
+    "audio_s": 2160.74,
+    "asr_wall_s": 551.1600028000103,
+    "asr_segments": 733,
+    "gain": 1.9174412488937378
+   },
+   "TS3008c": {
+    "turns": 716,
+    "turns_still_unknown": 0,
+    "audio_s": 2298.9,
+    "asr_wall_s": 585.6672933000082,
+    "asr_segments": 717,
+    "gain": 1.3638134002685547
+   },
+   "TS3006b": {
+    "turns": 689,
+    "turns_still_unknown": 1,
+    "audio_s": 2222.19,
+    "asr_wall_s": 566.4980825999955,
+    "asr_segments": 689,
+    "gain": 1.459097146987915
+   },
+   "ES2013c": {
+    "turns": 663,
+    "turns_still_unknown": 4,
+    "audio_s": 2342.68,
+    "asr_wall_s": 596.6305951999966,
+    "asr_segments": 664,
+    "gain": 4.146642684936523
+   }
+  },
+  "diarization_run_ms": {
+   "n": 358,
+   "p50": 3202.0,
+   "p95": 3359.3
+  },
+  "invalidates": "The earlier E7 records' WER, DER, asr_pipeline and asr_oracle_speakers quality and their speech and speaker timings were invalid because of the voice gate bug (the gate dropped quiet speech); this record replaces the WER and DER. The clean system's cards and the press latencies do not depend on the speech path.",
+  "dropped": "The 33-question quality under speech errors (recall and the rest of the card metrics of the pipeline and oracle systems) is not measured again, because no resume bullet uses it; this record has no cards.",
+  "gpu_peak": {
+   "baseline_mb": 1207,
+   "peak_mb": 5710,
+   "used_by_run_mb": 4503
+  },
+  "resumed_stages": [],
+  "claude_calls": 0,
+  "started_at": "2026-11-06T22:47:36.260719+00:00"
+ },
+ "models": {
+  "speech": "whisper.cpp ggml-tiny.en",
+  "diarizer": "pyannote/speaker-diarization-3.1"
+ },
+ "prompt_versions": {},
+ "n": 33,
+ "metrics": {
+  "asr_pipeline": {
+   "wer": 0.3757669913982939,
+   "der": 0.5994588868276943
+  }
+ },
+ "intervals": {
+  "asr_pipeline": {
+   "wer": [
+    0.3258791981660177,
+    0.4158301036964972
+   ]
+  }
+ },
+ "comparisons": [],
+ "supersedes": [
+  {
+   "run_id": "E7-20261106T193023811323Z",
+   "reason": "The earlier record's WER, DER, pipeline and oracle numbers were invalid: the speech service's fixed voice gate (RMS 0.01) dropped most of the quiet rebuilt audio, so the streamed text held far less than the audio said (see docs/DECISIONS.md, entry 60). The clean system's cards and the press latencies of that record do not depend on the speech path and still stand there."
+  }
+ ],
+ "attempts": [
+  {
+   "setting": "asr_pipeline",
+   "ok": true,
+   "errored_presses": 0
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": false,
+ "label_source": "ami_rule",
+ "predictions": {
+  "asr_pipeline": "results/runs/E7-20261107T003136847403Z.asr_pipeline.predictions.jsonl"
+ },
+ "started_at": "2026-11-06T22:47:36.260719+00:00",
+ "finished_at": "2026-11-07T00:31:36.847403+00:00"
+}
