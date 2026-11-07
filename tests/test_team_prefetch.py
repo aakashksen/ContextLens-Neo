@@ -2,6 +2,7 @@
 judged by Haiku beside the earlier arm's rows. No real model."""
 import json
 import shutil
+from pathlib import Path
 import threading
 import time
 
@@ -119,3 +120,59 @@ def test_both_arms_are_judged_by_the_same_model_and_sonnet_only_when_asked(repo,
     out2 = tp.judge(new.stem, judges=[haiku, sonnet], root=repo, guard=UsageGuard(95.0, read=lambda: 10.0),
                     say=lambda m: None, sleep=lambda s: None)
     assert set(json.loads(out2.read_text(encoding="utf-8"))["judges"]) == {"claude-haiku", "sonnet"} and sonnet.calls_made > 0
+
+
+def test_the_dev_check_builds_the_team_with_the_settings_production_ships(monkeypatch):
+    """Fix 1 and fix 2 both, taken from production's constants and not copied: every setting the shipped team passes to
+    TeamAssistant is on the team this arm presses."""
+    import contextlib
+
+    from contextlens.agents.graph import TeamAssistant
+    from contextlens.api import production
+    from contextlens.memory.extract import MemoryStore
+    from contextlens.memory.store import InMemoryTranscriptStore
+    from contextlens.replay.runner import Context
+    from contextlens.schemas import ButtonRequest, Turn
+
+    shipped: dict = {}
+
+    class Spy(TeamAssistant):
+        def __init__(self, llms, tools, prompt_version, deadline_s=8.0, **kw):
+            shipped.update(kw, deadline_s=deadline_s)
+            super().__init__(llms, tools, prompt_version, deadline_s, **kw)
+
+    store = InMemoryTranscriptStore()
+    store.add(Turn(id="c1:t0", conversation_id="c1", seq=0, speaker="a", text="x", start_ms=0, end_ms=900, source="synthetic"))
+    llms = {n: FakeLLM([{"tool": "final", "findings": []}] * 3) for n in ("memory", "consistency")}
+    llms["assistance"] = FakeLLM([{"mode": "recall", "followup": None}] * 3)
+    monkeypatch.setattr(production, "TeamAssistant", Spy)
+    per_press = production.TeamPerPress(store, production.Retriever(store, HashEmbedder()), MemoryStore(), llms, production.DEADLINE_S)
+    with contextlib.suppress(Exception):
+        per_press.answer(ButtonRequest(conversation_id="c1", as_of_seq=0, question="q"), Context(store=store, as_of_seq=0))
+    assert shipped and {"prefetch_memory", "specialist_deadline_s", "deadline_s"} <= set(shipped)
+
+    sc = tp.load_verified(tp.SOURCE, tp.ta.SPLIT, REAL)[0][0]
+    team = tp.make_assistant(sc, Writer(), HashEmbedder(), RETRIEVAL, MemoryStore())
+    for name, value in shipped.items():
+        assert getattr(team, name) == value, name
+    assert team.specialist_deadline_s == production.SPECIALIST_DEADLINE_S and team.prefetch_memory is True
+    assert production.TEAM_SETTINGS == {"prefetch_memory": True, "specialist_deadline_s": production.SPECIALIST_DEADLINE_S}
+
+
+def test_the_arm_and_the_change_name_both_fixes():
+    assert "subdeadline" in tp.ARM and "prefetch" in tp.ARM
+    assert "retrieval before the memory model call" in tp.CHANGE and "sub-deadline" in tp.CHANGE
+
+
+def test_the_judge_command_stops_at_98_percent_weekly_usage_by_default(monkeypatch):
+    seen = {}
+
+    def fake_judge(record, *, guard, **kw):
+        seen["limit"] = guard.limit
+        return Path("x")
+
+    monkeypatch.setattr(tp, "judge", fake_judge)
+    import contextlens.experiments.parallel_grader as pg
+
+    monkeypatch.setattr(pg, "CountedClaude", lambda *a: None)
+    assert tp.main(["judge", "E3TP-1"]) == 0 and seen["limit"] == 98.0

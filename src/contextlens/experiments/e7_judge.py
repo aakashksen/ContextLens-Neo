@@ -1,10 +1,10 @@
 """E7's judging stage. Writing the cards holds the GPU; judging runs after it is released.
 
-    python -m contextlens.experiments.e7_judge E7-<run id> --concurrency 8 --max-weekly-pct 95
+    python -m contextlens.experiments.e7_judge E7-<run id> --concurrency 8 --max-weekly-pct 98
 
 Each claim (a finding of a card, with its cited quotes) is graded once by Haiku through `claude -p`, many at a time,
 with the E2 rubric (`e2-v1`) and `experiments/parallel_grader.py`. No local model judges. The weekly usage guard stops
-the run at 95% (the person's decision, 2026-11-05). Answers are saved as they arrive under results/partial/e7-judge/ (ids and verdicts, never text), so a
+the run at 98% (the person's decision, 2026-11-06). Answers are saved as they arrive under results/partial/e7-judge/ (ids and verdicts, never text), so a
 stopped run resumes. The result, ids and counts only, goes to results/e7-judge/<run id>.json.
 
 Haiku failed the written calibration (docs/DECISIONS.md, entry 56); the explanation given there is a reading, not proof.
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Judge the claims of an E7 run with Haiku, one claim per call")
     ap.add_argument("run_id")
     ap.add_argument("--concurrency", type=int, default=pg.DEFAULT_CONCURRENCY)
-    ap.add_argument("--max-weekly-pct", type=float, default=95.0)
+    ap.add_argument("--max-weekly-pct", type=float, default=98.0)
     ap.add_argument("--no-usage-guard", action="store_true", help="run without reading weekly usage")
     a = ap.parse_args(argv)
     guard = None if a.no_usage_guard else UsageGuard(a.max_weekly_pct)
