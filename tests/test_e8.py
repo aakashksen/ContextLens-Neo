@@ -261,7 +261,7 @@ def judged_repo_two(tmp_path: Path) -> tuple[Path, str, list[Scenario]]:
     return _make_judged(tmp_path, trained_team=False)
 
 
-def _make_judged(tmp_path: Path, trained_team: bool) -> tuple[Path, str, list[Scenario]]:
+def _make_judged(tmp_path: Path, trained_team: bool, search_later: bool = False) -> tuple[Path, str, list[Scenario]]:
     from contextlens.eval.records import write_local_manifest, write_scenarios_manifest
 
     root = tmp_path / "r"
@@ -288,13 +288,18 @@ def _make_judged(tmp_path: Path, trained_team: bool) -> tuple[Path, str, list[Sc
     _git(root, "init", "-q")
     _commit_all(root)
     commit = e8.head_commit(root)
+    cards_commit = commit
     (root / e8.ROWS_REL).parent.mkdir(parents=True, exist_ok=True)
-    (root / e8.ROWS_REL.with_name("e8-write.json")).write_text(json.dumps({"commit": commit, "consistency_checker_device": "cpu"}), encoding="utf-8")
     for n in e8.systems_of(freeze):
         for sc in cards:
             row = _abstain(sc.id) if sc.gold_label == "insufficient" else _answer(sc.id, f"{n} says w0")
-            e2._append_durable(root / e8.ROWS_REL, json.dumps({"commit": commit, "subset": "cards", "winner": n, "model": "E8", "calls": 0,
+            e2._append_durable(root / e8.ROWS_REL, json.dumps({"commit": cards_commit, "subset": "cards", "winner": n, "model": "E8", "calls": 0,
                                                               "row": json.loads(row.model_dump_json())}))
+    if search_later:  # the search stage reran after a commit that changes no card code
+        (root / "NOTES.md").write_text("search-stage fix", encoding="utf-8")
+        _commit_all(root)
+        commit = e8.head_commit(root)
+    (root / e8.ROWS_REL.with_name("e8-write.json")).write_text(json.dumps({"commit": commit, "cards_commit": cards_commit, "consistency_checker_device": "cpu"}), encoding="utf-8")
     parts = {("search:qmsum", e8.SEARCH_SYSTEM): qm, (f"search:{e8.LME}", e8.SEARCH_SYSTEM): lme}
     for (part, system), scs in parts.items():
         for sc in scs:
@@ -706,3 +711,106 @@ def test_the_checker_uses_the_gpu_only_if_it_fits_under_5500_mb_and_says_which()
     assert e8.checker_device(3500) == "cuda"  # 3500 + 2000 = 5500 fits exactly
     assert e8.checker_device(3501) == "cpu" and e8.checker_device(5300) == "cpu"  # the adapter or the writer is loaded
     assert e8.checker_device(None) == "cpu"  # GPU use cannot be read: do not guess
+
+
+# ---------------------------------------------------------------- embedding batches and resuming across a search-stage fix (coordinator, 2026-11-07)
+
+class _CapEmbedder:
+    """Ollama refuses 256 or more texts in one /api/embed request."""
+
+    model = "cap-embedder"
+
+    def __init__(self) -> None:
+        from tests.test_e1 import HashEmbedder
+
+        self.inner, self.sizes = HashEmbedder(), []
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.sizes.append(len(texts))
+        if len(texts) >= 256:
+            raise RuntimeError("HTTP Error 400: Bad Request")
+        return self.inner.embed(texts)
+
+
+def _big_scenario(n: int, sid: str = "big") -> Scenario:
+    turns = [Turn(id=f"{sid}:t{i}", conversation_id=sid, seq=i, speaker="A", text=f"word{i} about topic{i % 7}", start_ms=i * 1000,
+                  end_ms=i * 1000 + 900, source="dataset") for i in range(n)]
+    return Scenario(id=sid, conversation=Conversation(id=sid, turns=turns, source="qmsum"),
+                    request=ButtonRequest(conversation_id=sid, as_of_seq=n - 1, question="what about topic3?"), category="qmsum-specific",
+                    gold_evidence_turn_ids=[f"{sid}:t3"], gold_label=None, gold_answer=None, origin="dataset")
+
+
+def test_search_stage_embeds_a_long_meeting_in_batches_of_32() -> None:
+    emb = _CapEmbedder()
+    rows = e8.search_rows([_big_scenario(300)], emb, {"mode": "hybrid", "rerank": False, "chunk_turns": 1}, lambda t: None)
+    assert len(rows) == 1 and rows[0].ranked_turn_ids
+    assert max(emb.sizes) <= 32 and sum(emb.sizes) >= 300  # every turn was embedded, none in a request of 256 or more
+
+
+def test_preflight_embeds_every_case_in_batches_and_names_the_case_that_fails() -> None:
+    emb = _CapEmbedder()
+    e8.preflight_embeddings([_big_scenario(300, "a"), _big_scenario(40, "b")], emb)
+    assert max(emb.sizes) <= 32
+
+    class Broken:
+        model = "x"
+
+        def embed(self, texts):  # noqa: ANN001
+            raise RuntimeError("HTTP Error 400: Bad Request")
+
+    with pytest.raises(e2.RunBroken, match="case big"):
+        e8.preflight_embeddings([_big_scenario(5)], Broken())
+
+
+def _row_line(commit: str, part: str = "cards", sid: str = "k0") -> str:
+    return json.dumps({"commit": commit, "subset": part, "winner": e8.SINGLE, "model": "E8", "calls": 0,
+                       "row": json.loads(_abstain(sid).model_dump_json())})
+
+
+def _src_commit(root: Path, rel: str, msg: str) -> str:
+    f = root / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(msg, encoding="utf-8")
+    _commit_all(root, msg)
+    return e8.head_commit(root)
+
+
+def test_card_rows_are_reused_only_if_the_code_that_shaped_them_is_unchanged(repo: Path) -> None:
+    first = _src_commit(repo, "src/contextlens/agents/x.py", "agents v1")
+    e2._append_durable(repo / e8.ROWS_REL, _row_line(first))
+    assert e8.reusable_cards_commit(repo, first) == first  # nothing older to reuse: this commit
+    docs = _src_commit(repo, "docs/note.md", "a note")  # the search-stage fix changes e8_final.py, which is not card code
+    assert e8.reusable_cards_commit(repo, docs) == first
+    e8.require_first_test_run(repo, docs, None, reuse={first})  # these rows are a resume, not a second run
+    with pytest.raises(Refused, match="already run"):
+        e8.require_first_test_run(repo, docs, None)
+    for rel in ("src/contextlens/agents/x.py", "src/contextlens/prompts/v3/recall.md", "src/contextlens/api/production.py",
+                "configs/e8_freeze.json"):
+        changed = _src_commit(repo, rel, f"changed {rel}")
+        with pytest.raises(Refused, match="card code changed"):
+            e8.reusable_cards_commit(repo, changed)
+        assert changed != first
+
+
+def test_card_rows_at_two_commits_are_ambiguous_and_refused(repo: Path) -> None:
+    a = _src_commit(repo, "docs/a.md", "a")
+    b = _src_commit(repo, "docs/b.md", "b")
+    e2._append_durable(repo / e8.ROWS_REL, _row_line(a))
+    e2._append_durable(repo / e8.ROWS_REL, _row_line(b, sid="k1"))
+    with pytest.raises(Refused, match="several commits"):
+        e8.reusable_cards_commit(repo, b)
+
+
+def test_judge_uses_cards_from_the_earlier_commit_and_the_record_says_so(tmp_path: Path) -> None:
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, search_commit, _ = _make_judged(tmp_path, trained_team=False, search_later=True)
+    cards_commit = e8.git(root, "rev-parse", "HEAD~1").stdout.strip()
+    assert search_commit != cards_commit
+    path = e8.run_judge(root=root, from_commit=search_commit, haiku=FakeClaude("h"), sonnet=FakeClaude("s"),
+                        guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "calls.json",
+                        say=lambda t: None, concurrency=2)
+    cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
+    assert cfg["generating_commit"] == cards_commit and cfg["search_and_detector_commit"] == search_commit
+    assert "reran at" in cfg["resume_note"] and cards_commit[:12] in cfg["resume_note"] and search_commit[:12] in cfg["resume_note"]

@@ -82,6 +82,9 @@ EXTRA_DIR_REL = Path("results/e8-sonnet-extra")
 SAMPLE_SEED = 13
 DECISION_ENTRIES = (49, 51, 56, 57, 58)
 CAL_NOTE = j6.CALIBRATION_NOTE
+# What shapes a card: E6's list, plus the product's team settings and the frozen config. e8_final.py is not here: a fix to its search
+# stage (the embedding batches) does not change a card, and the tests pin how the arms are built.
+CARD_CODE = (*j6.CARD_CODE, "src/contextlens/api/production.py", FREEZE_REL.as_posix())
 
 
 # ---------------------------------------------------------------- freeze
@@ -273,7 +276,7 @@ def existing_test_records(root: Path) -> list[str]:
     return out
 
 
-def other_commit_rows(root: Path, commit: str) -> list[str]:
+def other_commit_rows(root: Path, commit: str, reuse: frozenset[str] | set[str] = frozenset()) -> list[str]:
     path = root / ROWS_REL
     if not path.exists():
         return []
@@ -283,25 +286,63 @@ def other_commit_rows(root: Path, commit: str) -> list[str]:
             c = json.loads(line)["commit"]
         except (ValueError, KeyError):
             continue
-        if c != commit:
+        if c != commit and c not in reuse:
             seen.add(c[:12])
     return sorted(seen)
 
 
-def require_first_test_run(root: Path, commit: str, override_note: str | None) -> None:
-    """Refuse a second test run unless the person's note says why. Rows saved at this same commit are a resume, not a second run."""
-    again = [f"test record {r}" for r in existing_test_records(root)] + [f"saved rows of commit {c}" for c in other_commit_rows(root, commit)]
+def require_first_test_run(root: Path, commit: str, override_note: str | None, reuse: frozenset[str] | set[str] = frozenset()) -> None:
+    """Refuse a second test run unless the person's note says why. Rows saved at this same commit, or at a commit in `reuse` (card
+    rows whose code is unchanged, see `reusable_cards_commit`), are a resume, not a second run."""
+    again = [f"test record {r}" for r in existing_test_records(root)] + [
+        f"saved rows of commit {c}" for c in other_commit_rows(root, commit, reuse)]
     if again and not (override_note or "").strip():
         raise Refused(f"the test split was already run ({', '.join(again)}); a second run needs --override-note saying why")
 
 
-def require_ready(root: Path, override_note: str | None) -> dict[str, Any]:
+def card_code_changed(root: Path, commit: str) -> list[str]:
+    """Files of CARD_CODE that differ between `commit` and HEAD (git, as e6_judge checks)."""
+    out = git(root, "diff", "--name-only", commit, "HEAD", "--", *CARD_CODE)
+    if out.returncode != 0:
+        raise Refused(f"git could not compare {commit[:12]} with HEAD: {out.stderr.strip()[:200]}")
+    return [ln for ln in out.stdout.splitlines() if ln.strip()]
+
+
+def reusable_cards_commit(root: Path, head: str) -> str:
+    """The commit whose saved card rows this run continues: HEAD if the rows are its own or there are none; an earlier commit only if
+    git shows the card code and the frozen config unchanged since; otherwise Refused."""
+    path = root / ROWS_REL
+    commits: set[str] = set()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+                if e["subset"] == "cards":
+                    commits.add(e["commit"])
+            except (ValueError, KeyError, TypeError):
+                continue
+    if not commits:
+        return head
+    if len(commits) > 1:
+        raise Refused(f"saved card rows exist at several commits ({sorted(c[:12] for c in commits)}); they cannot be continued")
+    (found,) = commits
+    if found != head:
+        changed = card_code_changed(root, found)
+        if changed:
+            raise Refused(f"saved card rows are from {found[:12]} but the card code changed since: {changed[:8]}")
+    return found
+
+
+def require_ready(root: Path, override_note: str | None) -> tuple[dict[str, Any], str]:
+    """(the freeze, the commit whose card rows are continued). Every refusal comes before any model is loaded or any row is read."""
     if is_dirty(root):
         raise Refused("the working tree has uncommitted changes; commit first")
     freeze = committed_freeze(root)
-    require_first_test_run(root, head_commit(root), override_note)
+    head = head_commit(root)
+    cards_commit = reusable_cards_commit(root, head)
+    require_first_test_run(root, head, override_note, reuse={cards_commit})
     check_inputs(root, freeze)
-    return freeze
+    return freeze, cards_commit
 
 
 # ---------------------------------------------------------------- saved rows
@@ -356,10 +397,25 @@ def split_cards(scenarios: list[Scenario]) -> tuple[list[Scenario], list[Scenari
     return ([s for s in scenarios if s.conversation.source != LME], [s for s in scenarios if s.conversation.source == LME])
 
 
+def preflight_embeddings(scenarios: list[Scenario], embedder: Any) -> None:
+    """E5's check: embed every case's turns and query in batches before any model is loaded, so a case the embedder cannot take
+    stops the run here, by name, in seconds."""
+    from contextlens.experiments.e5_cards import EmbedCache
+    from contextlens.experiments.e5_cards import preflight_embeddings as check
+
+    try:
+        check(scenarios, embedder if isinstance(embedder, EmbedCache) else EmbedCache(embedder))
+    except RuntimeError as err:
+        raise e2.RunBroken(str(err)) from err
+
+
 def search_rows(scenarios: list[Scenario], embedder: Any, config: dict[str, Any], say: Callable[[str], None]) -> list[Prediction]:
     """Ranked turns from the frozen retrieval config (one-turn chunks, no reranker); no card is written."""
     if config.get("rerank") or config.get("chunk_turns", 1) != 1:
         raise Refused("the frozen retrieval config needs a one-turn chunk and no reranker")
+    from contextlens.experiments.e5_cards import EmbedCache
+
+    embedder = embedder if isinstance(embedder, EmbedCache) else EmbedCache(embedder)  # batches of 32, as E1 and E5 (Ollama refuses 256)
     by_conv: dict[str, list[Scenario]] = defaultdict(list)
     for sc in scenarios:
         by_conv[sc.conversation.id].append(sc)
@@ -407,13 +463,19 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
     """Run the test once and save every row. Returns counts. Judging is a separate command."""
     if not run_conditions.strip():
         raise e2.RunBroken("run_conditions is required: say what else was running while latency was measured")
-    freeze = require_ready(root, override_note)
+    freeze, cards_commit = require_ready(root, override_note)
     commit = head_commit(root)
     say = progress_log(root, "write", commit, say)
     say(f"write started at {commit[:12]}; freeze, clean tree and first-run checks passed")
     cfg = e2.load_retrieval_config(root / freeze["retrieval"]["path"])
     loaded = {src: load_verified(src, SPLIT, root) for src in ("scenarios", "qmsum", "decode")}
     cards, lme = split_cards(loaded["scenarios"][0])
+    from contextlens.experiments.e5_cards import EmbedCache
+
+    embedder = EmbedCache(embedder)  # every embedding call in every stage goes out in batches of 32, each text once
+    say(f"card rows are continued from {cards_commit[:12]}" if cards_commit != commit else "card rows start at this commit")
+    preflight_embeddings([*cards, *loaded["qmsum"][0], *lme], embedder)
+    say("embedding preflight passed")
     names = e2.Models()
     mine = [(names.writer, False), (names.embedder, True)]
     counts: dict[str, int] = {}
@@ -428,20 +490,20 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
         return box["checker"]
 
     try:
-        have = {n: _saved(root, commit, "cards", n, {s.id for s in cards}) for n in systems}
+        have = {n: _saved(root, cards_commit, "cards", n, {s.id for s in cards}) for n in systems}
         todo = [s for s in cards if any(s.id not in have[n] for n in systems)]
         say(f"cards: {len(cards)} cases, building memory for {len(todo)}")
         memories: dict[str, MemoryStore] = {}
         for sc in todo:
             memories[sc.id], _ = e2.build_memory(sc, writer)
         for system in (PRIMARY, SINGLE):
-            counts[system] = len(run_part(root, commit, "cards", system, cards, lambda sc, system=system: build_system(
+            counts[system] = len(run_part(root, cards_commit, "cards", system, cards, lambda sc, system=system: build_system(
                 system, sc, writer, embedder, memories.get(sc.id, MemoryStore())), say))
         if TRAINED_TEAM in systems:
             say("trained-team stage: the writer is unloaded, the adapter loads")
             ctl.unload(names.writer)  # the adapter needs the GPU the writer held
             hf = make_hf_writer(freeze["trained"]["adapter"])
-            counts[TRAINED_TEAM] = len(run_part(root, commit, "cards", TRAINED_TEAM, cards, lambda sc: build_team_trained(
+            counts[TRAINED_TEAM] = len(run_part(root, cards_commit, "cards", TRAINED_TEAM, cards, lambda sc: build_team_trained(
                 sc, hf, trained_checker(), embedder, memories.get(sc.id, MemoryStore())), say))
         say("search stage")
         for source, scs in (("qmsum", loaded["qmsum"][0]), (LME, lme)):
@@ -462,7 +524,7 @@ def run_write(*, root: Path = ROOT, writer: LLMClient, embedder: Any, ctl: Ollam
                 root, commit, f"detector:{source}", name, by_source[source],
                 lambda sc, checker=checker, predict=predict: predict(checker, [sc])[0], say))
         write_atomic(root / ROWS_REL.with_name("e8-write.json"), json.dumps({
-            "commit": commit, "run_conditions": run_conditions, "override_note": override_note,
+            "commit": commit, "cards_commit": cards_commit, "run_conditions": run_conditions, "override_note": override_note,
             "consistency_checker_device": box.get("device", "not loaded (rows were already saved)"),
             "finished_at": datetime.now(timezone.utc).isoformat()}))
     finally:
@@ -591,6 +653,23 @@ def primary_vs_single(comparisons: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
+def recorded_cards_commit(root: Path, commit: str) -> str:
+    """The commit that wrote the card rows, from the write stage's note for `commit`; `commit` itself if the note says nothing else."""
+    try:
+        meta = json.loads((root / ROWS_REL.with_name("e8-write.json")).read_text(encoding="utf-8"))
+        return meta["cards_commit"] if meta.get("commit") == commit and "cards_commit" in meta else commit
+    except (OSError, ValueError):
+        return commit
+
+
+def _resume_note(cards_commit: str, commit: str) -> str:
+    if cards_commit == commit:
+        return f"Every stage ran at {commit[:12]}."
+    return (f"The card rows were written at {cards_commit[:12]} and reused: git shows the card code (prompts, agents, memory, retrieval, llm, "
+            f"replay, data, schemas, the product's team settings) and the frozen config unchanged between that commit and HEAD. The search "
+            f"stage reran at {commit[:12]} after a fix to its embedding batches, and the detector stage ran there.")
+
+
 def _checker_device(root: Path, commit: str) -> str:
     """Where the trained checker ran, from the write stage's note for this commit."""
     path = root / ROWS_REL.with_name("e8-write.json")
@@ -613,14 +692,15 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
     say(f"judge started at {commit[:12]}")
     if is_dirty(root):  # the log itself must not block the record that write_run writes after all the grading
         raise Refused("the working tree has uncommitted changes after the log was opened; ignore results/logs/ or commit first")
-    require_first_test_run(root, commit, override_note)
-    changed = j6.card_code_changed(root, commit)
+    cards_commit = recorded_cards_commit(root, commit)
+    require_first_test_run(root, commit, override_note, reuse={cards_commit})
+    changed = sorted({*card_code_changed(root, commit), *card_code_changed(root, cards_commit)})
     if changed:
         raise Refused(f"the prompts or card code changed between {commit[:12]} and HEAD: {changed[:8]}")
     loaded = {src: load_verified(src, SPLIT, root) for src in ("scenarios", "qmsum", "decode")}
     cards, lme = split_cards(loaded["scenarios"][0])
     systems = systems_of(freeze)
-    rows = {n: load_part(root, commit, "cards", n, cards) for n in systems}
+    rows = {n: load_part(root, cards_commit, "cards", n, cards) for n in systems}
     extra_rows: dict[tuple[str, str], list[Prediction]] = {
         ("search:qmsum", SEARCH_SYSTEM): load_part(root, commit, "search:qmsum", SEARCH_SYSTEM, loaded["qmsum"][0]),
         (f"search:{LME}", SEARCH_SYSTEM): load_part(root, commit, f"search:{LME}", SEARCH_SYSTEM, lme)}
@@ -679,7 +759,8 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
     n_claims = len(items)
     config: dict[str, Any] = {
         "experiment": EXPERIMENT, "freeze": {"path": FREEZE_REL.as_posix(), "sha256": sha256_path(root / FREEZE_REL), **freeze},
-        "generating_commit": commit, "systems": list(systems), "primary": PRIMARY, "consistency_checker_device": _checker_device(root, commit), "prompt_note": f"prompt {PROMPT} for every system",
+        "generating_commit": cards_commit, "search_and_detector_commit": commit,
+        "resume_note": _resume_note(cards_commit, commit), "systems": list(systems), "primary": PRIMARY, "consistency_checker_device": _checker_device(root, commit), "prompt_note": f"prompt {PROMPT} for every system",
         "cards_subset": freeze["cards_subset"], "cards_cases": len(cards), "search_only_cases": {LME: len(lme), "qmsum": len(loaded["qmsum"][0])},
         "written_score": {n: e3.score(m) for n, m in metrics.items()}, "primary_vs_single": primary_vs_single(comparisons),
         "judge": {"model": haiku.model, "rubric_version": e2.RUBRIC_VERSION, "same_model_and_prompt_as_writer": False, "via": "claude -p, one claim per call, in parallel", "claims": n_claims,
@@ -741,7 +822,8 @@ def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: 
     record = json.loads((root / RUNS_REL / f"{records[-1]}.json").read_text(encoding="utf-8"))
     at_record = {"claims": record["config"]["sonnet"]["claims_graded"], **record["config"]["sonnet"]["agreement_with_haiku"]}
     cards, _ = split_cards(load_verified("scenarios", SPLIT, root)[0])
-    items = items_of({n: load_part(root, commit, "cards", n, cards) for n in systems_of(freeze)})
+    cards_commit = recorded_cards_commit(root, commit)
+    items = items_of({n: load_part(root, cards_commit, "cards", n, cards) for n in systems_of(freeze)})
     seed, done = freeze["judging"]["sample_seed"], freeze["judging"]["sonnet_sample"]
     stem = commit[:12]
     header = {"kind": "e8-judge-rows", "commit": commit, "rubric": e2.RUBRIC_VERSION, "model": sonnet.model}
@@ -759,7 +841,7 @@ def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: 
                      guard, counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep) if chosen else {}
     haiku = saved_verdicts(root / JUDGE_DIR_REL / f"{stem}.haiku.rows.jsonl")
     original = {k: v for k, v in saved_verdicts(sample_path).items() if k in sample}
-    out = {"record": records[-1], "generating_commit": commit, "at_record": at_record,
+    out = {"record": records[-1], "generating_commit": cards_commit, "at_record": at_record,
            "finishes_original_sample": len(unfinished), "sample_complete": sample <= set(original),
            "extra_requested": more, "extra_graded": len(extra), "seed": seed, "weekly_usage_pct": guard.final(),
            **extra_report(haiku, original, extra)}
