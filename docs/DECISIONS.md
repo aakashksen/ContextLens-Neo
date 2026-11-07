@@ -710,3 +710,9 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Fit:** E5 measured a peak of 5.242 GB for the adapter alone; the checker adds about 0.74 GB of weights, so the trained-team stage needs about 6 GB or more, not 5.5 GB. It fits the 8 GB card only with little else on it. Nothing was changed to make it fit.
 - **Open:** QMSum and DECODE have no test scenario files or manifests yet (only dev), so `freeze` and `write` cannot read them.
 
+
+## 75. E8 without the adapter team: two systems, and the consistency checker measured on its own (2026-11-07, T9.1, the person's decision, relayed by the coordinator)
+- **Chosen (the person, directly):** E8 runs `freeze --without-trained-team`: two card systems, the shipping team (primary) and `single`. This changes the person's own earlier direction of three systems. Bullet 2's comparison stays in either case as its own measurement: T5.2's trained DeBERTa checker against `prompted` and TF-IDF, four-label macro-F1 on our test scenarios, plus DECODE (trained against TF-IDF), with McNemar on false alerts. It needs no adapter and no team. The checker runs on the GPU only if it fits under 5.5 GB beside what is loaded (the writer is unloaded first, `prompted` runs last), otherwise on the CPU; the record's `consistency_checker_device` says which.
+- **Why:** the adapter lost on dev (grounded -0.34, record E5-20261106T222951150994Z), the product will not use it, and its stage is most of `write`'s time. It also needs about 6 GB of GPU, more than the 5.5 GB the stages are budgeted.
+- **Considered and lost:** keeping the adapter team in the test (a loss already known on dev, for most of the GPU time); folding the checker comparison into the team (the checker is a separate measurement with its own bullet).
+- **Would change if:** the person wants the adapter's test number for the report.
