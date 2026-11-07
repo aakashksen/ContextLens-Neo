@@ -609,3 +609,13 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Also:** the 60 claims judged equal the 60 findings (2 + 0 + 20 + 38) that the first rows held, so the low judged count was only a consequence. The subset reason now states the measured 2B figure, 53.8 s per card (about 7.4 h for 248 cases on two sides); the speed was measured without the constraint and may change.
 - **Lost:** adding the allowed words to the prompt (changes the E6-chosen v3, and the adapter was trained without them); reporting the unconstrained result as the 2B's (it measures the missing grammar, not the model).
 - **Reruns:** the writing, both sides, on the GPU, then the judging. The first record stays as a record of the unconstrained run.
+
+## 64. Which E7 team fixes ship: a rule fixed before the controlled segment result (2026-11-06 18:02 local, T8.5, the coordinator's decision)
+- **Written before** the real-time segment's "after" run (fix 1 plus fix 2, against the "before" record `E7-20261107T011123157183Z`, which has the audio levelling only) has produced any result.
+- **Fixes:** fix 1, retrieval before the memory specialist's model call; fix 2, a 5.5 s first-pass sub-deadline for memory and consistency.
+- **Rule:** a fix is kept only if the segment's after shows a lower p50, a lower p95, or fewer deadline-cut cards than before, with an answer rate on the 33 clean questions no worse than before.
+  - **Mixed result:** keep fix 1 and drop fix 2.
+  - **Neither helps:** drop both, freeze T9.1 on the system before them, and return the product to it.
+- **Bullet 3:** its latency and token cut is whatever the segment shows, including no cut.
+- **Why:** on the 108 new dev cases the fixed team scored the same as the earlier arm under Haiku (written score 0.736 against 0.734, record `E3TP-20261107T015856746371Z`), but with a slower p50 (4.5 s against 3.7 s) and 9 cut cards against 0. Those runs were in different sessions, so the controlled segment decides.
+- **T9.1 judging order:** Haiku on every claim first, since it is the named judge and barely moves weekly usage; then the seeded 300-claim Sonnet sample. If the 98% weekly stop interrupts the Sonnet sample, the record states how many Sonnet grades were done, and the rest are graded after the weekly reset.
