@@ -29,7 +29,7 @@ from contextlens.vision.local import SceneStore
 
 MODEL = "qwen3.5:4b-q4_K_M"
 OLLAMA_URL = "http://127.0.0.1:11434"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
 DEADLINE_S = 8.0
 SPECIALIST_DEADLINE_S = 5.5  # the value the dropped sub-deadline fix was measured at; the code stays, switched off
 # What the shipped team passes to TeamAssistant besides its llms, tools, prompt and deadline. Both team fixes (a search before
