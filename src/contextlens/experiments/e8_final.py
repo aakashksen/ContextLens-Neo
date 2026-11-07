@@ -525,8 +525,15 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
                           counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep)
     chosen = set(sonnet_sample([i.id for i in items], freeze["judging"]["sonnet_sample"], freeze["judging"]["sample_seed"]))
     s_items = [i for i in items if i.id in chosen]
-    s_verdicts = j6.grade(s_items, sonnet, root / JUDGE_DIR_REL / f"{stem}.sonnet.rows.jsonl", {**header, "model": sonnet.model}, guard,
-                          counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep)
+    sonnet_rows = root / JUDGE_DIR_REL / f"{stem}.sonnet.rows.jsonl"
+    stopped: str | None = None
+    try:
+        s_verdicts = j6.grade(s_items, sonnet, sonnet_rows, {**header, "model": sonnet.model}, guard,
+                              counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep)
+    except j6.JudgeStopped as exc:  # Haiku has graded every claim; the record is written with the Sonnet grades done so far
+        stopped = str(exc)
+        s_verdicts = {k: v for k, v in saved_verdicts(sonnet_rows).items() if k in chosen}
+        say(f"Sonnet stopped with {len(s_verdicts)} of {len(s_items)} graded: {stopped}")
     end_pct = guard.final()
 
     judged = with_claims(rows, h_verdicts, "claim_supported")
@@ -534,10 +541,12 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
     metrics, intervals, comparisons = e3.card_stats(cards, judged)
     sonnet_view: dict[str, Any] = {
         "sample": freeze["judging"]["sonnet_sample"], "claims_graded": len(s_verdicts), "of_claims": len(items),
+        "complete": stopped is None, "remaining": len(s_items) - len(s_verdicts), "stopped": stopped,
         "agreement_with_haiku": agreement(h_verdicts, s_verdicts),
         "note": ("Haiku graded every claim; Sonnet graded a seeded random sample "
                  f"(seed {freeze['judging']['sample_seed']}), so Sonnet's figure is agreement with Haiku on the sample, not a second score. "
-                 "More Sonnet claims may be graded later by the separate `sonnet-extra` step, which keeps this figure and reports the extra apart.")}
+                 "If the weekly stop interrupted it (`complete` false), or more claims are wanted, the separate `sonnet-extra` step grades the rest "
+                 "without regrading, keeps this figure and reports the rest apart.")}
     detectors_out = {s: detector_block(s, scs, {n: extra_rows[(f"detector:{s}", n)] for n in ("trained", freeze["detectors"][s])},
                                        freeze["detectors"][s]) for s, scs in detectors.items()}
     benchmarks = {"qmsum": search_block(loaded["qmsum"][0], extra_rows[("search:qmsum", SEARCH_SYSTEM)]),
@@ -580,7 +589,7 @@ def run_judge(*, root: Path = ROOT, from_commit: str, haiku: Any, sonnet: Any, g
 def extra_report(haiku: dict[str, bool], original: dict[str, bool], extra: dict[str, bool]) -> dict[str, Any]:
     """The original sample's figure unchanged, the extra claims' figure, and the two together, each against Haiku."""
     return {"original": agreement(haiku, original), "extra": agreement(haiku, extra), "combined": agreement(haiku, {**original, **extra}),
-            "note": "`original` is the figure in the E8 record and is not changed; `extra` covers only the further claims graded after "
+            "note": "`original` is the Sonnet sample as completed, `at_record` is the E8 record's own figure and is not changed; `extra` covers only the further claims graded after "
                     "the weekly reset; `combined` is for reading only. This addendum does not replace the record's figure."}
 
 
@@ -597,11 +606,12 @@ def saved_verdicts(path: Path) -> dict[str, bool]:
     return out
 
 
-def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: int, guard: UsageGuard,
+def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: int = 0, guard: UsageGuard,
                      counter_path: Path = CLAUDE_CALLS_PATH, cap: int = CLAUDE_CALL_CAP, concurrency: int = pg.DEFAULT_CONCURRENCY,
                      say: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep) -> Path:
-    """Grade the next `more` claims of the frozen seeded order with Sonnet, after the E8 record exists. The record is not touched:
-    an addendum file holds the original figure, the extra's, and both together."""
+    """After the E8 record exists: first finish the original Sonnet sample if the weekly stop cut it short (claims with a saved
+    grade are not asked again), then grade `more` further claims of the frozen seeded order. The record is not touched: an
+    addendum file holds the record's own figure, the completed sample's, the extra's, and both together."""
     freeze = committed_freeze(root)
     if guard.limit != freeze["judging"]["max_weekly_pct"]:
         raise Refused("the weekly stop is not the frozen one")
@@ -609,21 +619,32 @@ def run_sonnet_extra(*, root: Path = ROOT, from_commit: str, sonnet: Any, more: 
     records = existing_test_records(root)
     if not records:
         raise Refused("there is no E8 record yet; run `judge` first")
+    record = json.loads((root / RUNS_REL / f"{records[-1]}.json").read_text(encoding="utf-8"))
+    at_record = {"claims": record["config"]["sonnet"]["claims_graded"], **record["config"]["sonnet"]["agreement_with_haiku"]}
     cards, _ = split_cards(load_verified("scenarios", SPLIT, root)[0])
     items = items_of({n: load_part(root, commit, "cards", n, cards) for n in SYSTEMS})
     seed, done = freeze["judging"]["sample_seed"], freeze["judging"]["sonnet_sample"]
-    chosen = set(sonnet_extra([i.id for i in items], seed, done, more))
-    if not chosen:
-        raise Refused(f"no more claims: all {len(items)} claims are already in the original sample of {done}")
     stem = commit[:12]
     header = {"kind": "e8-judge-rows", "commit": commit, "rubric": e2.RUBRIC_VERSION, "model": sonnet.model}
+    sample_path = root / JUDGE_DIR_REL / f"{stem}.sonnet.rows.jsonl"
+    sample = set(sonnet_sample([i.id for i in items], done, seed))
+    unfinished = [i for i in items if i.id in sample and i.id not in saved_verdicts(sample_path)]
+    chosen = set(sonnet_extra([i.id for i in items], seed, done, more)) if more > 0 else set()
+    if not unfinished and not chosen:
+        raise Refused(f"no more claims: all {len(items)} claims are already in the original sample of {done}")
     guard.start()
-    verdicts = j6.grade([i for i in items if i.id in chosen], sonnet, root / EXTRA_DIR_REL / f"{stem}.sonnet-extra.rows.jsonl", header,
-                        guard, counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep)
-    out = {"record": records[-1], "generating_commit": commit, "extra_requested": more, "extra_graded": len(verdicts), "seed": seed,
-           "weekly_usage_pct": guard.final(),
-           **extra_report(saved_verdicts(root / JUDGE_DIR_REL / f"{stem}.haiku.rows.jsonl"),
-                          saved_verdicts(root / JUDGE_DIR_REL / f"{stem}.sonnet.rows.jsonl"), verdicts)}
+    if unfinished:
+        j6.grade(unfinished, sonnet, sample_path, header, guard, counter_path=counter_path, cap=cap, concurrency=concurrency,
+                 say=say, sleep=sleep)
+    extra = j6.grade([i for i in items if i.id in chosen], sonnet, root / EXTRA_DIR_REL / f"{stem}.sonnet-extra.rows.jsonl", header,
+                     guard, counter_path=counter_path, cap=cap, concurrency=concurrency, say=say, sleep=sleep) if chosen else {}
+    haiku = saved_verdicts(root / JUDGE_DIR_REL / f"{stem}.haiku.rows.jsonl")
+    original = {k: v for k, v in saved_verdicts(sample_path).items() if k in sample}
+    out = {"record": records[-1], "generating_commit": commit, "at_record": at_record,
+           "finishes_original_sample": len(unfinished), "sample_complete": sample <= set(original),
+           "extra_requested": more, "extra_graded": len(extra), "seed": seed, "weekly_usage_pct": guard.final(),
+           **extra_report(haiku, original, extra)}
+    (root / EXTRA_DIR_REL).mkdir(parents=True, exist_ok=True)
     path = root / EXTRA_DIR_REL / f"{stem}.{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}.json"
     write_atomic(path, json.dumps(out, indent=1) + "\n")
     return path
@@ -671,7 +692,7 @@ def main(argv: list[str] | None = None) -> int:
     jd.add_argument("--concurrency", type=int, default=pg.DEFAULT_CONCURRENCY)
     ex = sub.add_parser("sonnet-extra", help="no GPU: grade more Sonnet claims after the E8 record, apart from it (additive)")
     ex.add_argument("--from-commit", required=True)
-    ex.add_argument("--more", type=int, required=True, help="how many further claims")
+    ex.add_argument("--more", type=int, default=0, help="further claims beyond the original sample (0: only finish the sample)")
     ex.add_argument("--concurrency", type=int, default=pg.DEFAULT_CONCURRENCY)
     args = ap.parse_args(argv)
     try:

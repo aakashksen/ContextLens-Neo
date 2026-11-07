@@ -474,3 +474,43 @@ def test_judge_stops_before_any_call_if_its_own_log_would_dirty_the_tree(judged_
         e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=FakeClaude("s"),
                      guard=UsageGuard(98.0, read=lambda: 10.0, interval_s=0.0), counter_path=tmp_path / "c.json", say=lambda t: None)
     assert haiku.n == 0
+
+
+def test_a_weekly_stop_in_the_sonnet_sample_still_writes_the_record_and_sonnet_extra_finishes_it(
+        judged_repo: tuple[Path, str, list[Scenario]], tmp_path: Path) -> None:
+    import threading
+
+    from contextlens.experiments.judge_calibrate import UsageGuard
+    from tests.test_e6_judge import FakeClaude
+
+    root, commit, _ = judged_repo
+    state = {"pct": 10.0}
+    lock = threading.Lock()
+
+    def sonnet_rule(text: str) -> bool:
+        with lock:
+            if sonnet.n >= 4:
+                state["pct"] = 99.0  # the weekly stop is reached while Sonnet is grading
+        return True
+
+    haiku, sonnet = FakeClaude("haiku-x"), FakeClaude("sonnet-x", rule=sonnet_rule)
+    guard = UsageGuard(98.0, read=lambda: state["pct"], interval_s=0.0)
+    path = e8.run_judge(root=root, from_commit=commit, haiku=haiku, sonnet=sonnet, guard=guard,
+                        counter_path=tmp_path / "calls.json", say=lambda t: None, concurrency=1)
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    s = rec["config"]["sonnet"]
+    assert haiku.n == 9  # Haiku graded every claim first
+    assert 0 < s["claims_graded"] < 9 and s["complete"] is False and s["stopped"]
+    assert s["remaining"] == 9 - s["claims_graded"] and "98" in s["stopped"]
+    done_before = s["claims_graded"]
+
+    state["pct"] = 10.0  # after the reset
+    again = FakeClaude("sonnet-x")
+    out = e8.run_sonnet_extra(root=root, from_commit=commit, sonnet=again, more=0,
+                              guard=UsageGuard(98.0, read=lambda: state["pct"], interval_s=0.0), counter_path=tmp_path / "calls.json",
+                              say=lambda t: None, concurrency=1)
+    add = json.loads(out.read_text(encoding="utf-8"))
+    assert again.n == 9 - done_before  # only the claims without a grade; none is graded twice
+    assert add["finishes_original_sample"] == 9 - done_before and add["sample_complete"] is True
+    assert add["at_record"]["claims"] == done_before  # the record's own figure is reported unchanged
+    assert json.loads(path.read_text(encoding="utf-8"))["config"]["sonnet"]["claims_graded"] == done_before
