@@ -777,16 +777,16 @@
         "{py} -m pytest tests/test_e8.py -q",
         "{py} -m contextlens.eval.check_run E8 --min-n 100 --split test"
       ],
-      "status": "in_progress",
-      "worktree": "<local path>",
+      "status": "done",
       "started_at": "2026-11-07T02:55:35+00:00",
       "verified": {
-        "commit": "923f4ab897b4e68bd93adb462279d52772c0e379",
+        "commit": "f8016e74f1230d9ce032c1fc313260018caedfc2",
         "passed": true,
-        "at": "2026-11-07T07:27:30+00:00"
+        "at": "2026-11-07T07:37:03+00:00"
       },
       "attempts": 1,
-      "reason": "verifier FAIL at 923f4ab: config.primary_vs_single is empty; primary_vs_single only matches pairs ordered primary-then-single, but every card comparison is single-then-team_shipping_changed"
+      "reason": "verifier FAIL at 923f4ab: config.primary_vs_single is empty; primary_vs_single only matches pairs ordered primary-then-single, but every card comparison is single-then-team_shipping_changed",
+      "done_at": "2026-11-07T07:41:20+00:00"
     },
     {
       "id": "T9.2",

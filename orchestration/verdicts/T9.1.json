@@ -1,25 +1,22 @@
 {
   "task": "T9.1",
-  "commit": "923f4ab897b4e68bd93adb462279d52772c0e379",
-  "verdict": "FAIL",
+  "commit": "f8016e74f1230d9ce032c1fc313260018caedfc2",
+  "verdict": "PASS",
   "checks": [
-    {"item": "HEAD equals commit, tree clean", "result": "pass", "evidence": "git rev-parse HEAD = 923f4ab...; git status clean"},
-    {"item": "check_run E8 --min-n 100 --split test --all; only test record", "result": "pass", "evidence": "prints 'E8 ok'; grep of results/runs for split test finds only E8-20261107T072458163837Z.json"},
-    {"item": "Freeze before test rows", "result": "pass", "evidence": "freeze a79dec7 at 22:36 PT; record started 07:24Z (23:24 PT); search/detector rerun fe53f0d at 23:08"},
-    {"item": "Card reuse a79dec7..fe53f0d", "result": "pass", "evidence": "git diff a79dec7 fe53f0d touches only e8_final.py and tests/test_e8.py; build_system and arm building unchanged; changes are EmbedCache batching, preflight, cards_commit plumbing. production.py PROMPT v3 change predates the freeze. Record names generating_commit a79dec7 and states the reuse."},
-    {"item": "Systems and arms", "result": "pass", "evidence": "systems [team_shipping_changed, single], primary team_shipping_changed; trained-team arm absent (entry 75)"},
-    {"item": "Benchmarks separate; DECODE false_alert McNemar", "result": "pass", "evidence": "config.benchmarks has qmsum (367, search only), longmemeval (10, search only), decode (1000; trained 0.135 vs tfidf 0.264, mcnemar_p 1.6e-7), consistency_scenarios (trained, prompted, tfidf)"},
-    {"item": "Haiku calibration failure and Sonnet agreement stated", "result": "pass", "evidence": "config.notes cites entry 56 and the -0.057 interval; config.sonnet: 300 claims, agreement 0.8733, kappa 0.3546, haiku_yes_sonnet_no 3, haiku_no_sonnet_yes 35"},
-    {"item": "No test text committed", "result": "pass", "evidence": "Split manifests hold ids and hashes only. The DECODE and QMSum rows are ids and labels only. Card rows quote our own synthetic scenarios (syn-*), not public test text."},
-    {"item": "Written primary-vs-single verdict", "result": "fail", "evidence": "record config.primary_vs_single is {}; see failures"}
+    {"item": "HEAD equals commit, tree clean", "result": "pass", "evidence": "git rev-parse HEAD = f8016e7...; git status --short empty"},
+    {"item": "Only the fix changed since 923f4ab", "result": "pass", "evidence": "git diff --stat 923f4ab HEAD: new E8 record + 2 prediction files, e8_final.py (orientation helper, detail, restate), tests/test_e8.py (+64). No other files."},
+    {"item": "Orientation correct", "result": "pass", "evidence": "_primary_minus_single negates diff and swaps/negates ci for (single, primary); saved comparisons are single minus primary. Record detail: grounded_rate +0.0002, tokens_per_card +794.6 [769,820] worse (lower is better), latency_p50 +1982.5 worse; matches the negated saved comparisons."},
+    {"item": "Verdict text only where interval (and McNemar) agree", "result": "pass", "evidence": "Four quality metrics all 'no clear difference' (intervals span 0 or touch 0, McNemar p=1.0); only tokens_per_card and latency_p50_ms say 'worse', interval excludes 0 and no binary test applies. A test covers interval clear but McNemar disagreeing."},
+    {"item": "Rows byte-identical", "result": "pass", "evidence": "cmp on both prediction files old vs new: identical. metrics, intervals, comparisons, dataset_hash, subset, attempts, models equal in old and new JSON."},
+    {"item": "Test-once rule honestly satisfied", "result": "pass", "evidence": "new.supersedes = [old run_id + reason]; config.override_note says same single run, not a second; claude_calls 0 (681 in original); restated_from set; restate() refuses without reason/note and reads only saved files."},
+    {"item": "check_run E8 --min-n 100 --split test --all", "result": "pass", "evidence": "prints 'E8 ok' plus note that the old record is superseded; both test-split files exist, the old one is superseded so one live test record."},
+    {"item": "Spot-check metric from predictions", "result": "pass", "evidence": "median of stage_latency_ms.total over 136 rows: single 2831.5, team_shipping_changed 4814.0; equals metrics latency_p50_ms, and the difference 1982.5 equals the record's diff."}
   ],
   "own_tests": [
-    {"input": "Read comparisons list orientation in the record", "result": "every card comparison has a='single', b='team_shipping_changed'"},
-    {"input": "Read primary_vs_single (e8_final.py:645-653)", "result": "it filters on (a, b) == (PRIMARY, SINGLE), which no comparison matches, so it returns an empty dict"},
-    {"input": "Looked for committed test text in the E8X DECODE and QMSum rows", "result": "ids, labels and ranked turn ids only"}
+    {"input": "cmp of prediction files old vs new", "result": "identical for both systems"},
+    {"input": "recompute latency p50 from saved rows", "result": "matches the recorded metric and diff exactly"},
+    {"input": "compare saved comparisons against primary_vs_single_detail", "result": "signs and intervals correctly flipped; no sign confusion in lower-is-better verdicts"}
   ],
-  "failures": [
-    "src/contextlens/experiments/e8_final.py:650: primary_vs_single matches (c['a'], c['b']) == (PRIMARY, SINGLE), but the compared pairs are a=single, b=team_shipping_changed. The record's config.primary_vs_single is therefore empty ({}) and the written better/worse/no-difference verdict of the primary against single is missing from the final record. Reproduce: open results/runs/E8-20261107T072458163837Z.json and read config.primary_vs_single. Fix the orientation and diff sign, then restate the record (the judged rows are saved, so no regrading is needed). Note that a pytest that passes against this suggests the test does not pin a non-empty verdict."
-  ],
-  "notes": "Everything else I checked held. I did not rerun anything or recompute the metrics from the predictions, which is a limit of this review. Wall-clock shows the person's entry 75 (arm dropped) landed before the freeze. The card_code_changed reuse guard deliberately excludes e8_final.py; this is acceptable here because the diff shows no change to arm building."
+  "failures": [],
+  "notes": "Did not rerun the test suite, GPU, Ollama or claude -p, as instructed; relied on the logged tests. Not verified: no independent recheck of McNemar values beyond the saved comparisons."
 }
