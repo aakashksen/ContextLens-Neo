@@ -1,0 +1,505 @@
+{
+ "run_id": "E7-20261107T011123157183Z",
+ "experiment": "E7",
+ "git_commit": "e25568f6b4b933380bf6e9b0fe8adf62185bc4a9",
+ "dirty": false,
+ "dataset_hash": "ac055926561034f8bd9a35f0d540348952c02144db63055911f3f860777bd2dc",
+ "split": "dev",
+ "scenario_source": "ami",
+ "config": {
+  "experiment": "E7",
+  "phase": "rerun_segment",
+  "systems": [
+   "clean"
+  ],
+  "baseline_run_id": "E7-20261106T193023811323Z",
+  "changes": [
+   "before: audio leveled before streaming only, no team fixes (gain fix cherry-picked onto b16a588)"
+  ],
+  "bottlenecks": [
+   {
+    "stage": "memory_ms",
+    "p95_ms": 8220.0,
+    "p50_ms": 6813.0
+   },
+   {
+    "stage": "consistency_ms",
+    "p95_ms": 8007.8,
+    "p50_ms": 3789.0
+   }
+  ],
+  "before_after": {
+   "memory_ms": {
+    "p50": {
+     "before": 3991.5,
+     "after": 1706.0
+    },
+    "p95": {
+     "before": 8001.55,
+     "after": 6864.7
+    }
+   },
+   "consistency_ms": {
+    "p50": {
+     "before": 2288.0,
+     "after": 1107.5
+    },
+    "p95": {
+     "before": 8007.4,
+     "after": 5960.150000000002
+    }
+   },
+   "total": {
+    "p50": {
+     "before": 4564.5,
+     "after": 1919.5
+    },
+    "p95": {
+     "before": 8022.7,
+     "after": 8020.85
+    }
+   },
+   "quality": {
+    "recall@5": {
+     "before": 0.8181818181818182,
+     "after": 0.8181818181818182
+    },
+    "tokens_per_card": {
+     "before": 1317.060606060606,
+     "after": 1363.3636363636363
+    }
+   }
+  },
+  "realtime_segment": {
+   "meeting": "ES2003a",
+   "speedup": 1.0,
+   "audio_s": 597.92,
+   "presses": 24,
+   "basis": "the first 600 s of the meeting; each of its questions pressed at every tick",
+   "asr_lag_ms": {
+    "n": 92,
+    "p50": 469.5,
+    "p95": 2921.9500000000035
+   },
+   "diarization_run_ms": {
+    "n": 17,
+    "p50": 4141.0,
+    "p95": 4668.8
+   },
+   "asr_real_time_factor": 1.0218803398447964,
+   "press_latency_ms": {
+    "latency_p50_ms[stage=assistance_ms]": 1.0,
+    "latency_p95_ms[stage=assistance_ms]": 1179.15,
+    "latency_p50_ms[stage=assistance_tokens]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens]": 261.7,
+    "latency_p50_ms[stage=consistency_ms]": 1107.5,
+    "latency_p95_ms[stage=consistency_ms]": 5960.150000000002,
+    "latency_p50_ms[stage=consistency_tokens]": 538.0,
+    "latency_p95_ms[stage=consistency_tokens]": 711.6,
+    "latency_p50_ms[stage=memory_ms]": 1706.0,
+    "latency_p95_ms[stage=memory_ms]": 6864.7,
+    "latency_p50_ms[stage=memory_tokens]": 490.0,
+    "latency_p95_ms[stage=memory_tokens]": 780.9000000000003,
+    "latency_p50_ms": 1919.5,
+    "latency_p95_ms": 8020.85,
+    "latency_p50_ms[stage=assistance_ms][category=actions]": 253.5,
+    "latency_p95_ms[stage=assistance_ms][category=actions]": 1280.45,
+    "latency_p50_ms[stage=assistance_tokens][category=actions]": 125.0,
+    "latency_p95_ms[stage=assistance_tokens][category=actions]": 262.0,
+    "latency_p50_ms[stage=consistency_ms][category=actions]": 2142.5,
+    "latency_p95_ms[stage=consistency_ms][category=actions]": 4122.35,
+    "latency_p50_ms[stage=consistency_tokens][category=actions]": 576.5,
+    "latency_p95_ms[stage=consistency_tokens][category=actions]": 668.4,
+    "latency_p50_ms[stage=memory_ms][category=actions]": 4134.0,
+    "latency_p95_ms[stage=memory_ms][category=actions]": 6890.3,
+    "latency_p50_ms[stage=memory_tokens][category=actions]": 503.5,
+    "latency_p95_ms[stage=memory_tokens][category=actions]": 877.4000000000001,
+    "latency_p50_ms[category=actions]": 4636.0,
+    "latency_p95_ms[category=actions]": 8030.75,
+    "latency_p50_ms[stage=assistance_ms][category=decisions]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=decisions]": 333.8000000000002,
+    "latency_p50_ms[stage=assistance_tokens][category=decisions]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=decisions]": 149.50000000000009,
+    "latency_p50_ms[stage=consistency_ms][category=decisions]": 2307.5,
+    "latency_p95_ms[stage=consistency_ms][category=decisions]": 5322.050000000001,
+    "latency_p50_ms[stage=consistency_tokens][category=decisions]": 617.5,
+    "latency_p95_ms[stage=consistency_tokens][category=decisions]": 770.3000000000001,
+    "latency_p50_ms[stage=memory_ms][category=decisions]": 2088.5,
+    "latency_p95_ms[stage=memory_ms][category=decisions]": 6680.55,
+    "latency_p50_ms[stage=memory_tokens][category=decisions]": 489.0,
+    "latency_p95_ms[stage=memory_tokens][category=decisions]": 583.1,
+    "latency_p50_ms[category=decisions]": 2961.5,
+    "latency_p95_ms[category=decisions]": 6692.400000000001,
+    "latency_p50_ms[stage=assistance_ms][category=problems]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=problems]": 1.0,
+    "latency_p50_ms[stage=assistance_tokens][category=problems]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=problems]": 0.0,
+    "latency_p50_ms[stage=consistency_ms][category=problems]": 779.5,
+    "latency_p95_ms[stage=consistency_ms][category=problems]": 5626.200000000003,
+    "latency_p50_ms[stage=consistency_tokens][category=problems]": 525.0,
+    "latency_p95_ms[stage=consistency_tokens][category=problems]": 547.75,
+    "latency_p50_ms[stage=memory_ms][category=problems]": 1525.5,
+    "latency_p95_ms[stage=memory_ms][category=problems]": 5146.250000000002,
+    "latency_p50_ms[stage=memory_tokens][category=problems]": 484.5,
+    "latency_p95_ms[stage=memory_tokens][category=problems]": 703.4000000000001,
+    "latency_p50_ms[category=problems]": 1542.0,
+    "latency_p95_ms[category=problems]": 5917.9000000000015,
+    "latency_p50_ms[stage=assistance_ms][origin=dataset]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][origin=dataset]": 1179.15,
+    "latency_p50_ms[stage=assistance_tokens][origin=dataset]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][origin=dataset]": 261.7,
+    "latency_p50_ms[stage=consistency_ms][origin=dataset]": 1107.5,
+    "latency_p95_ms[stage=consistency_ms][origin=dataset]": 5960.150000000002,
+    "latency_p50_ms[stage=consistency_tokens][origin=dataset]": 538.0,
+    "latency_p95_ms[stage=consistency_tokens][origin=dataset]": 711.6,
+    "latency_p50_ms[stage=memory_ms][origin=dataset]": 1706.0,
+    "latency_p95_ms[stage=memory_ms][origin=dataset]": 6864.7,
+    "latency_p50_ms[stage=memory_tokens][origin=dataset]": 490.0,
+    "latency_p95_ms[stage=memory_tokens][origin=dataset]": 780.9000000000003,
+    "latency_p50_ms[origin=dataset]": 1919.5,
+    "latency_p95_ms[origin=dataset]": 8020.85
+   }
+  },
+  "baseline_realtime_segment": {
+   "meeting": "ES2003a",
+   "speedup": 1.0,
+   "audio_s": 597.92,
+   "presses": 24,
+   "basis": "the first 600 s of the meeting; each of its questions pressed at every tick",
+   "asr_lag_ms": {
+    "n": 79,
+    "p50": 338.0,
+    "p95": 1863.2999999999972
+   },
+   "diarization_run_ms": {
+    "n": 17,
+    "p50": 4388.0,
+    "p95": 4576.0
+   },
+   "asr_real_time_factor": 1.0221573121822412,
+   "press_latency_ms": {
+    "latency_p50_ms[stage=assistance_ms]": 1.0,
+    "latency_p95_ms[stage=assistance_ms]": 648.3500000000003,
+    "latency_p50_ms[stage=assistance_tokens]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens]": 243.10000000000002,
+    "latency_p50_ms[stage=consistency_ms]": 2288.0,
+    "latency_p95_ms[stage=consistency_ms]": 8007.4,
+    "latency_p50_ms[stage=consistency_tokens]": 532.0,
+    "latency_p95_ms[stage=consistency_tokens]": 677.45,
+    "latency_p50_ms[stage=memory_ms]": 3991.5,
+    "latency_p95_ms[stage=memory_ms]": 8001.55,
+    "latency_p50_ms[stage=memory_tokens]": 490.0,
+    "latency_p95_ms[stage=memory_tokens]": 1891.1,
+    "latency_p50_ms": 4564.5,
+    "latency_p95_ms": 8022.7,
+    "latency_p50_ms[stage=assistance_ms][category=actions]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=actions]": 924.3500000000005,
+    "latency_p50_ms[stage=assistance_tokens][category=actions]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=actions]": 172.25000000000009,
+    "latency_p50_ms[stage=consistency_ms][category=actions]": 3163.0,
+    "latency_p95_ms[stage=consistency_ms][category=actions]": 7053.050000000001,
+    "latency_p50_ms[stage=consistency_tokens][category=actions]": 574.5,
+    "latency_p95_ms[stage=consistency_tokens][category=actions]": 670.0,
+    "latency_p50_ms[stage=memory_ms][category=actions]": 7166.0,
+    "latency_p95_ms[stage=memory_ms][category=actions]": 7998.65,
+    "latency_p50_ms[stage=memory_tokens][category=actions]": 530.5,
+    "latency_p95_ms[stage=memory_tokens][category=actions]": 1889.9,
+    "latency_p50_ms[category=actions]": 7898.0,
+    "latency_p95_ms[category=actions]": 8019.95,
+    "latency_p50_ms[stage=assistance_ms][category=decisions]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=decisions]": 464.3,
+    "latency_p50_ms[stage=assistance_tokens][category=decisions]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=decisions]": 241.9,
+    "latency_p50_ms[stage=consistency_ms][category=decisions]": 3077.5,
+    "latency_p95_ms[stage=consistency_ms][category=decisions]": 7147.9000000000015,
+    "latency_p50_ms[stage=consistency_tokens][category=decisions]": 566.0,
+    "latency_p95_ms[stage=consistency_tokens][category=decisions]": 670.05,
+    "latency_p50_ms[stage=memory_ms][category=decisions]": 5669.5,
+    "latency_p95_ms[stage=memory_ms][category=decisions]": 8019.55,
+    "latency_p50_ms[stage=memory_tokens][category=decisions]": 492.5,
+    "latency_p95_ms[stage=memory_tokens][category=decisions]": 2906.4000000000015,
+    "latency_p50_ms[category=decisions]": 5932.0,
+    "latency_p95_ms[category=decisions]": 8037.25,
+    "latency_p50_ms[stage=assistance_ms][category=problems]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=problems]": 440.7500000000002,
+    "latency_p50_ms[stage=assistance_tokens][category=problems]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=problems]": 152.75000000000009,
+    "latency_p50_ms[stage=consistency_ms][category=problems]": 814.5,
+    "latency_p95_ms[stage=consistency_ms][category=problems]": 6396.250000000002,
+    "latency_p50_ms[stage=consistency_tokens][category=problems]": 519.5,
+    "latency_p95_ms[stage=consistency_tokens][category=problems]": 599.5,
+    "latency_p50_ms[stage=memory_ms][category=problems]": 1554.0,
+    "latency_p95_ms[stage=memory_ms][category=problems]": 4785.85,
+    "latency_p50_ms[stage=memory_tokens][category=problems]": 483.0,
+    "latency_p95_ms[stage=memory_tokens][category=problems]": 594.5500000000001,
+    "latency_p50_ms[category=problems]": 1577.0,
+    "latency_p95_ms[category=problems]": 6917.350000000001,
+    "latency_p50_ms[stage=assistance_ms][origin=dataset]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][origin=dataset]": 648.3500000000003,
+    "latency_p50_ms[stage=assistance_tokens][origin=dataset]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][origin=dataset]": 243.10000000000002,
+    "latency_p50_ms[stage=consistency_ms][origin=dataset]": 2288.0,
+    "latency_p95_ms[stage=consistency_ms][origin=dataset]": 8007.4,
+    "latency_p50_ms[stage=consistency_tokens][origin=dataset]": 532.0,
+    "latency_p95_ms[stage=consistency_tokens][origin=dataset]": 677.45,
+    "latency_p50_ms[stage=memory_ms][origin=dataset]": 3991.5,
+    "latency_p95_ms[stage=memory_ms][origin=dataset]": 8001.55,
+    "latency_p50_ms[stage=memory_tokens][origin=dataset]": 490.0,
+    "latency_p95_ms[stage=memory_tokens][origin=dataset]": 1891.1,
+    "latency_p50_ms[origin=dataset]": 4564.5,
+    "latency_p95_ms[origin=dataset]": 8022.7
+   }
+  },
+  "step_ms": 60000,
+  "speedup": 1.0,
+  "obs_profile": true,
+  "latency_basis": "real_time",
+  "audio_source": {
+   "method": "rebuilt from segmented utterances",
+   "level": "each meeting gets one gain so that the median RMS of its 20 ms frames above 0.002 is 0.02 (twice the speech service's fixed voice-gate threshold of 0.01); samples saturate at 16 bits, silence stays silence",
+   "note": "gaps between utterances are silence, so latency and diarization error may be easier than on the original recordings",
+   "dataset": "edinburghcstr/ami",
+   "config": "ihm",
+   "revision": "46f28f2503e2ec48f8867a84eef356c70476beab",
+   "sample_rate": 16000,
+   "rule": "(also stated in each manifest and in the E7 record):\n- Each speaker (or channel) gets its own track. An utterance is written at round(begin_time * rate) samples; a later\n  utterance of the same speaker replaces an overlapping earlier one, since both are the same microphone.\n- Tracks are summed in 32 bits. If the sum ever passes the 16-bit range, the whole meeting is scaled by one gain\n  (32767 / peak), so nothing is clipped and relative levels are kept; the gain is recorded (1.0 when none was needed).\n- Time between utterances is digital silence. The meeting ends at its last utterance.\n- Every utterance must be at the expected sample rate (no resampling) and mono, or several identical channels (the\n  data has stereo files repeating one signal), which count as that one signal; channels that differ stop the run. 16-bit PCM is used as is; 32-bit float\n  WAV, which part of this data uses, becomes 16-bit by x * 32767 (the count is recorded). Other formats stop the run."
+  },
+  "speech_address": "127.0.0.1:50052",
+  "devices": {
+   "whisper": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "gpu:CUDA0"
+   },
+   "pyannote": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "cuda"
+   },
+   "embeddings": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "cuda"
+   },
+   "llm": {
+    "requested": "cuda",
+    "actual": "cuda",
+    "reported": "cuda"
+   }
+  },
+  "stages_not_on_cuda": [],
+  "ran_alone": true,
+  "deadline": {
+   "clean": {
+    "cards": 33,
+    "deadline_ms": 8000,
+    "cut_by_deadline": 23,
+    "cut_in_stage": {
+     "memory": 15,
+     "consistency": 3,
+     "assistance": 20
+    },
+    "memory_or_consistency_at_or_over_deadline": 7,
+    "cut_after_earlier_stages_used_the_budget": 16,
+    "total_at_or_over_deadline": 23,
+    "share_of_presses_at_the_ceiling": 0.696969696969697
+   }
+  },
+  "latency_note": "The 8 s deadline cut cards (cards with a deadline or timeout note: clean 23 of 33); their quality numbers are confounded by the cut. Press latency sits at the deadline ceiling: the share of presses at or over 8000 ms is clean 70%, so p50 and p95 there are the ceiling, not a measurement of the work.",
+  "headline_latency": {
+   "source": "realtime_segment",
+   "meeting": "ES2003a",
+   "press_latency_ms": {
+    "latency_p50_ms[stage=assistance_ms]": 1.0,
+    "latency_p95_ms[stage=assistance_ms]": 1179.15,
+    "latency_p50_ms[stage=assistance_tokens]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens]": 261.7,
+    "latency_p50_ms[stage=consistency_ms]": 1107.5,
+    "latency_p95_ms[stage=consistency_ms]": 5960.150000000002,
+    "latency_p50_ms[stage=consistency_tokens]": 538.0,
+    "latency_p95_ms[stage=consistency_tokens]": 711.6,
+    "latency_p50_ms[stage=memory_ms]": 1706.0,
+    "latency_p95_ms[stage=memory_ms]": 6864.7,
+    "latency_p50_ms[stage=memory_tokens]": 490.0,
+    "latency_p95_ms[stage=memory_tokens]": 780.9000000000003,
+    "latency_p50_ms": 1919.5,
+    "latency_p95_ms": 8020.85,
+    "latency_p50_ms[stage=assistance_ms][category=actions]": 253.5,
+    "latency_p95_ms[stage=assistance_ms][category=actions]": 1280.45,
+    "latency_p50_ms[stage=assistance_tokens][category=actions]": 125.0,
+    "latency_p95_ms[stage=assistance_tokens][category=actions]": 262.0,
+    "latency_p50_ms[stage=consistency_ms][category=actions]": 2142.5,
+    "latency_p95_ms[stage=consistency_ms][category=actions]": 4122.35,
+    "latency_p50_ms[stage=consistency_tokens][category=actions]": 576.5,
+    "latency_p95_ms[stage=consistency_tokens][category=actions]": 668.4,
+    "latency_p50_ms[stage=memory_ms][category=actions]": 4134.0,
+    "latency_p95_ms[stage=memory_ms][category=actions]": 6890.3,
+    "latency_p50_ms[stage=memory_tokens][category=actions]": 503.5,
+    "latency_p95_ms[stage=memory_tokens][category=actions]": 877.4000000000001,
+    "latency_p50_ms[category=actions]": 4636.0,
+    "latency_p95_ms[category=actions]": 8030.75,
+    "latency_p50_ms[stage=assistance_ms][category=decisions]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=decisions]": 333.8000000000002,
+    "latency_p50_ms[stage=assistance_tokens][category=decisions]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=decisions]": 149.50000000000009,
+    "latency_p50_ms[stage=consistency_ms][category=decisions]": 2307.5,
+    "latency_p95_ms[stage=consistency_ms][category=decisions]": 5322.050000000001,
+    "latency_p50_ms[stage=consistency_tokens][category=decisions]": 617.5,
+    "latency_p95_ms[stage=consistency_tokens][category=decisions]": 770.3000000000001,
+    "latency_p50_ms[stage=memory_ms][category=decisions]": 2088.5,
+    "latency_p95_ms[stage=memory_ms][category=decisions]": 6680.55,
+    "latency_p50_ms[stage=memory_tokens][category=decisions]": 489.0,
+    "latency_p95_ms[stage=memory_tokens][category=decisions]": 583.1,
+    "latency_p50_ms[category=decisions]": 2961.5,
+    "latency_p95_ms[category=decisions]": 6692.400000000001,
+    "latency_p50_ms[stage=assistance_ms][category=problems]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][category=problems]": 1.0,
+    "latency_p50_ms[stage=assistance_tokens][category=problems]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][category=problems]": 0.0,
+    "latency_p50_ms[stage=consistency_ms][category=problems]": 779.5,
+    "latency_p95_ms[stage=consistency_ms][category=problems]": 5626.200000000003,
+    "latency_p50_ms[stage=consistency_tokens][category=problems]": 525.0,
+    "latency_p95_ms[stage=consistency_tokens][category=problems]": 547.75,
+    "latency_p50_ms[stage=memory_ms][category=problems]": 1525.5,
+    "latency_p95_ms[stage=memory_ms][category=problems]": 5146.250000000002,
+    "latency_p50_ms[stage=memory_tokens][category=problems]": 484.5,
+    "latency_p95_ms[stage=memory_tokens][category=problems]": 703.4000000000001,
+    "latency_p50_ms[category=problems]": 1542.0,
+    "latency_p95_ms[category=problems]": 5917.9000000000015,
+    "latency_p50_ms[stage=assistance_ms][origin=dataset]": 1.0,
+    "latency_p95_ms[stage=assistance_ms][origin=dataset]": 1179.15,
+    "latency_p50_ms[stage=assistance_tokens][origin=dataset]": 0.0,
+    "latency_p95_ms[stage=assistance_tokens][origin=dataset]": 261.7,
+    "latency_p50_ms[stage=consistency_ms][origin=dataset]": 1107.5,
+    "latency_p95_ms[stage=consistency_ms][origin=dataset]": 5960.150000000002,
+    "latency_p50_ms[stage=consistency_tokens][origin=dataset]": 538.0,
+    "latency_p95_ms[stage=consistency_tokens][origin=dataset]": 711.6,
+    "latency_p50_ms[stage=memory_ms][origin=dataset]": 1706.0,
+    "latency_p95_ms[stage=memory_ms][origin=dataset]": 6864.7,
+    "latency_p50_ms[stage=memory_tokens][origin=dataset]": 490.0,
+    "latency_p95_ms[stage=memory_tokens][origin=dataset]": 780.9000000000003,
+    "latency_p50_ms[origin=dataset]": 1919.5,
+    "latency_p95_ms[origin=dataset]": 8020.85
+   }
+  },
+  "secondary_latency": "The latency_* metrics of this record are from the 4x pass (model-call times, not speech or speaker timing): secondary figures. The headline stage latencies are in the real-time segment.",
+  "gpu_peak": {
+   "baseline_mb": 2396,
+   "peak_mb": 7921,
+   "used_by_run_mb": 5525
+  },
+  "claude_calls": 0,
+  "started_at": "2026-11-07T00:35:48.290026+00:00",
+  "resumed_stages": []
+ },
+ "models": {
+  "llm": "qwen3.5:4b-q4_K_M",
+  "embedder": "nomic-embed-text",
+  "speech": "whisper.cpp ggml-tiny.en",
+  "diarizer": "pyannote/speaker-diarization-3.1"
+ },
+ "prompt_versions": {
+  "team": "v1"
+ },
+ "n": 33,
+ "metrics": {
+  "clean": {
+   "label_accuracy": null,
+   "abstain_when_insufficient": null,
+   "answer_when_answerable": 0.8484848484848485,
+   "tokens_per_card": 1363.3636363636363,
+   "speaker_accuracy": 1.0,
+   "mrr": 0.6590909090909091,
+   "recall@1": 0.5454545454545454,
+   "recall@3": 0.7878787878787878,
+   "recall@5": 0.8181818181818182,
+   "latency_p50_ms[stage=assistance_ms]": 440.0,
+   "latency_p95_ms[stage=assistance_ms]": 1284.3999999999999,
+   "latency_p50_ms[stage=assistance_tokens]": 250.0,
+   "latency_p95_ms[stage=assistance_tokens]": 285.8,
+   "latency_p50_ms[stage=consistency_ms]": 4405.0,
+   "latency_p95_ms[stage=consistency_ms]": 7931.8,
+   "latency_p50_ms[stage=consistency_tokens]": 688.0,
+   "latency_p95_ms[stage=consistency_tokens]": 884.7999999999998,
+   "latency_p50_ms[stage=memory_ms]": 7245.0,
+   "latency_p95_ms[stage=memory_ms]": 8201.8,
+   "latency_p50_ms[stage=memory_tokens]": 567.0,
+   "latency_p95_ms[stage=memory_tokens]": 1084.6,
+   "latency_p50_ms": 8027.0,
+   "latency_p95_ms": 8524.0,
+   "latency_p50_ms[stage=assistance_ms][category=actions]": 956.0,
+   "latency_p95_ms[stage=assistance_ms][category=actions]": 1287.0,
+   "latency_p50_ms[stage=assistance_tokens][category=actions]": 260.0,
+   "latency_p95_ms[stage=assistance_tokens][category=actions]": 286.0,
+   "latency_p50_ms[stage=consistency_ms][category=actions]": 4507.0,
+   "latency_p95_ms[stage=consistency_ms][category=actions]": 7001.5,
+   "latency_p50_ms[stage=consistency_tokens][category=actions]": 701.0,
+   "latency_p95_ms[stage=consistency_tokens][category=actions]": 978.5,
+   "latency_p50_ms[stage=memory_ms][category=actions]": 7115.0,
+   "latency_p95_ms[stage=memory_ms][category=actions]": 8001.0,
+   "latency_p50_ms[stage=memory_tokens][category=actions]": 567.0,
+   "latency_p95_ms[stage=memory_tokens][category=actions]": 1129.0,
+   "latency_p50_ms[stage=assistance_ms][category=decisions]": 450.0,
+   "latency_p95_ms[stage=assistance_ms][category=decisions]": 1158.5,
+   "latency_p50_ms[stage=assistance_tokens][category=decisions]": 254.0,
+   "latency_p95_ms[stage=assistance_tokens][category=decisions]": 264.5,
+   "latency_p50_ms[stage=consistency_ms][category=decisions]": 3366.0,
+   "latency_p95_ms[stage=consistency_ms][category=decisions]": 6712.5,
+   "latency_p50_ms[stage=consistency_tokens][category=decisions]": 678.0,
+   "latency_p95_ms[stage=consistency_tokens][category=decisions]": 743.5,
+   "latency_p50_ms[stage=memory_ms][category=decisions]": 6142.0,
+   "latency_p95_ms[stage=memory_ms][category=decisions]": 8246.5,
+   "latency_p50_ms[stage=memory_tokens][category=decisions]": 569.0,
+   "latency_p95_ms[stage=memory_tokens][category=decisions]": 1009.0,
+   "latency_p50_ms[stage=assistance_ms][category=problems]": 49.0,
+   "latency_p95_ms[stage=assistance_ms][category=problems]": 1029.5,
+   "latency_p50_ms[stage=assistance_tokens][category=problems]": 0.0,
+   "latency_p95_ms[stage=assistance_tokens][category=problems]": 293.0,
+   "latency_p50_ms[stage=consistency_ms][category=problems]": 5780.0,
+   "latency_p95_ms[stage=consistency_ms][category=problems]": 7947.0,
+   "latency_p50_ms[stage=consistency_tokens][category=problems]": 689.0,
+   "latency_p95_ms[stage=consistency_tokens][category=problems]": 888.5,
+   "latency_p50_ms[stage=memory_ms][category=problems]": 7951.0,
+   "latency_p95_ms[stage=memory_ms][category=problems]": 8251.0,
+   "latency_p50_ms[stage=memory_tokens][category=problems]": 562.0,
+   "latency_p95_ms[stage=memory_tokens][category=problems]": 940.0,
+   "latency_p50_ms[stage=assistance_ms][origin=dataset]": 440.0,
+   "latency_p95_ms[stage=assistance_ms][origin=dataset]": 1284.3999999999999,
+   "latency_p50_ms[stage=assistance_tokens][origin=dataset]": 250.0,
+   "latency_p95_ms[stage=assistance_tokens][origin=dataset]": 285.8,
+   "latency_p50_ms[stage=consistency_ms][origin=dataset]": 4405.0,
+   "latency_p95_ms[stage=consistency_ms][origin=dataset]": 7931.8,
+   "latency_p50_ms[stage=consistency_tokens][origin=dataset]": 688.0,
+   "latency_p95_ms[stage=consistency_tokens][origin=dataset]": 884.7999999999998,
+   "latency_p50_ms[stage=memory_ms][origin=dataset]": 7245.0,
+   "latency_p95_ms[stage=memory_ms][origin=dataset]": 8201.8,
+   "latency_p50_ms[stage=memory_tokens][origin=dataset]": 567.0,
+   "latency_p95_ms[stage=memory_tokens][origin=dataset]": 1084.6
+  }
+ },
+ "intervals": {
+  "clean": {
+   "recall@5": [
+    0.696969696969697,
+    0.9393939393939394
+   ]
+  }
+ },
+ "comparisons": [],
+ "supersedes": [],
+ "attempts": [
+  {
+   "setting": "clean",
+   "ok": true,
+   "errored_presses": 0
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": false,
+ "label_source": "ami_rule",
+ "predictions": {
+  "clean": "results/runs/E7-20261107T011123157183Z.clean.predictions.jsonl"
+ },
+ "started_at": "2026-11-07T00:35:48.290026+00:00",
+ "finished_at": "2026-11-07T01:11:23.157183+00:00"
+}
