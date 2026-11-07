@@ -1,0 +1,858 @@
+{
+ "run_id": "E8-20261107T073426291017Z",
+ "experiment": "E8",
+ "git_commit": "600311bb09b8fea18ee611ca407cc36a97954c7b",
+ "dirty": false,
+ "dataset_hash": "9c6e5a2088e88632a65d80f9be03110cb849c57298802ffec6ef149eb7ee6692",
+ "split": "test",
+ "scenario_source": "scenarios",
+ "config": {
+  "experiment": "E8",
+  "freeze": {
+   "path": "configs/e8_freeze.json",
+   "sha256": "d0f7c3efd0e3c4261e1de4ee6f8e04956fe3dcbe9622f2f6bafc90c23932b14d",
+   "kind": "e8-freeze",
+   "experiment": "E8",
+   "chosen_on": "dev",
+   "decision_entries": [
+    49,
+    51,
+    56,
+    57,
+    58
+   ],
+   "systems": {
+    "primary": "team_shipping_changed",
+    "others": [
+     "single"
+    ]
+   },
+   "trained_team": false,
+   "assistant_setting": {
+    "env": "CONTEXTLENS_ASSISTANT",
+    "value": "team_shipping_changed"
+   },
+   "prompt_version": "v3",
+   "team_settings": {
+    "prefetch_memory": false,
+    "specialist_deadline_s": null
+   },
+   "writer_model": "qwen3.5:4b-q4_K_M",
+   "embedder_model": "nomic-embed-text",
+   "deadline_s": 8.0,
+   "retrieval": {
+    "path": "configs/retrieval.json",
+    "sha256": "da997da393bf5b89952ef7ab02603c580c187dead5cf55babab8e66bcb26f71e"
+   },
+   "trained": {
+    "checker": {
+     "path": "<local path>",
+     "sha256": "6f0cc95019bfc44a14adb8ccf13b52fdec05870392858b8e0fc7574cb2f4eba9",
+     "hash_rule": "model.safetensors",
+     "threshold": 0.5
+    }
+   },
+   "detectors": {
+    "scenarios": [
+     "prompted",
+     "tfidf"
+    ],
+    "decode": [
+     "tfidf"
+    ]
+   },
+   "search_only": [
+    "qmsum",
+    "longmemeval"
+   ],
+   "judging": {
+    "haiku": "claude-haiku-5-5",
+    "sonnet": "sonnet",
+    "sonnet_sample": 300,
+    "sample_seed": 13,
+    "max_weekly_pct": 98.0,
+    "rubric": "e2-v1"
+   },
+   "test_hashes": {
+    "scenarios": "9c6e5a2088e88632a65d80f9be03110cb849c57298802ffec6ef149eb7ee6692",
+    "qmsum": "82e97ba65aa194e38ac00f8f4d08741d650e565ae164b57c50de8ca72d12cec5",
+    "decode": "3d199f6223132363ae6b90ba2f3595278da0c1a2e19a961f1bdbd81cec49dd35"
+   },
+   "test_manifests": {
+    "paths": [
+     "datasets/splits/qmsum-scenarios.json",
+     "datasets/splits/decode-scenarios.json"
+    ],
+    "note": "The QMSum and DECODE test manifests (ids and hashes only, never text) were built by `freeze` with the same loaders and rules as dev. This is their first use, and they are committed in the same commit as this config file."
+   },
+   "cards_subset": {
+    "name": "e8-cards",
+    "path": "datasets/splits/subsets/e8-cards.json",
+    "sha256": "377f66769fb48648017e7a4ab95c2685216f5f451f6543bfae3595895e68aa72",
+    "reads": "only `id` and `conversation.source` of each line of the test file; no text",
+    "committed": "in the same commit as this config file; committed_freeze refuses otherwise"
+   }
+  },
+  "generating_commit": "a79dec7f09e31e049330eac4a986b282bb80bdd4",
+  "search_and_detector_commit": "fe53f0d6fc701ed87f5cf861cfa7b88609320428",
+  "resume_note": "The card rows were written at a79dec7f09e3 and reused: git shows the card code (prompts, agents, memory, retrieval, llm, replay, data, schemas, the product's team settings) and the frozen config unchanged between that commit and HEAD. The search stage reran at fe53f0d6fc70 after a fix to its embedding batches, and the detector stage ran there.",
+  "systems": [
+   "team_shipping_changed",
+   "single"
+  ],
+  "primary": "team_shipping_changed",
+  "consistency_checker_device": "cuda",
+  "prompt_note": "prompt v3 for every system",
+  "cards_subset": {
+   "name": "e8-cards",
+   "path": "datasets/splits/subsets/e8-cards.json",
+   "sha256": "377f66769fb48648017e7a4ab95c2685216f5f451f6543bfae3595895e68aa72",
+   "reads": "only `id` and `conversation.source` of each line of the test file; no text",
+   "committed": "in the same commit as this config file; committed_freeze refuses otherwise"
+  },
+  "cards_cases": 136,
+  "search_only_cases": {
+   "longmemeval": 10,
+   "qmsum": 367
+  },
+  "written_score": {
+   "team_shipping_changed": 0.8236053719008265,
+   "single": 0.7922661870503598
+  },
+  "primary_vs_single": {
+   "grounded_rate": "no clear difference",
+   "unsupported_claim_rate": "no clear difference",
+   "abstain_when_insufficient": "no clear difference",
+   "answer_when_answerable": "no clear difference",
+   "tokens_per_card": "worse",
+   "latency_p50_ms": "worse"
+  },
+  "judge": {
+   "model": "claude-haiku-5-5",
+   "rubric_version": "e2-v1",
+   "same_model_and_prompt_as_writer": false,
+   "via": "claude -p, one claim per call, in parallel",
+   "claims": 381,
+   "share_supported": 0.8346456692913385,
+   "calibration": "failed the written test (entry 56)"
+  },
+  "judge_note": "Haiku failed the written calibration test (docs/DECISIONS.md entry 56, record JCAL-20261105T044839474906Z, 300 claims): agreement with Sonnet 0.813 against the local judge's 0.870, a paired difference of -0.057 (95% interval -0.110 to -0.006, wholly below zero), so it counts as clearly worse under the rule as written. It is still this record's judge by the coordinator's decision, because local judging was ruled out. The explanation (the local judge and Sonnet both say 'supported' to nearly everything, so the base rate helps the local agreement) is a reading, not proof. Sonnet is a reference, not ground truth. grounded_rate and unsupported_claim_rate come from Haiku through `claude -p`, one claim per call; no person has reviewed a sample, so they are not claims.",
+  "sonnet": {
+   "model": "sonnet",
+   "sample": 300,
+   "claims_graded": 300,
+   "of_claims": 381,
+   "complete": true,
+   "remaining": 0,
+   "stopped": null,
+   "agreement_with_haiku": {
+    "claims": 300,
+    "agreement": 0.8733333333333333,
+    "haiku_yes_sonnet_no": 3,
+    "haiku_no_sonnet_yes": 35,
+    "kappa": 0.35461956521739124
+   },
+   "note": "Haiku graded every claim; Sonnet graded a seeded random sample (seed 13), so Sonnet's figure is agreement with Haiku on the sample, not a second score. If the weekly stop interrupted it (`complete` false), or more claims are wanted, the separate `sonnet-extra` step grades the rest without regrading, keeps this figure and reports the rest apart."
+  },
+  "benchmarks": {
+   "qmsum": {
+    "cases": 367,
+    "system": "hybrid_t1",
+    "metrics": {
+     "mrr": 0.5295478136758791,
+     "recall@1": 0.40054495912806537,
+     "recall@3": 0.5967302452316077,
+     "recall@5": 0.7002724795640327,
+     "recall@10": 0.8365122615803815,
+     "latency_p50_ms": 80.0,
+     "latency_p95_ms": 188.09999999999997,
+     "mrr[category=qmsum-specific]": 0.5295478136758791,
+     "recall@1[category=qmsum-specific]": 0.40054495912806537,
+     "recall@3[category=qmsum-specific]": 0.5967302452316077,
+     "recall@5[category=qmsum-specific]": 0.7002724795640327,
+     "recall@10[category=qmsum-specific]": 0.8365122615803815,
+     "latency_p50_ms[category=qmsum-specific]": 80.0,
+     "latency_p95_ms[category=qmsum-specific]": 188.09999999999997,
+     "mrr[origin=dataset]": 0.5295478136758791,
+     "recall@1[origin=dataset]": 0.40054495912806537,
+     "recall@3[origin=dataset]": 0.5967302452316077,
+     "recall@5[origin=dataset]": 0.7002724795640327,
+     "recall@10[origin=dataset]": 0.8365122615803815,
+     "latency_p50_ms[origin=dataset]": 80.0,
+     "latency_p95_ms[origin=dataset]": 188.09999999999997
+    },
+    "note": "search only: no written answer exists for these cases"
+   },
+   "longmemeval": {
+    "cases": 10,
+    "system": "hybrid_t1",
+    "metrics": {
+     "mrr": 0.8,
+     "recall@1": 0.6,
+     "recall@3": 1.0,
+     "recall@5": 1.0,
+     "recall@10": 1.0,
+     "latency_p50_ms": 1.0,
+     "latency_p95_ms": 4.100000000000001,
+     "mrr[category=recall]": 0.8,
+     "recall@1[category=recall]": 0.6,
+     "recall@3[category=recall]": 1.0,
+     "recall@5[category=recall]": 1.0,
+     "recall@10[category=recall]": 1.0,
+     "latency_p50_ms[category=recall]": 1.0,
+     "latency_p95_ms[category=recall]": 4.100000000000001,
+     "mrr[origin=dataset]": 0.8,
+     "recall@1[origin=dataset]": 0.6,
+     "recall@3[origin=dataset]": 1.0,
+     "recall@5[origin=dataset]": 1.0,
+     "recall@10[origin=dataset]": 1.0,
+     "latency_p50_ms[origin=dataset]": 1.0,
+     "latency_p95_ms[origin=dataset]": 4.100000000000001
+    },
+    "note": "search only: no written answer exists for these cases"
+   },
+   "decode": {
+    "cases": 1000,
+    "systems": [
+     "trained",
+     "tfidf"
+    ],
+    "baselines": [
+     "tfidf"
+    ],
+    "metrics": {
+     "trained": {
+      "false_alert_rate": 0.13513513513513514,
+      "f1[label=consistent]": 0.8994594594594595,
+      "f1[label=contradiction]": 0.9134883720930232,
+      "label_accuracy": 0.907,
+      "latency_p50_ms": 43.0,
+      "latency_p95_ms": 61.049999999999955
+     },
+     "tfidf": {
+      "false_alert_rate": 0.26403326403326405,
+      "f1[label=consistent]": 0.7344398340248963,
+      "f1[label=contradiction]": 0.752895752895753,
+      "label_accuracy": 0.744,
+      "latency_p50_ms": 2.0,
+      "latency_p95_ms": 3.0
+     }
+    },
+    "false_alert_comparison": {
+     "tfidf": {
+      "a": "trained",
+      "b": "tfidf",
+      "metric": "false_alert_rate",
+      "cases": 481,
+      "diff": -0.1288981288981289,
+      "ci": [
+       -0.17671517671517672,
+       -0.08108108108108109
+      ],
+      "mcnemar_p": 1.6065634901570299e-07,
+      "trained_only": 39,
+      "tfidf_only": 101,
+      "verdict": "better"
+     }
+    },
+    "note": "DECODE's score covers contradiction vs not only and is not four-label performance; its cases appear here by id only."
+   },
+   "consistency_scenarios": {
+    "cases": 136,
+    "systems": [
+     "trained",
+     "prompted",
+     "tfidf"
+    ],
+    "baselines": [
+     "prompted",
+     "tfidf"
+    ],
+    "metrics": {
+     "trained": {
+      "macro_f1": 0.7289502164502164,
+      "false_alert_rate": 0.234375,
+      "f1[label=consistent]": 0.6181818181818182,
+      "f1[label=update]": 0.9142857142857143,
+      "f1[label=contradiction]": 0.45,
+      "f1[label=insufficient]": 0.9333333333333333,
+      "label_accuracy": 0.7,
+      "ece": 0.25188721269369124,
+      "abstain_when_insufficient": 0.875,
+      "answer_when_answerable": 0.8416666666666667,
+      "latency_p50_ms": 45.0,
+      "latency_p95_ms": 69.75,
+      "label_accuracy[category=contradiction]": 0.5625,
+      "label_accuracy[category=hypothetical_or_joking]": 0.875,
+      "label_accuracy[category=insufficient_evidence]": 0.875,
+      "label_accuracy[category=legitimate_update]": 1.0,
+      "label_accuracy[category=prompt_injection]": null,
+      "label_accuracy[category=recall]": null,
+      "label_accuracy[category=respond_with_suggestion]": null,
+      "label_accuracy[category=wrong_speaker_trap]": 0.1875
+     },
+     "prompted": {
+      "macro_f1": 0.5752527486273616,
+      "false_alert_rate": 0.1875,
+      "f1[label=consistent]": 0.5396825396825397,
+      "f1[label=update]": 0.8235294117647058,
+      "f1[label=contradiction]": 0.7272727272727273,
+      "f1[label=insufficient]": 0.21052631578947367,
+      "label_accuracy": 0.6125,
+      "ece": 0.37312499999999993,
+      "abstain_when_insufficient": 0.125,
+      "answer_when_answerable": 0.875,
+      "latency_p50_ms": 561.5,
+      "latency_p95_ms": 665.5,
+      "label_accuracy[category=contradiction]": 1.0,
+      "label_accuracy[category=hypothetical_or_joking]": 0.75,
+      "label_accuracy[category=insufficient_evidence]": 0.125,
+      "label_accuracy[category=legitimate_update]": 0.875,
+      "label_accuracy[category=prompt_injection]": null,
+      "label_accuracy[category=recall]": null,
+      "label_accuracy[category=respond_with_suggestion]": null,
+      "label_accuracy[category=wrong_speaker_trap]": 0.3125
+     },
+     "tfidf": {
+      "macro_f1": 0.18902137431549196,
+      "false_alert_rate": 0.265625,
+      "f1[label=consistent]": 0.4222222222222222,
+      "f1[label=update]": 0.0,
+      "f1[label=contradiction]": 0.21621621621621623,
+      "f1[label=insufficient]": 0.11764705882352941,
+      "label_accuracy": 0.3,
+      "ece": 0.32637645153685857,
+      "abstain_when_insufficient": 0.0625,
+      "answer_when_answerable": 1.0,
+      "latency_p50_ms": 2.0,
+      "latency_p95_ms": 3.0,
+      "label_accuracy[category=contradiction]": 0.25,
+      "label_accuracy[category=hypothetical_or_joking]": 0.8125,
+      "label_accuracy[category=insufficient_evidence]": 0.0625,
+      "label_accuracy[category=legitimate_update]": 0.0,
+      "label_accuracy[category=prompt_injection]": null,
+      "label_accuracy[category=recall]": null,
+      "label_accuracy[category=respond_with_suggestion]": null,
+      "label_accuracy[category=wrong_speaker_trap]": 0.375
+     }
+    },
+    "false_alert_comparison": {
+     "prompted": {
+      "a": "trained",
+      "b": "prompted",
+      "metric": "false_alert_rate",
+      "cases": 64,
+      "diff": 0.046875,
+      "ci": [
+       -0.046875,
+       0.140625
+      ],
+      "mcnemar_p": 0.5078125,
+      "trained_only": 6,
+      "prompted_only": 3,
+      "verdict": "no clear difference"
+     },
+     "tfidf": {
+      "a": "trained",
+      "b": "tfidf",
+      "metric": "false_alert_rate",
+      "cases": 64,
+      "diff": -0.03125,
+      "ci": [
+       -0.125,
+       0.0625
+      ],
+      "mcnemar_p": 0.75390625,
+      "trained_only": 4,
+      "tfidf_only": 6,
+      "verdict": "no clear difference"
+     }
+    },
+    "note": "four-label macro-F1 on our scenarios; the trained checker against the baselines"
+   }
+  },
+  "extra_rows": {
+   "search:qmsum/hybrid_t1": {
+    "path": "results/runs/E8X-20261107T072457980506Z.search-qmsum-hybrid_t1.predictions.jsonl",
+    "sha256": "6b1b01c83e2944131a0821041bb91855de09387fe14157f540def1a721259b9a"
+   },
+   "search:longmemeval/hybrid_t1": {
+    "path": "results/runs/E8X-20261107T072457980506Z.search-longmemeval-hybrid_t1.predictions.jsonl",
+    "sha256": "bd2c55d50e25bb840dd7f9d4b9ac261bb4e0f59c8b2e5a82a974792201724e06"
+   },
+   "detector:scenarios/trained": {
+    "path": "results/runs/E8X-20261107T072457980506Z.detector-scenarios-trained.predictions.jsonl",
+    "sha256": "4cf3abe2ed859a8b41bac639464a2c9b2d128b9f65474b9d223baa3e33351235"
+   },
+   "detector:scenarios/prompted": {
+    "path": "results/runs/E8X-20261107T072457980506Z.detector-scenarios-prompted.predictions.jsonl",
+    "sha256": "f4799dffc12d27fe6db1431935d5492130316b4c0e341ff9f530de97194b6de2"
+   },
+   "detector:scenarios/tfidf": {
+    "path": "results/runs/E8X-20261107T072457980506Z.detector-scenarios-tfidf.predictions.jsonl",
+    "sha256": "d82bd017c5679127261cb6309d08b9f72407eea8f0a48329de65add0d4eae738"
+   },
+   "detector:decode/trained": {
+    "path": "results/runs/E8X-20261107T072457980506Z.detector-decode-trained.predictions.jsonl",
+    "sha256": "188eb08ce8d741d6e9aea51cf3d9feedc3e6645708484ccb0fc1db02689fe02d"
+   },
+   "detector:decode/tfidf": {
+    "path": "results/runs/E8X-20261107T072457980506Z.detector-decode-tfidf.predictions.jsonl",
+    "sha256": "4e59a02d3cdde12d1298debfffb887da929ac8c6d28cac1d45b8c90c5efbfb14"
+   }
+  },
+  "usage": {
+   "start_pct": 97.0,
+   "end_pct": 97.0,
+   "max_weekly_pct": 98.0
+  },
+  "notes": [
+   "Haiku failed the written calibration test (docs/DECISIONS.md entry 56, record JCAL-20261105T044839474906Z, 300 claims): agreement with Sonnet 0.813 against the local judge's 0.870, a paired difference of -0.057 (95% interval -0.110 to -0.006, wholly below zero), so it counts as clearly worse under the rule as written. It is still this record's judge by the coordinator's decision, because local judging was ruled out. The explanation (the local judge and Sonnet both say 'supported' to nearly everything, so the base rate helps the local agreement) is a reading, not proof. Sonnet is a reference, not ground truth. grounded_rate and unsupported_claim_rate come from Haiku through `claude -p`, one claim per call; no person has reviewed a sample, so they are not claims.",
+   "answer_when_answerable counts cards that did not abstain, not cards that answered correctly",
+   "Public benchmarks are reported separately under config.benchmarks; their rows are in config.extra_rows and are not recomputed by check_run.",
+   "Dev labels are reviewed (`labels_reviewed` is true; label source: scenarios).",
+   "The trained consistency checker is compared with `prompted` and TF-IDF in config.benchmarks (four-label macro-F1 on our scenarios, binary on DECODE); it needs no adapter and no team."
+  ],
+  "claude_calls": 0,
+  "started_at": "2026-11-07T07:19:01.284853+00:00",
+  "run_conditions": "judging only, no GPU",
+  "primary_vs_single_detail": {
+   "grounded_rate": {
+    "difference": "team_shipping_changed minus single",
+    "diff": 0.00017836970093343396,
+    "ci": [
+     -0.06491710152062363,
+     0.06626751099240083
+    ],
+    "mcnemar_p": null,
+    "verdict": "no clear difference"
+   },
+   "unsupported_claim_rate": {
+    "difference": "team_shipping_changed minus single",
+    "diff": 0.012052705799400654,
+    "ci": [
+     -0.04943983034140732,
+     0.07253031407750553
+    ],
+    "mcnemar_p": null,
+    "verdict": "no clear difference"
+   },
+   "abstain_when_insufficient": {
+    "difference": "team_shipping_changed minus single",
+    "diff": 0.0625,
+    "ci": [
+     -0.0,
+     0.21052631578947367
+    ],
+    "mcnemar_p": 1.0,
+    "verdict": "no clear difference"
+   },
+   "answer_when_answerable": {
+    "difference": "team_shipping_changed minus single",
+    "diff": -0.008333333333333304,
+    "ci": [
+     -0.025862068965517238,
+     -0.0
+    ],
+    "mcnemar_p": 1.0,
+    "verdict": "no clear difference"
+   },
+   "tokens_per_card": {
+    "difference": "team_shipping_changed minus single",
+    "diff": 794.6470588235295,
+    "ci": [
+     769.432536764706,
+     820.2579044117646
+    ],
+    "mcnemar_p": null,
+    "verdict": "worse"
+   },
+   "latency_p50_ms": {
+    "difference": "team_shipping_changed minus single",
+    "diff": 1982.5,
+    "ci": [
+     1623.0,
+     2229.0125
+    ],
+    "mcnemar_p": null,
+    "verdict": "worse"
+   }
+  },
+  "restated_from": "E8-20261107T072458163837Z",
+  "override_note": "A restatement of the same single E8 test run (same saved rows, grades and metrics; no model run, no call): not a second test run. It only corrects the written primary-against-single verdict.",
+  "claude_calls_in_original": 681,
+  "restatement": "Rows, claim grades, metrics and comparisons are those of the superseded record; only the written primary-against-single verdict was recomputed, from the comparisons, with the difference oriented as primary minus single. No model was run and no call was made."
+ },
+ "models": {
+  "writer": "qwen3.5:4b-q4_K_M",
+  "judge": "claude-haiku-5-5",
+  "cloud_grader": "sonnet",
+  "embedder": "nomic-embed-text"
+ },
+ "prompt_versions": {
+  "recall": "v3"
+ },
+ "n": 136,
+ "metrics": {
+  "team_shipping_changed": {
+   "abstain_when_insufficient": 0.8125,
+   "answer_when_answerable": 0.9916666666666667,
+   "tokens_per_card": 1349.4411764705883,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.8347107438016529,
+   "unsupported_claim_rate": 0.16393442622950818,
+   "latency_p50_ms": 4814.0,
+   "latency_p95_ms": 6829.25,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 1.0,
+   "tokens_per_card[category=contradiction]": 1461.375,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.65625,
+   "unsupported_claim_rate[category=contradiction]": 0.34375,
+   "latency_p50_ms[category=contradiction]": 6516.0,
+   "latency_p95_ms[category=contradiction]": 8023.75,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 0.9375,
+   "tokens_per_card[category=hypothetical_or_joking]": 1404.25,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 0.9333333333333333,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.06666666666666667,
+   "latency_p50_ms[category=hypothetical_or_joking]": 5373.0,
+   "latency_p95_ms[category=hypothetical_or_joking]": 6391.5,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.8125,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 1061.625,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 0.42857142857142855,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.5,
+   "latency_p50_ms[category=insufficient_evidence]": 1112.0,
+   "latency_p95_ms[category=insufficient_evidence]": 7361.0,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 1415.0625,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 0.8709677419354839,
+   "unsupported_claim_rate[category=legitimate_update]": 0.15625,
+   "latency_p50_ms[category=legitimate_update]": 5625.0,
+   "latency_p95_ms[category=legitimate_update]": 6845.75,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 1.0,
+   "tokens_per_card[category=prompt_injection]": 1283.75,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 0.7419354838709677,
+   "unsupported_claim_rate[category=prompt_injection]": 0.25,
+   "latency_p50_ms[category=prompt_injection]": 4134.5,
+   "latency_p95_ms[category=prompt_injection]": 5088.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "tokens_per_card[category=recall]": 1246.75,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 0.9375,
+   "unsupported_claim_rate[category=recall]": 0.0625,
+   "latency_p50_ms[category=recall]": 4173.0,
+   "latency_p95_ms[category=recall]": 4300.35,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 1.0,
+   "tokens_per_card[category=respond_with_suggestion]": 1567.0625,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 0.8387096774193549,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.15625,
+   "latency_p50_ms[category=respond_with_suggestion]": 5138.0,
+   "latency_p95_ms[category=respond_with_suggestion]": 6430.0,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 1.0,
+   "tokens_per_card[category=wrong_speaker_trap]": 1326.875,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.921875,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.078125,
+   "latency_p50_ms[category=wrong_speaker_trap]": 4262.0,
+   "latency_p95_ms[category=wrong_speaker_trap]": 6019.15,
+   "abstain_when_insufficient[origin=synthetic]": 0.8125,
+   "answer_when_answerable[origin=synthetic]": 0.9916666666666667,
+   "tokens_per_card[origin=synthetic]": 1349.4411764705883,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.8347107438016529,
+   "unsupported_claim_rate[origin=synthetic]": 0.16393442622950818,
+   "latency_p50_ms[origin=synthetic]": 4814.0,
+   "latency_p95_ms[origin=synthetic]": 6829.25
+  },
+  "single": {
+   "abstain_when_insufficient": 0.75,
+   "answer_when_answerable": 1.0,
+   "tokens_per_card": 554.7941176470588,
+   "cost_usd_per_card": 0.0,
+   "speaker_accuracy": 1.0,
+   "grounded_rate": 0.8345323741007195,
+   "unsupported_claim_rate": 0.15188172043010753,
+   "latency_p50_ms": 2831.5,
+   "latency_p95_ms": 4859.0,
+   "abstain_when_insufficient[category=contradiction]": null,
+   "answer_when_answerable[category=contradiction]": 1.0,
+   "tokens_per_card[category=contradiction]": 590.9375,
+   "cost_usd_per_card[category=contradiction]": 0.0,
+   "speaker_accuracy[category=contradiction]": 1.0,
+   "grounded_rate[category=contradiction]": 0.7619047619047619,
+   "unsupported_claim_rate[category=contradiction]": 0.2708333333333333,
+   "latency_p50_ms[category=contradiction]": 3693.5,
+   "latency_p95_ms[category=contradiction]": 5581.5,
+   "abstain_when_insufficient[category=hypothetical_or_joking]": null,
+   "answer_when_answerable[category=hypothetical_or_joking]": 1.0,
+   "tokens_per_card[category=hypothetical_or_joking]": 611.3125,
+   "cost_usd_per_card[category=hypothetical_or_joking]": 0.0,
+   "speaker_accuracy[category=hypothetical_or_joking]": 1.0,
+   "grounded_rate[category=hypothetical_or_joking]": 0.75,
+   "unsupported_claim_rate[category=hypothetical_or_joking]": 0.23958333333333334,
+   "latency_p50_ms[category=hypothetical_or_joking]": 3635.5,
+   "latency_p95_ms[category=hypothetical_or_joking]": 5456.0,
+   "abstain_when_insufficient[category=insufficient_evidence]": 0.75,
+   "answer_when_answerable[category=insufficient_evidence]": null,
+   "tokens_per_card[category=insufficient_evidence]": 447.8125,
+   "cost_usd_per_card[category=insufficient_evidence]": 0.0,
+   "speaker_accuracy[category=insufficient_evidence]": 1.0,
+   "grounded_rate[category=insufficient_evidence]": 0.5,
+   "unsupported_claim_rate[category=insufficient_evidence]": 0.5,
+   "latency_p50_ms[category=insufficient_evidence]": 1391.5,
+   "latency_p95_ms[category=insufficient_evidence]": 3119.25,
+   "abstain_when_insufficient[category=legitimate_update]": null,
+   "answer_when_answerable[category=legitimate_update]": 1.0,
+   "tokens_per_card[category=legitimate_update]": 562.4375,
+   "cost_usd_per_card[category=legitimate_update]": 0.0,
+   "speaker_accuracy[category=legitimate_update]": 1.0,
+   "grounded_rate[category=legitimate_update]": 0.8888888888888888,
+   "unsupported_claim_rate[category=legitimate_update]": 0.09375,
+   "latency_p50_ms[category=legitimate_update]": 3125.5,
+   "latency_p95_ms[category=legitimate_update]": 4297.5,
+   "abstain_when_insufficient[category=prompt_injection]": null,
+   "answer_when_answerable[category=prompt_injection]": 1.0,
+   "tokens_per_card[category=prompt_injection]": 499.5,
+   "cost_usd_per_card[category=prompt_injection]": 0.0,
+   "speaker_accuracy[category=prompt_injection]": 1.0,
+   "grounded_rate[category=prompt_injection]": 0.8125,
+   "unsupported_claim_rate[category=prompt_injection]": 0.1875,
+   "latency_p50_ms[category=prompt_injection]": 2527.0,
+   "latency_p95_ms[category=prompt_injection]": 3067.0,
+   "abstain_when_insufficient[category=recall]": null,
+   "answer_when_answerable[category=recall]": 1.0,
+   "tokens_per_card[category=recall]": 480.375,
+   "cost_usd_per_card[category=recall]": 0.0,
+   "speaker_accuracy[category=recall]": 1.0,
+   "grounded_rate[category=recall]": 0.875,
+   "unsupported_claim_rate[category=recall]": 0.125,
+   "latency_p50_ms[category=recall]": 2390.5,
+   "latency_p95_ms[category=recall]": 2592.9,
+   "abstain_when_insufficient[category=respond_with_suggestion]": null,
+   "answer_when_answerable[category=respond_with_suggestion]": 1.0,
+   "tokens_per_card[category=respond_with_suggestion]": 727.6875,
+   "cost_usd_per_card[category=respond_with_suggestion]": 0.0,
+   "speaker_accuracy[category=respond_with_suggestion]": 1.0,
+   "grounded_rate[category=respond_with_suggestion]": 0.8421052631578947,
+   "unsupported_claim_rate[category=respond_with_suggestion]": 0.07291666666666666,
+   "latency_p50_ms[category=respond_with_suggestion]": 3270.5,
+   "latency_p95_ms[category=respond_with_suggestion]": 5250.0,
+   "abstain_when_insufficient[category=wrong_speaker_trap]": null,
+   "answer_when_answerable[category=wrong_speaker_trap]": 1.0,
+   "tokens_per_card[category=wrong_speaker_trap]": 517.9375,
+   "cost_usd_per_card[category=wrong_speaker_trap]": 0.0,
+   "speaker_accuracy[category=wrong_speaker_trap]": 1.0,
+   "grounded_rate[category=wrong_speaker_trap]": 0.9393939393939394,
+   "unsupported_claim_rate[category=wrong_speaker_trap]": 0.0625,
+   "latency_p50_ms[category=wrong_speaker_trap]": 2630.0,
+   "latency_p95_ms[category=wrong_speaker_trap]": 3610.7,
+   "abstain_when_insufficient[origin=synthetic]": 0.75,
+   "answer_when_answerable[origin=synthetic]": 1.0,
+   "tokens_per_card[origin=synthetic]": 554.7941176470588,
+   "cost_usd_per_card[origin=synthetic]": 0.0,
+   "speaker_accuracy[origin=synthetic]": 1.0,
+   "grounded_rate[origin=synthetic]": 0.8345323741007195,
+   "unsupported_claim_rate[origin=synthetic]": 0.15188172043010753,
+   "latency_p50_ms[origin=synthetic]": 2831.5,
+   "latency_p95_ms[origin=synthetic]": 4859.0
+  }
+ },
+ "intervals": {
+  "team_shipping_changed": {
+   "grounded_rate": [
+    0.7815126050420168,
+    0.8833333333333333
+   ],
+   "unsupported_claim_rate": [
+    0.1169287634408602,
+    0.21487603305785125
+   ],
+   "abstain_when_insufficient": [
+    0.6,
+    1.0
+   ],
+   "answer_when_answerable": [
+    0.9741379310344828,
+    1.0
+   ],
+   "tokens_per_card": [
+    1315.9558823529412,
+    1382.7597426470588
+   ],
+   "latency_p50_ms": [
+    4363.0,
+    5155.0
+   ],
+   "latency_p95_ms": [
+    6457.2125,
+    7374.5
+   ]
+  },
+  "single": {
+   "grounded_rate": [
+    0.7730496453900709,
+    0.8931297709923665
+   ],
+   "unsupported_claim_rate": [
+    0.09443989071038253,
+    0.21527777777777776
+   ],
+   "abstain_when_insufficient": [
+    0.5,
+    0.9412581699346393
+   ],
+   "answer_when_answerable": [
+    1.0,
+    1.0
+   ],
+   "tokens_per_card": [
+    539.6983455882354,
+    571.0518382352941
+   ],
+   "latency_p50_ms": [
+    2653.5,
+    3128.5
+   ],
+   "latency_p95_ms": [
+    3973.75,
+    5566.0
+   ]
+  }
+ },
+ "comparisons": [
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "grounded_rate",
+   "diff": -0.00017836970093343396,
+   "ci": [
+    -0.06626751099240083,
+    0.06491710152062363
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "unsupported_claim_rate",
+   "diff": -0.012052705799400654,
+   "ci": [
+    -0.07253031407750553,
+    0.04943983034140732
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "abstain_when_insufficient",
+   "diff": -0.0625,
+   "ci": [
+    -0.21052631578947367,
+    0.0
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "answer_when_answerable",
+   "diff": 0.008333333333333304,
+   "ci": [
+    0.0,
+    0.025862068965517238
+   ],
+   "mcnemar_p": 1.0
+  },
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "tokens_per_card",
+   "diff": -794.6470588235295,
+   "ci": [
+    -820.2579044117646,
+    -769.432536764706
+   ],
+   "mcnemar_p": null
+  },
+  {
+   "a": "single",
+   "b": "team_shipping_changed",
+   "metric": "latency_p50_ms",
+   "diff": -1982.5,
+   "ci": [
+    -2229.0125,
+    -1623.0
+   ],
+   "mcnemar_p": null
+  }
+ ],
+ "supersedes": [
+  {
+   "run_id": "E8-20261107T072458163837Z",
+   "reason": "config.primary_vs_single was empty: the verdict filter matched primary then single but every card comparison is saved single then primary; recomputed from the saved comparisons, oriented as primary minus single"
+  }
+ ],
+ "subset": "e8-cards",
+ "attempts": [
+  {
+   "setting": "team_shipping_changed",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 3,
+    "ok": 133,
+    "abstained": 14,
+    "n": 136
+   }
+  },
+  {
+   "setting": "single",
+   "kind": "card system",
+   "ok": true,
+   "error": null,
+   "health": {
+    "broken": 0,
+    "invalid": 0,
+    "timeout": 0,
+    "ok": 136,
+    "abstained": 12,
+    "n": 136
+   }
+  }
+ ],
+ "claude_calls": 0,
+ "labels_reviewed": true,
+ "label_source": "scenarios",
+ "predictions": {
+  "team_shipping_changed": "results/runs/E8-20261107T073426291017Z.team_shipping_changed.predictions.jsonl",
+  "single": "results/runs/E8-20261107T073426291017Z.single.predictions.jsonl"
+ },
+ "started_at": "2026-11-07T07:19:01.284853+00:00",
+ "finished_at": "2026-11-07T07:34:26.291017+00:00"
+}
