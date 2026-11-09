@@ -486,7 +486,7 @@ def test_the_command_refuses_to_start_without_claude_or_with_too_few_calls_left(
     monkeypatch.setattr(e2.shutil, "which", lambda name: None)
     assert e2.main([]) == 3  # no claude command
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    counter.write_text(json.dumps({"count": 5000, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
+    counter.write_text(json.dumps({"count": client.CLAUDE_CALL_CAP, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
     assert e2.main([]) == 3  # the cap leaves no call
 
 
@@ -503,10 +503,11 @@ def test_the_budget_is_what_the_cap_leaves_up_to_one_stage_limit(tmp_path: Path,
     counter = tmp_path / "claude_calls.json"
     monkeypatch.setattr(client, "CLAUDE_CALLS_PATH", counter)
     monkeypatch.setattr(e2.shutil, "which", lambda name: "claude")
-    for count in (0, 4700, 4900):
+    cap = client.CLAUDE_CALL_CAP
+    for count in (0, cap - 300, cap - 100):
         counter.write_text(json.dumps({"count": count, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}), encoding="utf-8")
         assert e2.main([]) == 0
-    assert seen == [(5000, 5000), (300, 5000), (100, 5000)]
+    assert seen == [(cap, cap), (300, cap), (100, cap)]
     assert not hasattr(e2, "CLOUD_CALL_CAP")
 
 
