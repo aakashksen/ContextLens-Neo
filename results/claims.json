@@ -411,86 +411,6 @@
    "value": 0.9772727272727273
   },
   {
-   "id": "E1-bm25_t1-recall@5",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "bm25_t1",
-   "value": 0.6811594202898551
-  },
-  {
-   "id": "E1-bm25_t1-mrr",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "mrr",
-   "system": "bm25_t1",
-   "value": 0.49973161567364466
-  },
-  {
-   "id": "E1-dense_t1-recall@5",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "dense_t1",
-   "value": 0.7318840579710145
-  },
-  {
-   "id": "E1-dense_t1-mrr",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "mrr",
-   "system": "dense_t1",
-   "value": 0.5518010505329346
-  },
-  {
-   "id": "E1-hybrid_t1-recall@5",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "hybrid_t1",
-   "value": 0.7681159420289855
-  },
-  {
-   "id": "E1-hybrid_t1-mrr",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "mrr",
-   "system": "hybrid_t1",
-   "value": 0.564035541752933
-  },
-  {
-   "id": "E1-hybrid_rerank_t1-recall@5",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "hybrid_rerank_t1",
-   "value": 0.7536231884057971
-  },
-  {
-   "id": "E1-hybrid_rerank_t1-mrr",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "mrr",
-   "system": "hybrid_rerank_t1",
-   "value": 0.5634422206885975
-  },
-  {
-   "id": "E1-hybrid_w3-recall@5",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "hybrid_w3",
-   "value": 0.5966183574879227
-  },
-  {
-   "id": "E1-hybrid_w3-mrr",
-   "run_id": "E1-20261103T035342386305Z",
-   "kind": "metric",
-   "metric": "mrr",
-   "system": "hybrid_w3",
-   "value": 0.4609960892569588
-  },
-  {
    "id": "E2-recent-abstain_when_insufficient",
    "run_id": "E2-20261104T011721815005Z",
    "kind": "metric",
@@ -795,22 +715,6 @@
    "value": 4870.5
   },
   {
-   "id": "E7before-clean-answer_when_answerable",
-   "run_id": "E7-20261107T011123157183Z",
-   "kind": "metric",
-   "metric": "answer_when_answerable",
-   "system": "clean",
-   "value": 0.8484848484848485
-  },
-  {
-   "id": "E7before-clean-recall@5",
-   "run_id": "E7-20261107T011123157183Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "clean",
-   "value": 0.8181818181818182
-  },
-  {
    "id": "E7before-clean-tokens_per_card",
    "run_id": "E7-20261107T011123157183Z",
    "kind": "metric",
@@ -825,22 +729,6 @@
    "metric": "latency_p50_ms",
    "system": "clean",
    "value": 8027.0
-  },
-  {
-   "id": "E7after-clean-answer_when_answerable",
-   "run_id": "E7-20261107T023701185115Z",
-   "kind": "metric",
-   "metric": "answer_when_answerable",
-   "system": "clean",
-   "value": 0.7575757575757576
-  },
-  {
-   "id": "E7after-clean-recall@5",
-   "run_id": "E7-20261107T023701185115Z",
-   "kind": "metric",
-   "metric": "recall@5",
-   "system": "clean",
-   "value": 0.696969696969697
   },
   {
    "id": "E7after-clean-tokens_per_card",
@@ -875,102 +763,6 @@
    "system": "asr_pipeline",
    "value": 0.5994588868276943,
    "text": "streamed speaker error on AMI, on published labels (the published speaker segments)"
-  },
-  {
-   "id": "E4scen-trained-macro_f1",
-   "run_id": "E4-20261103T102658868337Z",
-   "kind": "metric",
-   "metric": "macro_f1",
-   "system": "trained",
-   "value": 0.792519305019305
-  },
-  {
-   "id": "E4scen-tfidf-macro_f1",
-   "run_id": "E4-20261103T102658868337Z",
-   "kind": "metric",
-   "metric": "macro_f1",
-   "system": "tfidf",
-   "value": 0.1776035886052534
-  },
-  {
-   "id": "E4scen-zeroshot-macro_f1",
-   "run_id": "E4-20261103T102658868337Z",
-   "kind": "metric",
-   "metric": "macro_f1",
-   "system": "zeroshot",
-   "value": 0.19752798507462688
-  },
-  {
-   "id": "E4scen-prompted-macro_f1",
-   "run_id": "E4-20261103T102658868337Z",
-   "kind": "metric",
-   "metric": "macro_f1",
-   "system": "prompted",
-   "value": 0.5161674620096794
-  },
-  {
-   "id": "E4decode-trained-false_alert_rate",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "false_alert_rate",
-   "system": "trained",
-   "value": 0.12127236580516898
-  },
-  {
-   "id": "E4decode-trained-label_accuracy",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "label_accuracy",
-   "system": "trained",
-   "value": 0.917
-  },
-  {
-   "id": "E4decode-tfidf-false_alert_rate",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "false_alert_rate",
-   "system": "tfidf",
-   "value": 0.2485089463220676
-  },
-  {
-   "id": "E4decode-tfidf-label_accuracy",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "label_accuracy",
-   "system": "tfidf",
-   "value": 0.763
-  },
-  {
-   "id": "E4decode-zeroshot-false_alert_rate",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "false_alert_rate",
-   "system": "zeroshot",
-   "value": 0.4731610337972167
-  },
-  {
-   "id": "E4decode-zeroshot-label_accuracy",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "label_accuracy",
-   "system": "zeroshot",
-   "value": 0.715
-  },
-  {
-   "id": "E4decode-prompted-false_alert_rate",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "false_alert_rate",
-   "system": "prompted",
-   "value": 0.02186878727634195
-  },
-  {
-   "id": "E4decode-prompted-label_accuracy",
-   "run_id": "E4-20261103T102930546849Z",
-   "kind": "metric",
-   "metric": "label_accuracy",
-   "system": "prompted",
-   "value": 0.8
   },
   {
    "id": "E8bench-consistency_scenarios-trained-macro_f1",
@@ -1093,6 +885,19 @@
    "value": 0,
    "commit": "ca71e8c61b2e92f2e30c865d02b0d27da2b73ba1",
    "text": "blind held-out guard check"
+  },
+  {
+   "id": "E5-adapter-vs-prompted-abstain_when_insufficient-ci",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "comparison",
+   "metric": "abstain_when_insufficient",
+   "a": "adapter",
+   "b": "prompted",
+   "field": "ci",
+   "value": [
+    -0.75,
+    -0.25
+   ]
   }
  ]
 }
