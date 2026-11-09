@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ("docs/REPORT.md", "docs/RESUME-TARGETS.md", "README.md")
 
-FENCE = re.compile(r"^```.*?^```[ \t]*$", re.M | re.S)
+FENCE = re.compile(r"^[ \t]*```.*?^[ \t]*```[ \t]*$", re.M | re.S)
 INLINE = re.compile(r"`[^`\n]*`")
 # The only things not read as numbers. Each is narrow on purpose; see tests/test_check_report_numbers.py.
 IGNORED = [

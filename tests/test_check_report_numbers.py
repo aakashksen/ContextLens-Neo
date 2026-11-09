@@ -88,6 +88,7 @@ def test_a_record_no_claim_cites_gives_no_counts(tmp_path: Path) -> None:
     "recall@5 and p95 and ES2003a.",
     "## 3. Data\n\n### 4.2 Detail\n\n1. First\n2) Second\n",
     "```\ndocker run -p 8000:8000 --gpus 1\n```\n",
+    "1. Start it\n   ```\n   docker run -p 8000:8000\n   ```\n",
 ])
 def test_the_narrow_ignore_rules(tmp_path: Path, text: str) -> None:
     assert _problems(tmp_path, text + "\n") == []
