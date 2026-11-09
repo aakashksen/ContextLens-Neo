@@ -74,7 +74,8 @@ def _label_problems(cid: str, c: dict[str, Any], rec: dict[str, Any]) -> list[st
     return [] if rec.get("labels_reviewed") else [f"claim {cid}: run has labels_reviewed false"]
 
 
-def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated: list[str]) -> list[str]:
+def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated: list[str],
+                    record_problems: dict[str, list[str]]) -> list[str]:
     cid = c.get("id", "?")
     problem, metric = _value_problem(c, rec)
     problems = [f"claim {cid}: {problem}"] if problem else []
@@ -83,7 +84,11 @@ def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated
     problems += _label_problems(cid, c, rec)
     if c.get("run_id") in superseded_by(rec.get("experiment", ""), root):
         problems.append(f"claim {cid}: run {c.get('run_id')} is superseded by a later record")
-    problems += [f"claim {cid}: run: {m}" for m in check_record(rec, root)]
+    # The full record check re-bootstraps every interval, so it runs once per record in this call (never cached across runs).
+    rid = str(c.get("run_id"))
+    if rid not in record_problems:
+        record_problems[rid] = check_record(rec, root)
+    problems += [f"claim {cid}: run: {m}" for m in record_problems[rid]]
     problems += [f"claim {cid}: run: {m}" for m in repeated if m.startswith(f"{c.get('run_id')}:")]
     return problems
 
@@ -94,6 +99,7 @@ def check_claims(root: Path = ROOT) -> list[str]:
         return ["claims.json must have a 'claims' key holding a list"]
     problems: list[str] = []
     repeated: list[str] | None = None
+    record_problems: dict[str, list[str]] = {}
     for c in claims:
         path = root / RUNS_REL / f"{c.get('run_id')}.json"
         if not path.is_file():
@@ -102,7 +108,8 @@ def check_claims(root: Path = ROOT) -> list[str]:
         rec = json.loads(path.read_text(encoding="utf-8"))
         if rec.get("split") == "test" and repeated is None:
             repeated = _test_once_problems(root)  # computed once, and only when a claim cites a test record
-        problems += _claim_problems(c, rec, root, repeated if rec.get("split") == "test" and repeated else [])
+        problems += _claim_problems(c, rec, root, repeated if rec.get("split") == "test" and repeated else [],
+                                   record_problems)
     return problems
 
 
