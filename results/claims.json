@@ -1,3 +1,1098 @@
 {
- "claims": []
+ "claims": [
+  {
+   "id": "E8-single-tokens_per_card",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "single",
+   "value": 554.7941176470588
+  },
+  {
+   "id": "E8-single-latency_p50_ms",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "single",
+   "value": 2831.5
+  },
+  {
+   "id": "E8-single-latency_p95_ms",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "latency_p95_ms",
+   "system": "single",
+   "value": 4859.0
+  },
+  {
+   "id": "E8-single-abstain_when_insufficient",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "single",
+   "value": 0.75
+  },
+  {
+   "id": "E8-single-answer_when_answerable",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "single",
+   "value": 1.0
+  },
+  {
+   "id": "E8-single-speaker_accuracy",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "speaker_accuracy",
+   "system": "single",
+   "value": 1.0
+  },
+  {
+   "id": "E8-team_shipping_changed-tokens_per_card",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "team_shipping_changed",
+   "value": 1349.4411764705883
+  },
+  {
+   "id": "E8-team_shipping_changed-latency_p50_ms",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "team_shipping_changed",
+   "value": 4814.0
+  },
+  {
+   "id": "E8-team_shipping_changed-latency_p95_ms",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "latency_p95_ms",
+   "system": "team_shipping_changed",
+   "value": 6829.25
+  },
+  {
+   "id": "E8-team_shipping_changed-abstain_when_insufficient",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "team_shipping_changed",
+   "value": 0.8125
+  },
+  {
+   "id": "E8-team_shipping_changed-answer_when_answerable",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "team_shipping_changed",
+   "value": 0.9916666666666667
+  },
+  {
+   "id": "E8-team_shipping_changed-speaker_accuracy",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "metric",
+   "metric": "speaker_accuracy",
+   "system": "team_shipping_changed",
+   "value": 1.0
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-tokens_per_card-diff",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "tokens_per_card",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "diff",
+   "value": -794.6470588235295
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-tokens_per_card-ci",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "tokens_per_card",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "ci",
+   "value": [
+    -820.2579044117646,
+    -769.432536764706
+   ]
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-latency_p50_ms-diff",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "latency_p50_ms",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "diff",
+   "value": -1982.5
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-latency_p50_ms-ci",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "latency_p50_ms",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "ci",
+   "value": [
+    -2229.0125,
+    -1623.0
+   ]
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-abstain_when_insufficient-diff",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "abstain_when_insufficient",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "diff",
+   "value": -0.0625
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-abstain_when_insufficient-ci",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "abstain_when_insufficient",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "ci",
+   "value": [
+    -0.21052631578947367,
+    0.0
+   ]
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-answer_when_answerable-diff",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "answer_when_answerable",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "diff",
+   "value": 0.008333333333333304
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-answer_when_answerable-ci",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "answer_when_answerable",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "ci",
+   "value": [
+    0.0,
+    0.025862068965517238
+   ]
+  },
+  {
+   "id": "E8-single-vs-team_shipping_changed-abstain_when_insufficient-mcnemar_p",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "comparison",
+   "metric": "abstain_when_insufficient",
+   "a": "single",
+   "b": "team_shipping_changed",
+   "field": "mcnemar_p",
+   "value": 1.0
+  },
+  {
+   "id": "E6-v1-abstain_when_insufficient",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v1",
+   "value": 0.8125
+  },
+  {
+   "id": "E6-v1-answer_when_answerable",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v1",
+   "value": 0.946969696969697
+  },
+  {
+   "id": "E6-v3-abstain_when_insufficient",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v3",
+   "value": 0.8125
+  },
+  {
+   "id": "E6-v3-answer_when_answerable",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v3",
+   "value": 0.9545454545454546
+  },
+  {
+   "id": "E6-v4-abstain_when_insufficient",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v4",
+   "value": 1.0
+  },
+  {
+   "id": "E6-v4-answer_when_answerable",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v4",
+   "value": 0.3106060606060606
+  },
+  {
+   "id": "E6-v6-abstain_when_insufficient",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v6",
+   "value": 0.3125
+  },
+  {
+   "id": "E6-v6-answer_when_answerable",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v6",
+   "value": 0.9772727272727273
+  },
+  {
+   "id": "E6-v1-tokens_per_card",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "v1",
+   "value": 634.0202702702703
+  },
+  {
+   "id": "E6-v1-latency_p50_ms",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "v1",
+   "value": 2723.5
+  },
+  {
+   "id": "E6-v3-tokens_per_card",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "v3",
+   "value": 601.9527027027027
+  },
+  {
+   "id": "E6-v3-latency_p50_ms",
+   "run_id": "E6-20261105T223904724358Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "v3",
+   "value": 2361.5
+  },
+  {
+   "id": "E5-prompted-abstain_when_insufficient",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "prompted",
+   "value": 0.9375
+  },
+  {
+   "id": "E5-prompted-answer_when_answerable",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "prompted",
+   "value": 0.21212121212121213
+  },
+  {
+   "id": "E5-prompted-schema_valid_rate",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "schema_valid_rate",
+   "system": "prompted",
+   "value": 1.0
+  },
+  {
+   "id": "E5-prompted-latency_p50_ms",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "prompted",
+   "value": 7155.0
+  },
+  {
+   "id": "E5-adapter-abstain_when_insufficient",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "adapter",
+   "value": 0.4375
+  },
+  {
+   "id": "E5-adapter-answer_when_answerable",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "adapter",
+   "value": 0.9621212121212122
+  },
+  {
+   "id": "E5-adapter-schema_valid_rate",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "schema_valid_rate",
+   "system": "adapter",
+   "value": 1.0
+  },
+  {
+   "id": "E5-adapter-latency_p50_ms",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "adapter",
+   "value": 23886.0
+  },
+  {
+   "id": "E5-adapter-vs-prompted-abstain_when_insufficient-diff",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "comparison",
+   "metric": "abstain_when_insufficient",
+   "a": "adapter",
+   "b": "prompted",
+   "field": "diff",
+   "value": -0.5
+  },
+  {
+   "id": "E5-adapter-vs-prompted-answer_when_answerable-diff",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "comparison",
+   "metric": "answer_when_answerable",
+   "a": "adapter",
+   "b": "prompted",
+   "field": "diff",
+   "value": 0.75
+  },
+  {
+   "id": "E3-single-abstain_when_insufficient",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "single",
+   "value": 0.875
+  },
+  {
+   "id": "E3-single-answer_when_answerable",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "single",
+   "value": 0.946969696969697
+  },
+  {
+   "id": "E3-team-abstain_when_insufficient",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "team",
+   "value": 0.3125
+  },
+  {
+   "id": "E3-team-answer_when_answerable",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "team",
+   "value": 0.9772727272727273
+  },
+  {
+   "id": "E1-bm25_t1-recall@5",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "bm25_t1",
+   "value": 0.6811594202898551
+  },
+  {
+   "id": "E1-bm25_t1-mrr",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "mrr",
+   "system": "bm25_t1",
+   "value": 0.49973161567364466
+  },
+  {
+   "id": "E1-dense_t1-recall@5",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "dense_t1",
+   "value": 0.7318840579710145
+  },
+  {
+   "id": "E1-dense_t1-mrr",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "mrr",
+   "system": "dense_t1",
+   "value": 0.5518010505329346
+  },
+  {
+   "id": "E1-hybrid_t1-recall@5",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "hybrid_t1",
+   "value": 0.7681159420289855
+  },
+  {
+   "id": "E1-hybrid_t1-mrr",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "mrr",
+   "system": "hybrid_t1",
+   "value": 0.564035541752933
+  },
+  {
+   "id": "E1-hybrid_rerank_t1-recall@5",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "hybrid_rerank_t1",
+   "value": 0.7536231884057971
+  },
+  {
+   "id": "E1-hybrid_rerank_t1-mrr",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "mrr",
+   "system": "hybrid_rerank_t1",
+   "value": 0.5634422206885975
+  },
+  {
+   "id": "E1-hybrid_w3-recall@5",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "hybrid_w3",
+   "value": 0.5966183574879227
+  },
+  {
+   "id": "E1-hybrid_w3-mrr",
+   "run_id": "E1-20261103T035342386305Z",
+   "kind": "metric",
+   "metric": "mrr",
+   "system": "hybrid_w3",
+   "value": 0.4609960892569588
+  },
+  {
+   "id": "E2-recent-abstain_when_insufficient",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "recent",
+   "value": 0.9375
+  },
+  {
+   "id": "E2-recent-answer_when_answerable",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "recent",
+   "value": 0.6590909090909091
+  },
+  {
+   "id": "E2-recent-tokens_per_card",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "recent",
+   "value": 411.5135135135135
+  },
+  {
+   "id": "E2-full-abstain_when_insufficient",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "full",
+   "value": 0.9375
+  },
+  {
+   "id": "E2-full-answer_when_answerable",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "full",
+   "value": 0.6742424242424242
+  },
+  {
+   "id": "E2-full-tokens_per_card",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "full",
+   "value": 410.0878378378378
+  },
+  {
+   "id": "E2-retrieval-abstain_when_insufficient",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "retrieval",
+   "value": 0.9375
+  },
+  {
+   "id": "E2-retrieval-answer_when_answerable",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "retrieval",
+   "value": 0.6742424242424242
+  },
+  {
+   "id": "E2-retrieval-tokens_per_card",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "retrieval",
+   "value": 409.56081081081084
+  },
+  {
+   "id": "E2-retrieval_memory-abstain_when_insufficient",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "retrieval_memory",
+   "value": 0.5
+  },
+  {
+   "id": "E2-retrieval_memory-answer_when_answerable",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "retrieval_memory",
+   "value": 0.946969696969697
+  },
+  {
+   "id": "E2-retrieval_memory-tokens_per_card",
+   "run_id": "E2-20261104T011721815005Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "retrieval_memory",
+   "value": 565.277027027027
+  },
+  {
+   "id": "E2-full_local-abstain_when_insufficient",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "full_local",
+   "value": 0.9375
+  },
+  {
+   "id": "E2-full_local-answer_when_answerable",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "full_local",
+   "value": 0.6742424242424242
+  },
+  {
+   "id": "E2-full_local-latency_p50_ms",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "full_local",
+   "value": 1799.5
+  },
+  {
+   "id": "E2-full_local-cost_usd_per_card",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "cost_usd_per_card",
+   "system": "full_local",
+   "value": 0.0
+  },
+  {
+   "id": "E2-full_cloud-abstain_when_insufficient",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "full_cloud",
+   "value": 1.0
+  },
+  {
+   "id": "E2-full_cloud-answer_when_answerable",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "full_cloud",
+   "value": 0.8712121212121212
+  },
+  {
+   "id": "E2-full_cloud-latency_p50_ms",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "full_cloud",
+   "value": 5682.5
+  },
+  {
+   "id": "E2-full_cloud-cost_usd_per_card",
+   "run_id": "E2-20261104T011906729928Z",
+   "kind": "metric",
+   "metric": "cost_usd_per_card",
+   "system": "full_cloud",
+   "value": 0.01800522702702703
+  },
+  {
+   "id": "E3-recent-tokens_per_card",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "recent",
+   "value": 411.5135135135135
+  },
+  {
+   "id": "E3-recent-latency_p50_ms",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "recent",
+   "value": 2012.5
+  },
+  {
+   "id": "E3-retrieval_memory-tokens_per_card",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "retrieval_memory",
+   "value": 565.277027027027
+  },
+  {
+   "id": "E3-retrieval_memory-latency_p50_ms",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "retrieval_memory",
+   "value": 2853.5
+  },
+  {
+   "id": "E3-single-tokens_per_card",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "single",
+   "value": 634.0202702702703
+  },
+  {
+   "id": "E3-single-latency_p50_ms",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "single",
+   "value": 2834.0
+  },
+  {
+   "id": "E3-team-tokens_per_card",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "team",
+   "value": 1534.581081081081
+  },
+  {
+   "id": "E3-team-latency_p50_ms",
+   "run_id": "E3-20261104T011047113852Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "team",
+   "value": 3908.0
+  },
+  {
+   "id": "E5-prompted-tokens_per_card",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "prompted",
+   "value": 453.3378378378378
+  },
+  {
+   "id": "E5-adapter-tokens_per_card",
+   "run_id": "E5-20261106T222951150994Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "adapter",
+   "value": 631.0202702702703
+  },
+  {
+   "id": "E6team-v1-abstain_when_insufficient",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v1",
+   "value": 1.0
+  },
+  {
+   "id": "E6team-v1-answer_when_answerable",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v1",
+   "value": 0.9772727272727273
+  },
+  {
+   "id": "E6team-v1-tokens_per_card",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "v1",
+   "value": 1421.3108108108108
+  },
+  {
+   "id": "E6team-v1-latency_p50_ms",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "v1",
+   "value": 4433.5
+  },
+  {
+   "id": "E6team-v3-abstain_when_insufficient",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "abstain_when_insufficient",
+   "system": "v3",
+   "value": 1.0
+  },
+  {
+   "id": "E6team-v3-answer_when_answerable",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "v3",
+   "value": 0.9696969696969697
+  },
+  {
+   "id": "E6team-v3-tokens_per_card",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "v3",
+   "value": 1420.3918918918919
+  },
+  {
+   "id": "E6team-v3-latency_p50_ms",
+   "run_id": "E6-20261106T000633991380Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "v3",
+   "value": 4870.5
+  },
+  {
+   "id": "E7before-clean-answer_when_answerable",
+   "run_id": "E7-20261107T011123157183Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "clean",
+   "value": 0.8484848484848485
+  },
+  {
+   "id": "E7before-clean-recall@5",
+   "run_id": "E7-20261107T011123157183Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "clean",
+   "value": 0.8181818181818182
+  },
+  {
+   "id": "E7before-clean-tokens_per_card",
+   "run_id": "E7-20261107T011123157183Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "clean",
+   "value": 1363.3636363636363
+  },
+  {
+   "id": "E7before-clean-latency_p50_ms",
+   "run_id": "E7-20261107T011123157183Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "clean",
+   "value": 8027.0
+  },
+  {
+   "id": "E7after-clean-answer_when_answerable",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "answer_when_answerable",
+   "system": "clean",
+   "value": 0.7575757575757576
+  },
+  {
+   "id": "E7after-clean-recall@5",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "recall@5",
+   "system": "clean",
+   "value": 0.696969696969697
+  },
+  {
+   "id": "E7after-clean-tokens_per_card",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "tokens_per_card",
+   "system": "clean",
+   "value": 1675.8484848484848
+  },
+  {
+   "id": "E7after-clean-latency_p50_ms",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "clean",
+   "value": 5953.0
+  },
+  {
+   "id": "E7speech-asr_pipeline-wer",
+   "run_id": "E7-20261107T003136847403Z",
+   "kind": "metric",
+   "metric": "wer",
+   "system": "asr_pipeline",
+   "value": 0.3757669913982939,
+   "text": "streamed word error rate on AMI, on published labels (the published transcript)"
+  },
+  {
+   "id": "E7speech-asr_pipeline-der",
+   "run_id": "E7-20261107T003136847403Z",
+   "kind": "metric",
+   "metric": "der",
+   "system": "asr_pipeline",
+   "value": 0.5994588868276943,
+   "text": "streamed speaker error on AMI, on published labels (the published speaker segments)"
+  },
+  {
+   "id": "E4scen-trained-macro_f1",
+   "run_id": "E4-20261103T102658868337Z",
+   "kind": "metric",
+   "metric": "macro_f1",
+   "system": "trained",
+   "value": 0.792519305019305
+  },
+  {
+   "id": "E4scen-tfidf-macro_f1",
+   "run_id": "E4-20261103T102658868337Z",
+   "kind": "metric",
+   "metric": "macro_f1",
+   "system": "tfidf",
+   "value": 0.1776035886052534
+  },
+  {
+   "id": "E4scen-zeroshot-macro_f1",
+   "run_id": "E4-20261103T102658868337Z",
+   "kind": "metric",
+   "metric": "macro_f1",
+   "system": "zeroshot",
+   "value": 0.19752798507462688
+  },
+  {
+   "id": "E4scen-prompted-macro_f1",
+   "run_id": "E4-20261103T102658868337Z",
+   "kind": "metric",
+   "metric": "macro_f1",
+   "system": "prompted",
+   "value": 0.5161674620096794
+  },
+  {
+   "id": "E4decode-trained-false_alert_rate",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "false_alert_rate",
+   "system": "trained",
+   "value": 0.12127236580516898
+  },
+  {
+   "id": "E4decode-trained-label_accuracy",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "label_accuracy",
+   "system": "trained",
+   "value": 0.917
+  },
+  {
+   "id": "E4decode-tfidf-false_alert_rate",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "false_alert_rate",
+   "system": "tfidf",
+   "value": 0.2485089463220676
+  },
+  {
+   "id": "E4decode-tfidf-label_accuracy",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "label_accuracy",
+   "system": "tfidf",
+   "value": 0.763
+  },
+  {
+   "id": "E4decode-zeroshot-false_alert_rate",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "false_alert_rate",
+   "system": "zeroshot",
+   "value": 0.4731610337972167
+  },
+  {
+   "id": "E4decode-zeroshot-label_accuracy",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "label_accuracy",
+   "system": "zeroshot",
+   "value": 0.715
+  },
+  {
+   "id": "E4decode-prompted-false_alert_rate",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "false_alert_rate",
+   "system": "prompted",
+   "value": 0.02186878727634195
+  },
+  {
+   "id": "E4decode-prompted-label_accuracy",
+   "run_id": "E4-20261103T102930546849Z",
+   "kind": "metric",
+   "metric": "label_accuracy",
+   "system": "prompted",
+   "value": 0.8
+  },
+  {
+   "id": "E8bench-consistency_scenarios-trained-macro_f1",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "consistency_scenarios",
+   "system": "trained",
+   "metric": "macro_f1",
+   "value": 0.7289502164502164,
+   "text": "macro-F1 of trained on our test scenarios"
+  },
+  {
+   "id": "E8bench-consistency_scenarios-prompted-macro_f1",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "consistency_scenarios",
+   "system": "prompted",
+   "metric": "macro_f1",
+   "value": 0.5752527486273616,
+   "text": "macro-F1 of prompted on our test scenarios"
+  },
+  {
+   "id": "E8bench-consistency_scenarios-tfidf-macro_f1",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "consistency_scenarios",
+   "system": "tfidf",
+   "metric": "macro_f1",
+   "value": 0.18902137431549196,
+   "text": "macro-F1 of tfidf on our test scenarios"
+  },
+  {
+   "id": "E8bench-decode-trained-f1[label=contradiction]",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "decode",
+   "system": "trained",
+   "metric": "f1[label=contradiction]",
+   "value": 0.9134883720930232,
+   "text": "contradiction F1 of trained on DECODE, on published labels"
+  },
+  {
+   "id": "E8bench-decode-tfidf-f1[label=contradiction]",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "decode",
+   "system": "tfidf",
+   "metric": "f1[label=contradiction]",
+   "value": 0.752895752895753,
+   "text": "contradiction F1 of tfidf on DECODE, on published labels"
+  },
+  {
+   "id": "E8bench-qmsum-hybrid_t1-mrr",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "qmsum",
+   "metric": "mrr",
+   "value": 0.5295478136758791,
+   "text": "hybrid retrieval mrr on QMSum, on published labels"
+  },
+  {
+   "id": "E8bench-qmsum-hybrid_t1-recall@5",
+   "run_id": "E8-20261107T073426291017Z",
+   "kind": "benchmark",
+   "benchmark": "qmsum",
+   "metric": "recall@5",
+   "value": 0.7002724795640327,
+   "text": "hybrid retrieval recall@5 on QMSum, on published labels"
+  },
+  {
+   "id": "E7press-clean-latency_p50_ms",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "latency_p50_ms",
+   "system": "clean",
+   "value": 5953.0,
+   "text": "button-to-card latency, clean-transcript cards"
+  },
+  {
+   "id": "E7press-clean-latency_p95_ms",
+   "run_id": "E7-20261107T023701185115Z",
+   "kind": "metric",
+   "metric": "latency_p95_ms",
+   "system": "clean",
+   "value": 8524.4,
+   "text": "button-to-card latency, clean-transcript cards"
+  },
+  {
+   "id": "guard-heldout-injections",
+   "kind": "guard",
+   "hash": "06440351937c",
+   "metric": "injections",
+   "value": 60,
+   "commit": "ca71e8c61b2e92f2e30c865d02b0d27da2b73ba1",
+   "text": "blind held-out guard check"
+  },
+  {
+   "id": "guard-heldout-injections_caught",
+   "kind": "guard",
+   "hash": "06440351937c",
+   "metric": "injections_caught",
+   "value": 14,
+   "commit": "ca71e8c61b2e92f2e30c865d02b0d27da2b73ba1",
+   "text": "blind held-out guard check"
+  },
+  {
+   "id": "guard-heldout-ordinary",
+   "kind": "guard",
+   "hash": "06440351937c",
+   "metric": "ordinary",
+   "value": 60,
+   "commit": "ca71e8c61b2e92f2e30c865d02b0d27da2b73ba1",
+   "text": "blind held-out guard check"
+  },
+  {
+   "id": "guard-heldout-ordinary_dropped",
+   "kind": "guard",
+   "hash": "06440351937c",
+   "metric": "ordinary_dropped",
+   "value": 0,
+   "commit": "ca71e8c61b2e92f2e30c865d02b0d27da2b73ba1",
+   "text": "blind held-out guard check"
+  }
+ ]
 }

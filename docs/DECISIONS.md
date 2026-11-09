@@ -716,3 +716,34 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Why:** the adapter lost on dev (grounded -0.34, record E5-20261106T222951150994Z), the product will not use it, and its stage is most of `write`'s time. It also needs about 6 GB of GPU, more than the 5.5 GB the stages are budgeted.
 - **Considered and lost:** keeping the adapter team in the test (a loss already known on dev, for most of the GPU time); folding the checker comparison into the team (the checker is a separate measurement with its own bullet).
 - **Would change if:** the person wants the adapter's test number for the report.
+
+
+## 76. T9.3 claims: a `benchmark` kind for E8's benchmark tables (2026-11-09, T9.3, the coordinator)
+- **Chosen:** `kind: benchmark` reads `config.benchmarks[name].metrics[metric]` of the cited record exactly; an optional `system` picks the nested table (DECODE and the consistency scenarios keep one table per system). It sits under the same record, superseded and label checks as every claim.
+- **Considered and lost:** copying the benchmark rows into the metrics table of the record (an edit to a run record, never allowed); typing the figures into the report with no claim (breaks "numbers are earned").
+- **Evidence:** `tests/test_claims_kinds.py` (exact match, nested system, missing pieces fail); the E8 DeBERTa and QMSum figures are now claims.
+- **Would change if:** E8 is rewritten so benchmarks land in `metrics`; the kind then goes.
+
+## 77. T9.3 claims: latency and token metrics need no reviewed labels; WER and DER on AMI count as published-label figures (2026-11-09, T9.3, the coordinator)
+- **Chosen:** `latency_*` (including `[stage=...]` and `[category=...]` variants) and `tokens_per_card` skip the label rule, because they do not depend on any label. `wer` and `der` pass without the AMI sign-off only for an E7 record whose source is AMI, and only when the claim text says "on published labels": the reference is AMI's own transcript and speaker segments. Judged and accuracy-type metrics stay blocked on unreviewed labels, and no other experiment or source gets the route.
+- **Considered and lost:** waiting for the AMI sign-off (the report would carry no speech figure); opening the publisher route for every metric on AMI (accuracy and recall rest on our own question labels, which no one signed); exempting only latency (WER would stay blocked although its reference is not ours).
+- **Evidence:** the tests in `tests/test_claims_kinds.py` (wrong experiment, wrong source and `label_accuracy` still fail). The E7 record's `labels_reviewed` is false.
+- **Would change if:** the person signs the AMI labels; the route is then redundant.
+
+## 78. T9.3 claims: a `guard` kind reading the committed held-out file (2026-11-09, T9.3, the coordinator)
+- **Chosen:** `kind: guard` with `hash`, `metric` (a key of the file's `result`), `value` and `commit`. The check reads `results/guard-heldout/<hash>.json`, requires it to be tracked, unchanged against HEAD, and added by the named commit (prefix match), and compares the value exactly. The report's 14 of 60 orders caught and 0 of 60 ordinary turns dropped come from claims on `ca71e8c`.
+- **Considered and lost:** wrapping the guard result in a run record (the guard test is not a run-record experiment and records are never edited); trusting the file alone (an edited file would still pass).
+- **Evidence:** `tests/test_claims_kinds.py` builds a temporary git repository: changed, untracked, wrong-commit and wrong-value cases all fail.
+- **Would change if:** the guard is rerun; a new file gets a new hash and a new claim.
+
+## 79. T9.3 report check: placeholders inside inline code count (2026-11-09, T9.3, the coordinator)
+- **Chosen:** `tools/check_report_numbers.py` no longer strips inline code before looking for placeholders; a `[pending: ...]` in backticks fails. Numbers are read as before.
+- **Considered and lost:** leaving it (a backticked placeholder would pass unnoticed); also reading numbers in inline code (command flags and ports there are not results).
+- **Evidence:** `test_a_placeholder_inside_inline_code_fails`; the README, interview notes, RESUME-TARGETS and REPORT hold no backticked placeholder, and only the three person-wording ones remain.
+- **Would change if:** a backticked example needs square brackets with letters; it would then use a fenced block.
+
+## 80. T9.3 claims check runs each cited record once (2026-11-09, T9.3, commit 21e7d82)
+- **Chosen:** `check_claims` runs the full record check once per run id in a call and reuses the problems for every claim on that record.
+- **Considered and lost:** a cache across calls (could hide a record edited between runs); dropping the interval re-bootstrap (weakens the check). Before, the record check ran once per claim (about a minute each); now it runs once per cited record.
+- **Evidence:** `tests/test_claims_once.py`.
+- **Would change if:** record checks become cheap, when the per-call memo is harmless but unneeded.
