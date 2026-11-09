@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from contextlens.eval.series import JUDGED, base_name
 CLAIMS_REL = Path("results/claims.json")
 COMPARISON_FIELDS = ("diff", "ci", "mcnemar_p")
 PUBLISHED_WORDS = "on published labels"
+SPEECH_METRICS = ("wer", "der")
+GUARD_REL = "results/guard-heldout"
 
 
 def _system(c: dict[str, Any], rec: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -37,6 +40,14 @@ def _cited(c: dict[str, Any], rec: dict[str, Any]) -> tuple[object, str | None, 
                     return None, metric, f"field must be one of {', '.join(COMPARISON_FIELDS)}"
                 return saved.get(c["field"]), metric, None
         return None, metric, f"comparison of {metric} for {c.get('a')} vs {c.get('b')} not in run"
+    if kind == "benchmark":
+        table = ((rec.get("config") or {}).get("benchmarks") or {}).get(c.get("benchmark"))
+        table = table.get("metrics") if isinstance(table, dict) else None
+        if isinstance(table, dict) and c.get("system") is not None:
+            table = table.get(c["system"])
+        if not isinstance(table, dict) or metric not in table:
+            return None, metric, f"benchmark {c.get('benchmark')} {c.get('system') or ''} {metric} not in run".replace("  ", " ")
+        return table[metric], metric, None
     if kind not in ("metric", "interval"):
         return None, metric, f"unknown kind {kind}"
     system, problem = _system(c, rec)
@@ -63,6 +74,10 @@ def _value_problem(c: dict[str, Any], rec: dict[str, Any]) -> tuple[str | None, 
 def _label_problems(cid: str, c: dict[str, Any], rec: dict[str, Any]) -> list[str]:
     """Publisher labels count as reviewed (the person's rule), but the claim must say they are published labels.
     Our scenarios and AMI keep their sign-off, as recorded in the run. An unknown source is not reviewed."""
+    metric = c.get("metric")
+    base = base_name(metric) if isinstance(metric, str) else ""
+    if base.startswith("latency_") or base == "tokens_per_card":
+        return []  # timings and token counts do not depend on any label
     kind = record_label_source(rec)
     if kind is None:
         return [f"claim {cid}: the run's label source cannot be determined, so its labels are not reviewed"]
@@ -71,7 +86,45 @@ def _label_problems(cid: str, c: dict[str, Any], rec: dict[str, Any]) -> list[st
         if isinstance(text, str) and PUBLISHED_WORDS in text.lower():
             return []
         return [f"claim {cid}: the run's labels come from the publisher, so the claim's text must say '{PUBLISHED_WORDS}'"]
-    return [] if rec.get("labels_reviewed") else [f"claim {cid}: run has labels_reviewed false"]
+    if rec.get("labels_reviewed"):
+        return []
+    if base in SPEECH_METRICS and rec.get("experiment") == "E7" and kind == "ami_rule":
+        # The reference is AMI's own published transcript and speaker segments, so the claim may stand on that.
+        text = c.get("text")
+        if isinstance(text, str) and PUBLISHED_WORDS in text.lower():
+            return []
+        return [f"claim {cid}: AMI's published transcript is the reference, so the claim's text must say '{PUBLISHED_WORDS}'"]
+    return [f"claim {cid}: run has labels_reviewed false"]
+
+
+def _git(root: Path, *args: str) -> str | None:
+    done = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def _guard_problems(c: dict[str, Any], root: Path) -> list[str]:
+    """A guard claim reads results/guard-heldout/<hash>.json. The file must be tracked, unchanged against HEAD, and
+    added by the commit the claim names."""
+    cid = c.get("id", "?")
+    rel = f"{GUARD_REL}/{c.get('hash')}.json"
+    path = root / rel
+    if not path.is_file():
+        return [f"claim {cid}: no guard record {rel}"]
+    problems: list[str] = []
+    result = (json.loads(path.read_text(encoding="utf-8")).get("result") or {})
+    if c.get("metric") not in result:
+        problems.append(f"claim {cid}: {c.get('metric')} not in the guard record")
+    elif result[c["metric"]] != c.get("value"):
+        problems.append(f"claim {cid}: value differs from the guard record")
+    if _git(root, "ls-files", "--error-unmatch", rel) is None:
+        return problems + [f"claim {cid}: {rel} is not committed"]
+    if _git(root, "diff", "HEAD", "--", rel):
+        problems.append(f"claim {cid}: {rel} differs from the commit")
+    added = (_git(root, "log", "--diff-filter=A", "--format=%H", "--", rel) or "").splitlines()
+    named = str(c.get("commit") or "")
+    if not named or not added or not added[-1].startswith(named):
+        problems.append(f"claim {cid}: {rel} was not added by commit {named or '(none named)'}")
+    return problems
 
 
 def _claim_problems(c: dict[str, Any], rec: dict[str, Any], root: Path, repeated: list[str],
@@ -101,6 +154,9 @@ def check_claims(root: Path = ROOT) -> list[str]:
     repeated: list[str] | None = None
     record_problems: dict[str, list[str]] = {}
     for c in claims:
+        if c.get("kind") == "guard":
+            problems += _guard_problems(c, root)
+            continue
         path = root / RUNS_REL / f"{c.get('run_id')}.json"
         if not path.is_file():
             problems.append(f"claim {c.get('id', '?')}: no run record {c.get('run_id')}")

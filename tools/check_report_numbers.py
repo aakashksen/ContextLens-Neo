@@ -27,7 +27,7 @@ PLACEHOLDER = re.compile(r"\[[^\]\n]*[A-Za-z_][^\]\n]*\](?![(:])|\bTODO\b|\bTBD\
 
 
 def _text(doc: str) -> str:
-    return INLINE.sub("", FENCE.sub("", doc))
+    return FENCE.sub("", doc)
 
 
 def numbers(doc: str) -> list[str]:
@@ -65,6 +65,8 @@ def _cited(root: Path, claims: list[dict]) -> tuple[list[float], set[int], list[
     seen: set[str] = set()
     for c in claims:
         flat(c.get("value"))
+        if c.get("kind") == "guard":
+            continue  # read from a committed guard file, not a run record
         run = c.get("run_id")
         if run in seen:
             continue
