@@ -834,8 +834,15 @@
         "{py} tools/check_report_numbers.py",
         "{py} -m pytest -q"
       ],
-      "status": "pending",
-      "verifier": false
+      "status": "done",
+      "verifier": false,
+      "started_at": "2026-11-09T18:45:50+00:00",
+      "verified": {
+        "commit": "327d3cc6406b88881ad9ebba3807626be9d5f9a0",
+        "passed": true,
+        "at": "2026-11-10T02:29:10+00:00"
+      },
+      "done_at": "2026-11-10T02:30:50+00:00"
     },
     {
       "id": "H5",
