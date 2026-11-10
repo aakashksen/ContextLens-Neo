@@ -747,3 +747,10 @@ Note on numbering: T4.2's entries were first written as 27 to 38 and are now 28 
 - **Considered and lost:** a cache across calls (could hide a record edited between runs); dropping the interval re-bootstrap (weakens the check). Before, the record check ran once per claim (about a minute each); now it runs once per cited record.
 - **Evidence:** `tests/test_claims_once.py`.
 - **Would change if:** record checks become cheap, when the per-call memo is harmless but unneeded.
+
+## 81. T9.3 AMI transcript text stays committed as a known exception (2026-11-09, T9.3, the coordinator)
+- **Chosen:** AMI text (CC BY 4.0) stays committed in `datasets/ami-questions/` and the E7 prediction files. `tests/test_no_raw_text.py` compares against QMSum's non-AMI meetings and DECODE only; a QMSum record is AMI-sourced when one of its speakers is "Project Manager" (AMI role names; ICSI uses Grad/PhD, the parliaments use member names). The number-word lists in `src/contextlens/agents/single.py` are allowed as exact windows.
+- **Considered and lost:** scrubbing text from the E7 predictions (breaks `check_run` on every E7 record and the claims citing them); rewriting history (the person's call, before any push).
+- **Evidence:** the test flagged 13 files: `single.py` (number words), `datasets/ami-questions/dev.json`, `review-sample.md` (1022 matching windows), and 10 E7 prediction files (6096 windows in `E7-20261107T003136847403Z.asr_pipeline.predictions.jsonl`), all AMI text that QMSum's Product domain also holds.
+- **Allowlist:** AMI-sourced QMSum records are those with an AMI role speaker (`Project Manager`). After that, 21 everyday 8-word phrases ("i don t know if that s really" and the like) still matched non-AMI QMSum meetings from E7's AMI text, and the number-word list in `agents/single.py` matched too; each is added to `ALLOWED_WINDOWS` by exact window with its reason.
+- **Would change if:** the person decides to publish without the AMI text (then scrub and rewrite history), or QMSum's non-AMI sources are found in a committed file.

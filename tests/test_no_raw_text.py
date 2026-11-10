@@ -1,4 +1,5 @@
-"""QMSum and DECODE may be used locally but never committed: no tracked or committable file may hold their text."""
+"""QMSum (non-AMI) and DECODE may be used locally but never committed: no tracked or committable file may hold their text.
+AMI-sourced QMSum meetings are excluded: AMI is CC BY 4.0 and its text is committed as a known exception."""
 import hashlib
 import json
 import os
@@ -22,6 +23,29 @@ ALLOWED_WINDOWS = {
     "that makes a lot of sense i ve": "common agreement phrase",
     "can you give me an example of a": "common request phrase",
     "i ll believe it when i see it": "proverb",
+    "one two three four five six seven eight": "number words in agents/single.py",
+    "two three four five six seven eight nine": "same list, shifted one word",
+    "but i don t know if it s": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "but i don t think that s a": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "don t know if that s a good": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "don t know if we should talk about": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "don t think it s going to be": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "don t think so it s just the": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t know if it doesn t": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t know if that s a": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t know if that s really": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t know if we should talk": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t know what that is but": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t think it s going to": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i don t think so it s just": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i m sorry i m sorry i m": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i think so too i ll give it": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "i think we re all in agreement about": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "it s not going to be on the": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "m sorry i m sorry i m sorry": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "think so too i ll give it a": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "think we re all in agreement about the": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
+    "yeah i don t know if it s": "everyday speech in AMI-derived E7 text that also occurs in a non-AMI QMSum meeting",
 }
 
 
@@ -37,7 +61,16 @@ def _strings(x: object) -> Iterator[str]:
             yield from _strings(v)
 
 
-def _texts(path: Path, joined: bool = False) -> Iterator[str]:
+def _is_ami(line: str) -> bool:
+    """QMSum's Product domain is AMI meetings (CC BY 4.0, committed as a known exception); its speakers are AMI roles."""
+    try:
+        rec = json.loads(line)
+        return any(t.get("speaker") == "Project Manager" for t in rec["meeting_transcripts"])
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def _texts(path: Path, joined: bool = False, skip_ami: bool = False) -> Iterator[str]:
     """Strings of a file. `joined` reads a plain file as one text, so a quote hard-wrapped across its lines is found;
     the raw side is read line by line, because its own line breaks are not part of the copied text."""
     try:
@@ -47,6 +80,8 @@ def _texts(path: Path, joined: bool = False) -> Iterator[str]:
     if path.suffix in (".json", ".jsonl"):
         lines = raw.splitlines() if path.suffix == ".jsonl" else [raw]
         for line in lines:
+            if skip_ami and _is_ami(line):
+                continue
             try:
                 yield from _strings(json.loads(line))
             except ValueError:
@@ -65,7 +100,7 @@ def _windows(text: str, allowed: frozenset[str] | set[str] = frozenset()) -> Ite
 
 def leaked_files(raw_dirs: list[Path], files: list[Path], allowed: set[str] | frozenset[str] = frozenset(ALLOWED_WINDOWS)) -> list[str]:
     """Files among `files` that share a run of WINDOW words with any file under `raw_dirs`, ignoring `allowed` windows."""
-    seen = {h for d in raw_dirs if d.is_dir() for f in d.rglob("*") if f.is_file() for t in _texts(f) for h in _windows(t)}
+    seen = {h for d in raw_dirs if d.is_dir() for f in d.rglob("*") if f.is_file() for t in _texts(f, skip_ami=True) for h in _windows(t)}
     return [f.as_posix() for f in files if any(h in seen for t in _texts(f, joined=True) for h in _windows(t, allowed))]
 
 
@@ -82,6 +117,25 @@ def test_detector_flags_copied_text_and_nothing_else(tmp_path: Path) -> None:
     clean.write_text("ids only: invented1 invented2 invented3, and some other words entirely unrelated here", encoding="utf-8")
     found = leaked_files([raw], [copied, as_json, clean])
     assert found == [copied.as_posix(), as_json.as_posix()]
+
+
+def test_ami_sourced_qmsum_records_are_not_raw_but_other_qmsum_and_decode_are(tmp_path: Path) -> None:
+    qm = tmp_path / "qmsum"
+    qm.mkdir()
+    ami_text = " ".join(f"amiword{i}" for i in range(30))
+    icsi_text = " ".join(f"icsiword{i}" for i in range(30))
+    decode_text = " ".join(f"decodeword{i}" for i in range(30))
+    rows = [{"meeting_transcripts": [{"speaker": "Project Manager", "content": ami_text}], "topic_list": []},
+            {"meeting_transcripts": [{"speaker": "Grad A", "content": icsi_text}], "topic_list": []}]
+    (qm / "train.jsonl").write_text(NL.join(json.dumps(r) for r in rows) + NL, encoding="utf-8")
+    dec = tmp_path / "decode"
+    dec.mkdir()
+    (dec / "d.jsonl").write_text(json.dumps({"text": decode_text}) + NL, encoding="utf-8")
+    ami, icsi, decoded = (tmp_path / n for n in ("ami.md", "icsi.md", "decoded.md"))
+    ami.write_text(ami_text, encoding="utf-8")
+    icsi.write_text("quote: " + icsi_text, encoding="utf-8")
+    decoded.write_text(decode_text, encoding="utf-8")
+    assert leaked_files([qm, dec], [ami, icsi, decoded]) == [icsi.as_posix(), decoded.as_posix()]
 
 
 def test_a_quote_hard_wrapped_across_lines_in_a_plain_file_is_flagged(tmp_path: Path) -> None:

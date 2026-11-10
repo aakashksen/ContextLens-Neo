@@ -8,7 +8,7 @@ Summary:
 - DECODE: yes, by the person, for non-commercial evaluation; its text may also go to Claude through `claude -p` for grading and comparison, by the person on 2026-11-03; never commit, publish or redistribute its data (no data license stated).
 - QMSum: yes, by the person, for non-commercial evaluation and for training the T6.2 adapter locally; its text may also go to Claude through `claude -p` for grading and comparison, by the person on 2026-11-03; never commit or redistribute its data, and never publish that adapter or examples derived from it (data license not stated; it draws on AMI, ICSI, and two parliaments with terms not confirmed).
 - LongMemEval: yes (MIT).
-- AMI Meeting Corpus: yes (CC BY 4.0).
+- AMI Meeting Corpus: yes (CC BY 4.0). Attribution: AMI Meeting Corpus, https://groups.inf.ed.ac.uk/ami/corpus/ (text via edinburghcstr/ami on Hugging Face). AMI transcript text is committed in `datasets/ami-questions/` and in the E7 prediction files under `results/runs/`, as a known exception to the never-commit rule for QMSum (see `docs/DECISIONS.md` entry 81).
 - pyannote (diarization): yes, by the person, who accepted its terms on Hugging Face (gated model).
 - NVIDIA Sortformer v2 (diarization alternative): yes (CC BY 4.0).
 - microsoft/deberta-v3-base (consistency base): yes (MIT).
