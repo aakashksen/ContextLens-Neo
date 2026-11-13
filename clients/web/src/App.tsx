@@ -96,7 +96,7 @@ function Live({ session, startMic }: { session: Session; startMic: NonNullable<P
   return (
     <main ref={root} className={`app size-${settings.size}`}>
       <header>
-        <h1>ContextLens</h1>
+        <h1>ContextLens Neo</h1>
         <RecordingIndicator state={indicator} />
       </header>
 

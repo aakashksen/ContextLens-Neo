@@ -1,8 +1,8 @@
-# ContextLens rebuild: implementation plan
+# ContextLens Neo rebuild: implementation plan
 
 > **For agentic workers:** run this with the `/run-plan` skill in this folder. It uses the project's own `implementer`, `verifier`, and `reviewer` agents and the `tools/taskctl.py` gate. Do not use another execution workflow.
 
-**Goal:** Rebuild ContextLens as a button-triggered, multi-agent conversation assistant on local tools, with every result measured.
+**Goal:** Rebuild ContextLens as ContextLens Neo, a button-triggered, multi-agent conversation assistant on local tools, with every result measured.
 
 **Architecture:** A streaming speech and memory pipeline feeds a PostgreSQL store. A button press freezes the conversation, LangGraph agents gather evidence, a citation guard checks it, and clients show one card. A replay and evaluation harness comes first, so every later piece gets measured.
 

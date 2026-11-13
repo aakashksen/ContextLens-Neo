@@ -1,11 +1,11 @@
-# ContextLens report
+# ContextLens Neo report
 
 Every number in this report comes from a run record in `results/runs/`, entered through `results/claims.json`. Where a figure is not yet allowed by that route, the text marks it pending and does not guess.
 Run ids are written in full so each statement can be traced. Entry numbers point to `docs/DECISIONS.md`.
 
 ## 1. The problem and the question
 
-During a conversation (a meeting, a class, a long discussion) a person loses track of what was said. ContextLens answers one question at the press of a button:
+During a conversation (a meeting, a class, a long discussion) a person loses track of what was said. ContextLens Neo answers one question at the press of a button:
 what was actually said, and is there enough to say it? The answer is one short card whose every statement cites the turn it came from, and "not enough information" is a
 valid card. The design question (`docs/DESIGN.md`) is how an assistant can find the right context quickly enough to help, without inventing memories or mistaking a legitimate
 update for a contradiction.

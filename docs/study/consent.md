@@ -1,4 +1,4 @@
-# Consent form for the ContextLens informal user test
+# Consent form for the ContextLens Neo informal user test
 
 **DRAFT for the person to review. This text has not been reviewed by a lawyer or by UCSB's IRB, and it is not
 legally or IRB approved.** It is written for informal product testing. If the results will ever be published as
@@ -6,7 +6,7 @@ research, check with UCSB's IRB first and replace this form with what they requi
 before use.
 
 ## What this is
-ContextLens is a conversation assistant that answers questions about what was said earlier in a conversation.
+ContextLens Neo is a conversation assistant that answers questions about what was said earlier in a conversation.
 We are trying it with a few people to see whether it helps. You will do four short tasks about invented
 conversations, two with the assistant and two without. It takes about [30] minutes. The conversations are made
 up. You will not be asked to share anything about yourself or your own conversations.

@@ -1,4 +1,4 @@
-# ContextLens
+# ContextLens Neo
 
 Press a button mid-conversation and get one short card based on what was actually said: something you
 missed, a possible inconsistency, or help responding. Specialist agents do the digging, and every recalled

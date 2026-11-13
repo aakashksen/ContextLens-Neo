@@ -1,1 +1,1 @@
-"""ContextLens: an on-demand conversation assistant."""
+"""ContextLens Neo: an on-demand conversation assistant."""

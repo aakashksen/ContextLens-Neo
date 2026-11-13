@@ -1,7 +1,7 @@
-# ContextLens design
+# ContextLens Neo design
 
 ## Purpose
-ContextLens is an on-demand conversation assistant. During a conversation, the user presses a button and gets one short card built
+ContextLens Neo is an on-demand conversation assistant. During a conversation, the user presses a button and gets one short card built
 from what was actually said. It's for anyone who loses track of details in meetings, classes, or long discussions. Neurodivergent users
 are one audience the accessibility settings serve; they aren't the only audience.
 

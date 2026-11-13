@@ -56,7 +56,7 @@ def create_app(services: Services) -> FastAPI:
             task.cancel()
             await _shutdown(services, conversations)
 
-    app = FastAPI(title="ContextLens", lifespan=lifespan)
+    app = FastAPI(title="ContextLens Neo", lifespan=lifespan)
     app.state.conversations = conversations
 
     @app.get("/ready")
