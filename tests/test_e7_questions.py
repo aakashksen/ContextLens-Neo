@@ -9,7 +9,7 @@ from contextlens.experiments import e7_realtime as e7
 
 ROOT = Path(__file__).resolve().parents[1]
 NITE = 'xmlns:nite="http://nite.sourceforge.net/"'
-RAW = Path("<local path>")
+RAW = ROOT / "datasets" / "raw"
 
 
 def write_ami_fixture(raw: Path) -> None:
