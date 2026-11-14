@@ -811,3 +811,10 @@ def test_abandoned_calls_do_not_pile_up(monkeypatch):
         assert len(starts) == started
     finally:
         release.set()
+
+
+def test_number_with_unit_letters_attached_is_one_number():
+    from contextlens.agents.single import numbers_supported
+
+    assert numbers_supported("The meeting is at 10pm", ["we meet at 10 pm"], ["t1"])
+    assert not numbers_supported("The meeting is at 10pm", ["we meet at 1 pm"], ["t1"])

@@ -183,7 +183,7 @@ _ORDINALS = {
 _SMALL = {**_UNITS, **_TEENS, **_TENS, **_ORDINALS}
 _LOOSE = frozenset({"first", "second", "third"})
 _BIG = {"hundred": 100, "dozen": 12, "thousand": 1000, "million": 10**6, "billion": 10**9}
-_TOKEN = re.compile(r"(\d+(?:\.\d+)?)(?:st|nd|rd|th)?(?![a-z])|(\d+(?:\.\d+)?)|([a-z]+)")
+_TOKEN = re.compile(r"(\d+(?:\.\d+)?)(?:(?:st|nd|rd|th)(?![a-z]))?|(\d+(?:\.\d+)?)|([a-z]+)")
 
 
 def _kind(v: int) -> str:
