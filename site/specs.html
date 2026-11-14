@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it’s built, ContextLens Neo</title>
+<meta name="description" content="Architecture, stack, eight experiments with the rule written first and what failed, and the limits, in plain words.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="tour.html">Walkthrough</a><a href="specs.html" aria-current="page">How it’s built</a><a href="live.html">Live demo</a></nav>
+    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--tall">
+    <div class="container hero__grid">
+      <div>
+        <h1>How it’s built</h1>
+        <p class="lead">The pipeline, the stack and eight experiments, failures included.</p>
+      </div>
+      <ol class="panels flow-mini">
+        <li><span class="measured">1</span> A press freezes the conversation at one point.</li>
+        <li><span class="measured">2</span> Agents build a card from the turns before it.</li>
+        <li><span class="measured">3</span> Code drops any finding without a quote.</li>
+        <li><span class="measured">4</span> What is left is the card, or an abstention.</li>
+        <li><span class="measured">5</span> A client shows the card and the turns it cites.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="arch-h">
+    <div class="container">
+      <div class="head"><h2 id="arch-h">Architecture</h2></div>
+      <ol class="flow">
+        <li class="node"><h3>Speech</h3><ul><li>whisper.cpp behind gRPC</li><li>local diarization</li><li>a voice gate</li></ul></li>
+        <li class="node"><h3>Backend</h3><ul><li>FastAPI</li><li>transcript store</li><li>hybrid index</li><li>memory extractor</li></ul></li>
+        <li class="node"><h3>Agents</h3><ul><li>LangGraph</li><li>three specialists</li><li>a controller</li></ul></li>
+        <li class="node node--guard"><h3>Evidence guard</h3><ul><li>turn exists</li><li>not after the press</li><li>quote is in the turn</li></ul></li>
+        <li class="node"><h3>Clients</h3><ul><li>React and TypeScript</li><li>Unity</li><li>one WebSocket contract</li></ul></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--band" aria-labelledby="inside-h">
+    <div class="container">
+      <div class="head"><h2 id="inside-h">Inside one press</h2></div>
+      <div class="press">
+        <div class="node node--wide"><h3>Controller</h3><p>Enforces the 8 s deadline. Returns a partial card.</p></div>
+        <div class="join" aria-hidden="true"></div>
+        <div class="agents">
+          <div class="node"><h3>Memory agent</h3><ul><li>search</li><li>memory lookup</li></ul></div>
+          <div class="node"><h3>Consistency agent</h3><ul><li>search</li><li>consistency check</li></ul></div>
+          <div class="node"><h3>Assistance agent</h3><p>Writes the card. May send one specialist back.</p></div>
+        </div>
+        <div class="join" aria-hidden="true"></div>
+        <div class="node node--guard node--wide"><h3>Evidence guard</h3><p>Drops findings with a missing turn, a later turn or a quote not in the turn. Nothing left means abstain.</p></div>
+      </div>
+      
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="stack-h">
+    <div class="container">
+      <div class="head"><h2 id="stack-h">The stack</h2></div>
+      <dl class="stack">
+        <div><dt>Speech</dt><dd>whisper.cpp behind gRPC, local diarization.</dd><dd class="measured path">speech/</dd></div>
+        <div><dt>Backend</dt><dd>FastAPI, PostgreSQL with pgvector.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Retrieval</dt><dd>BM25 and embeddings over one-turn chunks.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Agents</dt><dd>LangGraph. A setting picks team or single.</dd><dd class="measured path">settings</dd></div>
+        <div><dt>Clients</dt><dd>React and TypeScript, and Unity <span class="chip">not yet tried on a headset</span></dd><dd class="measured path">clients/web/, clients/unity/</dd></div>
+        <div><dt>Observability</dt><dd>OpenTelemetry and Prometheus, no transcript text.</dd><dd class="measured path">docs/REPORT.md</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section section--band" id="experiments" aria-labelledby="exp-h">
+    <div class="container">
+      <div class="head"><h2 id="exp-h">Eight experiments</h2><p>Every rule was written before its run. Every number comes from a run record.</p></div>
+      <button class="ask" type="button" data-openall="exps" aria-pressed="false" hidden>Open all</button>
+      <ol class="exps" id="exps">
+      <li><details class="exp" id="e1">
+        <summary><span class="exp__id">E1</span><span class="exp__title">Retrieval</span><span class="exp__verdict">Hybrid won</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">E1-20261103T035342386305Z, dev</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Highest mean recall at 5 wins, ties go to MRR. Eight settings: dense, BM25, hybrid and hybrid with a reranker, each over one-turn chunks and 3-turn windows.</dd></div>
+            <div><dt>Result</dt><dd>Hybrid over one-turn chunks won. Its lead over dense and over the reranker is close to a tie, so there is no claim that reranking helps.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">No E1 figure is stated. The record fails its own check: the QMSum manifest was not committed before the run. The held-out search benchmark in E8 stands in: MRR 0.530 and recall at 5 of 0.700 over 367 QMSum questions.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e2">
+        <summary><span class="exp__id">E2</span><span class="exp__title">Context shapes</span><span class="exp__verdict">Memory raised answering</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">E2-20261104T011721815005Z and E2-20261104T011906729928Z, 148 dev cases</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Written before the run. The report does not restate it; docs/DECISIONS.md holds it.</dd></div>
+            <div><dt>Result</dt><dd>Recent turns, the full conversation and retrieval all abstained when they should (0.938) but answered only about two thirds of answerable cases (0.659 recent, 0.674 for the others). Adding memory raised answering to 0.947 and cut correct abstention to 0.5. A cloud arm abstained on every insufficient case (1.0) and answered 0.871.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">A short-id citation bug dropped true findings, so E2 and E3 were rerun. A number rule that compared spelled numbers as text dropped true findings too. The cloud arm’s rerun under the fixed rule was cancelled, so its numbers understate it. A mode-defining prompt was tried, answered fewer answerable cases, let an injected claim through, and was reverted.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e3">
+        <summary><span class="exp__id">E3</span><span class="exp__title">Agent against team</span><span class="exp__verdict">Team abstained less</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">E3-20261104T011047113852Z, 148 dev cases</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Score is the mean of groundedness and the lower of the two abstention sides, the answer rate and the abstain rate. Written before the run.</dd></div>
+            <div><dt>Result</dt><dd>The single agent abstained correctly on 0.875 of insufficient cases and answered 0.947. The team abstained correctly on only 0.312 and answered 0.977, at 1535 tokens per card against 634.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">The controller marked a card answered whenever the consistency agent wrote any finding, even “the transcript does not give this detail”. Memory’s correct “not enough evidence” was outvoted. Found by reading the saved rows.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e3b">
+        <summary><span class="exp__id">E3b</span><span class="exp__title">Team fixes</span><span class="exp__verdict">Gain in abstention</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">records E3T-20261104T131120203662Z, E3TS-20261104T173517541324Z</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>One fix allowed, then once the combination that could ship. That team becomes primary only if it beats the single agent on the new cases under both judges.</dd></div>
+            <div><dt>Result</dt><dd>On new template-built cases the shippable team abstained correctly more often than the single agent, with a lower grounded rate under the cloud grader. Its gain is in abstention, not in the accuracy of what it says. It became the primary system of the test.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">Those case labels are template-built and read by an agent, not a person, so no figure is claimed. The fix’s gain on old cases is in-sample, because the idea came from reading those rows.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e4">
+        <summary><span class="exp__id">E4</span><span class="exp__title">Contradictions</span><span class="exp__verdict">Cascade kept</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">records E4-20261103T102658868337Z and E4-20261103T102930546849Z</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Cascade threshold: the lowest false-alarm rate among points that keep the written catch-rate floor on every source.</dd></div>
+            <div><dt>Result</dt><dd>A DeBERTa-v3 checker had the best accuracy, the prompted checker far fewer false alarms, so both were kept in a cascade. On held-out data, macro-F1 on our scenarios is 0.729 (prompted 0.575, TF-IDF 0.189). Contradiction F1 on DECODE, on published labels, is 0.913 (TF-IDF 0.753).</dd></div>
+            <div><dt>What failed</dt><dd class="bad">The first run’s training loss was NaN in every setting, from float16 weights. Its records are void and the rerun loads float32. The E4 dev figures are not stated because the records fail their checks.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e5">
+        <summary><span class="exp__id">E5</span><span class="exp__title">Fine-tuning</span><span class="exp__verdict">Prompting kept</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">E5-20261106T222951150994Z, 148 dev cases</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>A winner rule written before any run, with one runtime for both arms.</dd></div>
+            <div><dt>Result</dt><dd>The adapter answered 0.962 of answerable cases against 0.212 for prompting. It abstained correctly on only 0.438 against 0.938, a difference of −0.5 (interval −0.75 to −0.25). It was slower: 23.9 s median against 7.2 s. Prompting stayed.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">The base moved from a 4B to a 2B model for GPU memory, so this says nothing about a larger adapter. The prompted 2B card answers only 0.212 of answerable cases, so neither arm is a good product at that size.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e6">
+        <summary><span class="exp__id">E6</span><span class="exp__title">Prompts</span><span class="exp__verdict">v3 selected</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">E6-20261105T223904724358Z, E6-20261106T000633991380Z, 148 dev cases</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Score is the mean of the grounded rate and the lower abstention side. A version qualifies only with a 95% interval above zero on a key measure and none below zero on the others. Otherwise v1 stays.</dd></div>
+            <div><dt>Result</dt><dd>v1 abstained 0.812 and answered 0.947. v3 abstained 0.812 and answered 0.955, at 602 tokens per card against 634, and was selected. v4 abstained on everything (1.0) and answered 0.311. v6 answered 0.977 but abstained correctly on only 0.312.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">v3’s gain is in groundedness under Haiku. Sonnet, grading the same rows, did not confirm it as measurable. No groundedness figure is stated.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e7">
+        <summary><span class="exp__id">E7</span><span class="exp__title">Streaming speech</span><span class="exp__verdict">Fixes dropped</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">records E7-20261107T003136847403Z, E7-20261107T011123157183Z, E7-20261107T023701185115Z</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>A latency fix is kept only if p50, p95 or the count of deadline-cut cards improves, with the answer rate on the 33 clean questions no worse.</dd></div>
+            <div><dt>Result</dt><dd>After a gain fix to the test audio, streamed word error rate is 0.376 and speaker error 0.599, on published labels. Button-to-card latency has a median of 5953 ms and a 95th percentile of 8524.4 ms, above the 8 s deadline. Both latency fixes were dropped: tokens per card rose from 1363 to 1676.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">The fixed voice gate dropped most quiet speech, which made streamed error look far worse than offline Whisper. The gain that fixed it is a normalisation of rebuilt audio, computed over a whole meeting. It is not a live feature.</dd></div>
+          </dl>
+        </div>
+      </details></li><li><details class="exp" id="e8">
+        <summary><span class="exp__id">E8</span><span class="exp__title">The held-out test</span><span class="exp__verdict">No clear difference</span></summary>
+        <div class="exp__body">
+          <p class="rec measured">record E8-20261107T073426291017Z, 136 test cases, run once</p>
+          <dl>
+            <div><dt>Rule, first</dt><dd>Better or worse only when the 95% bootstrap interval excludes zero and, for yes-or-no metrics, the exact McNemar test agrees. Otherwise: no clear difference.</dd></div>
+            <div><dt>Result</dt><dd>The shipping team shows no clear difference from the single agent on any quality measure. It is clearly worse on tokens per card and median latency. Table below.</dd></div>
+            <div><dt>What failed</dt><dd class="bad">The trained-team arm was dropped from the test by the person, because the adapter lost on dev.</dd></div>
+          </dl>
+        </div>
+      </details></li>
+      </ol>
+      <div class="panels diff">
+        <table>
+          <thead><tr><th scope="col">E8 measure</th><th scope="col">Single</th><th scope="col">Shipping team</th><th scope="col">Single minus team, 95% interval</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Tokens per card</th><td class="plus">555</td><td class="minus">1349</td><td>−795 (−820 to −769)</td></tr>
+            <tr><th scope="row">Median latency, ms</th><td class="plus">2832</td><td class="minus">4814</td><td>−1983 (−2229 to −1623)</td></tr>
+            <tr><th scope="row">95th percentile latency, ms</th><td>4859</td><td>6829</td><td>not compared</td></tr>
+            <tr><th scope="row">Abstained when evidence was insufficient</th><td>0.750</td><td>0.812</td><td>−0.062 (−0.211 to 0.000), McNemar p 1.0</td></tr>
+            <tr><th scope="row">Answered when answerable</th><td>1.000</td><td>0.992</td><td>0.008</td></tr>
+            <tr><th scope="row">Speaker accuracy</th><td>1.000</td><td>1.000</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Groundedness is not published. Its judge failed calibration and no person reviewed any judge.</p>
+    </div>
+  </section>
+
+  <section class="section" id="limits" aria-labelledby="lim-h">
+    <div class="container">
+      <div class="head"><h2 id="lim-h">Limits</h2></div>
+      <ul class="limits">
+        <li><details class="lim"><summary><strong>No judge was reviewed by a person</strong></summary><p>Haiku failed its written calibration against Sonnet and still judges, because local judging was ruled out. It leans lenient. Judged rates are in the records and left out here.</p></details></li>
+        <li><details class="lim"><summary><strong>Restated conflicts are shaky</strong></summary><p>Where a statement restates a conflict, both judges wobble. Those are the least reliable judged claims.</p></details></li>
+        <li><details class="lim"><summary><strong>New-case labels are template-built</strong></summary><p>An agent read them, a person did not. A template can be learned, so they guided development only.</p></details></li>
+        <li><details class="lim"><summary><strong>The number rule has a known false keep</strong></summary><p>A finding that cites N turns may say a spelled number up to N with no quote holding it. No run measured how often that happened.</p></details></li>
+        <li><details class="lim"><summary><strong>The injection guard is weak</strong></summary><p>It caught 14 of 60 orders and dropped 0 of 60 ordinary turns. Nothing here claims protection.</p></details></li>
+        <li><details class="lim"><summary><strong>Audio is flattered</strong></summary><p>The per-meeting gain is not a live feature. The fixed gate drops quiet microphones. Most cards on live audio hit the 8 s deadline. Rebuilt meetings have silence between utterances.</p></details></li>
+        <li><details class="lim"><summary><strong>E5 used a 2B base</strong></summary><p>It says nothing about a larger adapter.</p></details></li>
+        <li><details class="lim"><summary><strong>E2’s cloud arm carries the old number rule’s bug</strong></summary><p>The rerun was cancelled, so its numbers understate it.</p></details></li>
+        <li><details class="lim"><summary><strong>Small samples</strong></summary><p>E7’s comparison has 33 clean questions. One question moves its answer rate by several points.</p></details></li>
+        <li><details class="lim"><summary><strong>The test split was run once</strong></summary><p>After a configuration was chosen on dev. Which system ships is the person’s decision and has not been made.</p></details></li>
+      </ul>
+      <div class="cta"><a class="btn btn--primary" href="live.html">Try the scripted demo</a><a class="btn" href="https://github.com/aakashksen/ContextLens-Neo/blob/main/docs/REPORT.md">Read the full report</a></div>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="tour.html">Walkthrough</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="live.html">Live demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script></body>
+</html>
