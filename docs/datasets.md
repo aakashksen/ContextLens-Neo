@@ -2,7 +2,7 @@
 
 Checked 2026-11-02 from primary sources: official repos, dataset and model cards, license files, paper text, and the hosting site's own pages. Nothing was downloaded or installed. Where a primary page could not be read, the entry says "couldn't confirm".
 
-Standing rule (`CLAUDE.md`): a dataset is used only if a primary-source license allows non-commercial research use with no signed agreement. Otherwise `Approved: no, needs the person`. The same test is applied to the model candidates below, by analogy.
+Standing rule: a dataset is used only if a primary-source license allows non-commercial research use with no signed agreement. Otherwise `Approved: no, needs the person`. The same test is applied to the model candidates below, by analogy.
 
 Summary:
 - DECODE: yes, by the person, for non-commercial evaluation; its text may also go to Claude through `claude -p` for grading and comparison, by the person on 2026-11-03; never commit, publish or redistribute its data (no data license stated).
@@ -80,7 +80,7 @@ Approved: yes. Reason: CC BY 4.0 allows non-commercial research, no signed agree
 
 URL: https://huggingface.co/pyannote/speaker-diarization-3.1 (model); code https://github.com/pyannote/pyannote-audio.
 License: The code is MIT (https://github.com/pyannote/pyannote-audio/blob/develop/LICENSE, "Copyright (c) 2020 CNRS"). The model's HF metadata (https://huggingface.co/api/models/pyannote/speaker-diarization-3.1) says `license: mit` and `gated: auto`. The model card text couldn't be read unauthenticated (HTTP 401), so the terms that the user accepts on HF are unconfirmed. The segmentation model it uses (https://huggingface.co/api/models/pyannote/segmentation-3.0) is also MIT and gated.
-Access: Gated. Accept the terms on HF and use a read token, which is the person's step in `docs/HUMAN-GATES.md`.
+Access: Gated. Accept the terms on HF and use a read token, which is the person's step.
 Approved: yes, by the person on 2026-11-02, who accepted the model's terms on Hugging Face. Original finding: the access gate requires accepting model terms I could not read, so the license cannot be confirmed from the model card. The person can accept the terms and decide.
 
 ### Chosen for the backend (T8.2)

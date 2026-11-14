@@ -12,7 +12,7 @@ Stages (each its own command; only `--probe`, `--train` and `--write` hold the G
 
 The prompted side is the product's `RetrievalAssistant` with prompt V; the adapter side shows the model the same retrieved
 turns in the format it was trained on (`cards.dataset.SYSTEM` and `user_prompt`). Retrieval runs once, before any model is
-loaded, and both sides read the saved selection. QMSum dev cards are judged like the rest (approved, docs/HANDOFF.md section 8);
+loaded, and both sides read the saved selection. QMSum dev cards are judged like the rest (approved by the person);
 their rows stay under the git-ignored results/partial/ and no raw text is committed.
 """
 from __future__ import annotations
@@ -98,7 +98,7 @@ JUDGE_STATEMENT = ("Judge: Haiku through `claude -p`, one claim per call, rubric
                    "nearly everything and so gains from the base rate, is a reading and not proof. Sonnet did not grade E5. "
                    "No person reviewed these judgements (no config.judge_review), so they are provisional, not claims.")
 QMSUM_STATEMENT = ("QMSum dev cards are judged by Haiku like the rest, on published labels; sending that text to Claude through "
-                   "`claude -p` is approved (docs/HANDOFF.md section 8). Their rows stay in git-ignored files and no raw text is "
+                   "`claude -p` is approved by the person. Their rows stay in git-ignored files and no raw text is "
                    "committed; the record holds only the figures, so check_run cannot recompute them.")
 MAX_GOLD_CHOICE = {
     "chosen": 12,
