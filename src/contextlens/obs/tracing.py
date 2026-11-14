@@ -39,10 +39,11 @@ def _by_agent(stages: dict[str, int]) -> tuple[dict[str, int], dict[str, int], d
     tokens: dict[str, int] = {}
     ms: dict[str, int] = {}
     single: dict[str, int] = {}
+    is_single = "llm" in stages or "tools" in stages  # the team's suggestion call is already inside assistance_ms
     for key, value in stages.items():
         if not isinstance(value, int | float):
             continue
-        if key in SINGLE_STAGES:
+        if key in SINGLE_STAGES and (is_single or key != "suggestion"):
             single[key] = int(value)
             ms["single"] = ms.get("single", 0) + int(value)
         elif key.endswith("_ms"):
