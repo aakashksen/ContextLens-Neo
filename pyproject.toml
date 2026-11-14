@@ -24,7 +24,7 @@ obs = ["opentelemetry-api", "opentelemetry-sdk", "prometheus-client"]
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 addopts = "-m 'not real'"
 markers = [
