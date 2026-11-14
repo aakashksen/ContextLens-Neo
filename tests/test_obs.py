@@ -261,3 +261,11 @@ def test_slow_exporter_does_not_delay_the_card():
     assert card.status == "answered"
     assert time.perf_counter() - t0 < 0.5  # 4 spans at 0.5s would be 2s if run inline
     asst.flush(timeout_s=10)
+
+
+def test_team_suggestion_stage_is_not_a_single_agent_span():
+    prov, exp = provider_with_memory()
+    tel = Telemetry(tracer_provider=prov, registry=CollectorRegistry())
+    stages = {"memory_ms": 100, "consistency_ms": 90, "assistance_ms": 300, "suggestion": 50}
+    tel.record(0, 400_000_000, stages, Card(mode="respond", status="partial", findings=[]), None)
+    assert "agent.single" not in {s.name for s in exp.get_finished_spans()}
