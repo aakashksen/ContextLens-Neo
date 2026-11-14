@@ -75,7 +75,7 @@ def _f(kn: list[int]) -> dict[str, Any]:
     return {"flipped": kn[0], "trials": kn[1], "rate": e3.rate(kn)}
 
 
-def side(src: str, scored: Scored, labelled: list[e3.Case3], scenarios: list[Scenario],
+def side(scored: Scored, labelled: list[e3.Case3], scenarios: list[Scenario],
          extra: tuple[e3.Template, ...]) -> dict[str, Any]:
     """Flips (speaker, each fixed template, each extra template), catch and false alerts, and label metrics."""
     speaker = [0, 0]
@@ -149,7 +149,7 @@ def measure(*, evaluator: e3.Evaluator, prompted: ConsistencyChecker, prompted_s
         say(f"scoring the prompted checker alone, arm {arm}")
         checkers["prompted_alone"][arm] = {s: from_prompted(s, checker, cases[s], mode, extra) for s in srcs}
 
-    summary = {name: {arm: {s: side(s, run[s], labelled[s], data[s][0], extra) for s in srcs} for arm, run in arms.items()}
+    summary = {name: {arm: {s: side(run[s], labelled[s], data[s][0], extra) for s in srcs} for arm, run in arms.items()}
                for name, arms in checkers.items()}
     fell = [f"{name} {arm} {s} {m}" for name, arms in summary.items() for arm, per in arms.items() if arm != "off"
             for s, v in per.items() for m in ("label_accuracy", "alert_accuracy")

@@ -451,7 +451,7 @@ def require_base(info: dict[str, Any]) -> str:
 def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = print, *, fallback: bool = False) -> Path:
     from contextlens.llm.client import unload_ollama
 
-    info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
+    info = json.loads((root_models() / "e5_training.json").read_text(encoding="utf-8"))
     base = require_base(info)
     folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)
@@ -467,7 +467,7 @@ def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = prin
         unload_ollama(EMBED_MODEL)
         folder.mkdir(parents=True, exist_ok=True)
         write_atomic(sel_path, json.dumps(selection))
-    for side, adapter in (("prompted", None), ("adapter", str(root_models(root)))):
+    for side, adapter in (("prompted", None), ("adapter", str(root_models()))):
         client = RecordingHF(base, adapter)
         try:
             client.load()
@@ -478,7 +478,7 @@ def run_write(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     return folder
 
 
-def root_models(root: Path) -> Path:
+def root_models() -> Path:
     return data_root() / ADAPTER_REL
 
 
@@ -611,7 +611,7 @@ def run_judge(root: Path, prompt_version: str, say: Callable[[str], None] = prin
     from contextlens.experiments.judge_check import preflight
     from contextlens.llm.client import CLAUDE_CALL_CAP, CLAUDE_CALLS_PATH
 
-    info = json.loads((root_models(root) / "e5_training.json").read_text(encoding="utf-8"))
+    info = json.loads((root_models() / "e5_training.json").read_text(encoding="utf-8"))
     loaded = require_base(info)
     folder = run_dir(root, prompt_version, info["adapter_hash"], fallback)
     sets = eval_scenarios(root)

@@ -385,7 +385,7 @@ def run(
     if not any(st == NATURAL for _, _, st in scored):
         raise Refused(f"no natural-sample claim got a cloud verdict ({len(failed)} failed); rows kept, rerun to resume")
     scenarios, digest = load_verified(SOURCE, SPLIT, root)
-    return _write(run_ids, sample, scored, failed, scenarios, digest, coverage, commit, asks, before, counter_path,
+    return _write(run_ids, sample, scored, failed, scenarios, digest, coverage, asks, before, counter_path,
                   grader_name, started, root)
 
 
@@ -395,7 +395,7 @@ def _now() -> str:
 
 def _write(
     run_ids: list[str], sample: Sample, scored: list[tuple[Claim, bool, str]], failed: list[str],
-    scenarios: list[Scenario], digest: str, coverage: dict[str, Any], commit: str, asks: int, before: int,
+    scenarios: list[Scenario], digest: str, coverage: dict[str, Any], asks: int, before: int,
     counter_path: Path, grader_name: str, started: str, root: Path,
 ) -> Path:
     systems = build_systems(scored, scenarios)
