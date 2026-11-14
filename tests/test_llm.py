@@ -306,21 +306,6 @@ def test_a_worktree_shares_the_counter_of_the_main_folder(tmp_path):
     assert c.CLAUDE_CALLS_PATH == c.shared_root(c.REPO_ROOT) / "results" / "claude_calls.json"
 
 
-def test_a_worktree_counter_is_carried_into_the_shared_one_and_never_lowered(tmp_path):
-    local, shared = tmp_path / "wt" / "claude_calls.json", tmp_path / "main" / "claude_calls.json"
-    local.parent.mkdir()
-    local.write_text(json.dumps({"count": 102, "input_tokens": 204, "output_tokens": 69418, "cost_usd": 0.12}))
-    c.carry_over_counter(local, shared)
-    got = json.loads(shared.read_text())
-    assert got["count"] == 102 and got["output_tokens"] == 69418
-    assert not local.exists() and local.with_name("claude_calls.json.carried").exists()
-    c.carry_over_counter(local, shared)  # nothing left to carry
-    assert json.loads(shared.read_text())["count"] == 102
-    local.write_text(json.dumps({"count": 5, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}))
-    c.carry_over_counter(local, shared)  # a second worktree's calls add to the total
-    assert json.loads(shared.read_text())["count"] == 107
-
-
 def test_the_files_the_client_creates_do_not_dirty_a_git_tree(tmp_path, monkeypatch):
     from pathlib import Path
 

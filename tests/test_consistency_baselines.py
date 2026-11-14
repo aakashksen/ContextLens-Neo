@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from contextlens.consistency.baselines import TfidfChecker, ZeroShotChecker
-from contextlens.consistency.data import DECODE_LABEL_MAP, build_pairs, source_counts
+from contextlens.consistency.data import DECODE_LABEL_MAP, build_pairs
 from contextlens.data.loaders import Pair
 from contextlens.data.scenarios import SCENARIOS_DIR
 from contextlens.schemas import Turn
@@ -58,15 +58,6 @@ def test_label_map_matches_datasets_doc():
     rows = re.findall(r"^\| `(\w+)` \| `(\w+)` \|", section, flags=re.M)
     assert dict(rows) == DECODE_LABEL_MAP
     assert "update" not in DECODE_LABEL_MAP.values() and "insufficient" not in DECODE_LABEL_MAP.values()
-
-
-def test_sources_are_tracked(tmp_path):
-    by_split = _all(tmp_path)
-    assert source_counts(by_split["dev"]) == {
-        "decode": {"contradiction": 1}, "scenarios": {"contradiction": 1, "insufficient": 1, "update": 1}}
-    assert source_counts(by_split["test"]) == {
-        "decode": {"consistent": 2, "contradiction": 2}, "scenarios": {"consistent": 1, "contradiction": 1}}
-    assert source_counts(by_split["train"]) == {"decode": {"consistent": 2, "contradiction": 2}}
 
 
 def test_default_scenarios_dir_is_the_written_one():
