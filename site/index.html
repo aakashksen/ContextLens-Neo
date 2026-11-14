@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ContextLens Neo</title>
+<meta name="description" content="Press a button mid-conversation and get one short card, every line cited to the turn it came from.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="tour.html">Walkthrough</a><a href="specs.html">How it’s built</a><a href="live.html">Live demo</a></nav>
+    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="container hero__grid">
+      <div>
+        <h1>Who moved the launch date?</h1>
+        <p class="lead">Press once mid-meeting. The card cites every turn it used.</p>
+        <div class="actions"><a class="btn btn--primary" href="live.html">Try the demo</a><a class="btn" href="https://github.com/aakashksen/ContextLens-Neo/blob/main/docs/REPORT.md">Read the report</a></div>
+      </div>
+
+      <div class="panels" data-card>
+        <div class="record__head">
+          <div class="record__title">Planning sync, 4 minutes in</div>
+          <div class="asks" role="group" aria-label="Ask a question">
+            <button class="ask" type="button" aria-pressed="true" data-ask="date">When does it ship?</button>
+            <button class="ask" type="button" aria-pressed="false" data-ask="pricing">Who owns pricing?</button>
+          </div>
+        </div>
+        <ol class="turns">
+          <li data-t="t1" class="is-cited"><span class="measured id">t1</span><span class="who">Maya</span><span>Let’s ship the beta on Friday.</span></li>
+          <li data-t="t2"><span class="measured id">t2</span><span class="who">Jordan</span><span>Design still owes the onboarding screens.</span></li>
+          <li data-t="t3"><span class="measured id">t3</span><span class="who">Jordan</span><span>Then QA needs two days, minimum.</span></li>
+          <li data-t="t4" class="is-cited"><span class="measured id">t4</span><span class="who">Maya</span><span>Okay, make that Monday.</span></li>
+        </ol>
+        <div class="answer" aria-live="polite">
+          <div data-reading><s class="measured was">Friday</s><span class="reading">Monday</span></div>
+          <dl class="sig" data-sig>
+            <div><dt>Who</dt><dd class="person">Maya</dd></div>
+            <div><dt>Where</dt><dd class="measured instrument">t1, t4</dd></div>
+            <div><dt>Read as</dt><dd>An update, not a contradiction</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="press" aria-labelledby="press-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="press-h">How a press works</h2>
+      </div>
+      <ol class="panels steps">
+        <li><span class="n">1</span><h3>Speech becomes turns</h3><span class="measured detail">transcript, turn_update</span></li>
+        <li><span class="n">2</span><h3>The press freezes the moment</h3><span class="measured detail">as_of_seq</span></li>
+        <li><span class="n">3</span><h3>Agents search and check</h3><span class="measured detail">8 s deadline</span></li>
+        <li><span class="n">4</span><h3>The evidence guard drops what it cannot quote</h3><span class="measured detail">in code, not in the prompt</span></li>
+      </ol>
+      <p class="more"><a href="tour.html">Follow one meeting</a></p>
+    </div>
+  </section>
+
+  <section class="section section--band" id="test" aria-labelledby="test-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="test-h">Did the agent team beat one agent?</h2>
+        <p>No. 136 held-out cases, run once.</p>
+      </div>
+      <div class="panels diff">
+        <table>
+          <thead><tr><th scope="col">Measure</th><th scope="col">One agent</th><th scope="col">Team</th><th scope="col">Difference, 95% interval</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Tokens per card</th><td class="plus">555</td><td class="minus">1349</td><td>−795 (−820 to −769)</td></tr>
+            <tr><th scope="row">Median latency</th><td class="plus">2832 ms</td><td class="minus">4814 ms</td><td>−1983 ms (−2229 to −1623)</td></tr>
+            <tr><th scope="row">Abstained when evidence was missing</th><td>0.750</td><td>0.812</td><td><span class="chip chip--cool">no clear difference</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Groundedness is not published: its judge failed calibration.</p>
+      <p class="more"><a href="specs.html#experiments">All eight experiments</a></p>
+    </div>
+  </section>
+
+  <section class="section" id="trail" aria-labelledby="trail-h">
+    <div class="container">
+      <div class="head"><h2 id="trail-h">What broke on the way</h2></div>
+      <ol class="trail">
+        <li><span class="measured id">E2</span><p>A citation-id bug dropped true findings.</p><span class="chip">fixed, rerun</span></li>
+        <li><span class="measured id">E3</span><p>The team counted “not said” as an answer.</p><span class="chip">found in the rows</span></li>
+        <li><span class="measured id">E5</span><p>Fine-tuning stopped abstaining: 0.438 against 0.938.</p><span class="chip chip--person">prompting kept</span></li>
+        <li><span class="measured id">E7</span><p>A fixed voice gate dropped quiet speech.</p><span class="chip">explained, logged</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--band" id="stack" aria-labelledby="stack-h">
+    <div class="container">
+      <div class="head"><h2 id="stack-h">The stack</h2></div>
+      <dl class="stack">
+        <div><dt>Speech</dt><dd>whisper.cpp over gRPC, local speaker labels.</dd><dd class="measured path">speech/</dd></div>
+        <div><dt>Backend</dt><dd>FastAPI, PostgreSQL with pgvector.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Retrieval</dt><dd>BM25 plus embeddings, one-turn chunks.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Agents</dt><dd>LangGraph, three agents and a controller.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Clients</dt><dd>React and TypeScript, and Unity <span class="chip">not yet tried on a headset</span></dd><dd class="measured path">clients/web/, clients/unity/</dd></div>
+        <div><dt>Observability</dt><dd>OpenTelemetry and Prometheus, no transcript text.</dd><dd class="measured path">docs/REPORT.md</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section" id="contact" aria-labelledby="contact-h">
+    <div class="container contact">
+      <div>
+        <h2 id="contact-h">Built by Aakash Senthilnathan</h2>
+        <p class="who-line">Statistics and Data Science at UC Santa Barbara.</p>
+      </div>
+      <ul class="links">
+        <li><a href="https://github.com/aakashksen/ContextLens-Neo">Repository<span class="measured">ContextLens-Neo</span></a></li>
+        <li><a href="https://github.com/aakashksen">GitHub<span class="measured">github.com/aakashksen</span></a></li>
+        <li><a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn<span class="measured">linkedin.com/in/aakashsenthilnathan</span></a></li>
+        <li><a href="mailto:aakash.senthilnathan@gmail.com">Email<span class="measured">aakash.senthilnathan@gmail.com</span></a></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="tour.html">Walkthrough</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="live.html">Live demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>
