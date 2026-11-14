@@ -980,3 +980,11 @@ def test_a_team_with_a_dead_server_ends_the_run_at_the_streak_and_saves_no_reusa
     path.write_text("\n".join(json.dumps({"commit": "c", "subset": "s", "winner": "team", "model": "m", "calls": 0,
                                           "row": json.loads(p.model_dump_json())}) for p in saved), encoding="utf-8")
     assert e2._saved_rows(path, "c", "s", "team", {p.scenario_id for p in saved}, "m")[0] == {}
+
+
+def test_append_durable_after_a_crash_cut_line_keeps_the_new_row(tmp_path):
+    path = tmp_path / "rows.jsonl"
+    path.write_text('{"a": 1}\n{"b": ', encoding="utf-8")
+    e2._append_durable(path, '{"c": 3}')
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[-1] == '{"c": 3}' and lines[0] == '{"a": 1}'

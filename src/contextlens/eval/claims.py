@@ -53,7 +53,7 @@ def _cited(c: dict[str, Any], rec: dict[str, Any]) -> tuple[object, str | None, 
     system, problem = _system(c, rec)
     if system is None:
         return None, metric, problem
-    table = (rec.get("metrics") if kind == "metric" else rec.get("intervals") or {}).get(system) or {}
+    table = ((rec.get("metrics") if kind == "metric" else rec.get("intervals")) or {}).get(system) or {}
     if metric not in table:
         return None, metric, f"{kind} {metric} not in run"
     return table[metric], metric, None

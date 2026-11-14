@@ -193,3 +193,10 @@ def test_old_rows_without_new_fields_still_load() -> None:
     for k in ("claim_supported", "ranked_turn_ids", "raw_output", "errored"):
         row.pop(k)
     assert Prediction.model_validate(row).card is not None
+
+
+def test_schema_valid_rate_counts_an_empty_output_as_invalid() -> None:
+    good = _preds()[0].card.model_dump_json()  # type: ignore[union-attr]
+    preds = [p.model_copy(update={"raw_output": good}) for p in _preds()]
+    preds[1] = preds[1].model_copy(update={"raw_output": ""})
+    assert recompute_metrics(_scenarios(), preds)["schema_valid_rate"] == pytest.approx(3 / 4)

@@ -1231,8 +1231,13 @@ def _cloud_step(root: Path, cloud: Cloud, names: Models, judge_llm: LLMClient, e
 
 def _append_durable(path: Path, line: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    cut = False  # a crash left the last line without its newline: end it, or this row would join it and be lost
+    if path.is_file() and path.stat().st_size:
+        with open(path, "rb") as fh:
+            fh.seek(-1, os.SEEK_END)
+            cut = fh.read(1) != b"\n"
     with open(path, "a", encoding="utf-8") as fh:
-        fh.write(line + "\n")
+        fh.write(("\n" if cut else "") + line + "\n")
         fh.flush()
         os.fsync(fh.fileno())
 

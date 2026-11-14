@@ -283,7 +283,7 @@ def _raw_and_retrieval_metrics(rows: Rows, ks: tuple[int, ...], want: Want) -> M
     raws = _complete([p.raw_output is not None for _, p in rows]) if want("schema_valid_rate") else False
     if raws is not False:
         out["schema_valid_rate"] = (
-            M.mean([float(schema_valid(p.raw_output)) for _, p in rows if p.raw_output]) if raws else None)
+            M.mean([float(schema_valid(p.raw_output or "")) for _, p in rows]) if raws else None)
     need = [(s, p) for s, p in rows if s.gold_evidence_turn_ids]
     has_ranks = _complete([p.ranked_turn_ids is not None for _, p in need]) \
         if want("mrr", *(f"recall@{k}" for k in ks)) else False
