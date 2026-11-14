@@ -903,7 +903,7 @@ def latency_summary(outcomes: dict[str, dict[str, Outcome]], system: str) -> dic
     ms = sorted(total_ms(v["base"], system) for v in outcomes.values())
     called = [v["base"] for v in outcomes.values() if v["base"].second_ms is not None]
     tokens = [v.second_tokens for v in called if v.second_tokens is not None]
-    return {"mean_ms": statistics.mean(ms), "p50_ms": ms[len(ms) // 2], "p95_ms": ms[int(0.95 * (len(ms) - 1))],
+    return {"mean_ms": statistics.mean(ms), "p50_ms": series.percentile(ms, 50), "p95_ms": series.percentile(ms, 95),
             "second_stage_calls": len(called), "second_stage_tokens": sum(tokens),
             "second_stage_tokens_unreported": len(called) - len(tokens) if system.startswith("cascade") else 0}
 

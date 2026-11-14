@@ -939,3 +939,9 @@ def test_rebuild_adds_the_zero_count_warning_to_an_older_precision_note(crepo):
     path.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
     new = json.loads(rebuild_records.rebuild(crepo, rec["run_id"], say=lambda t: None).read_text(encoding="utf-8"))
     assert "trained on decode: 0 of 12 non-contradiction cases raised an alert" in new["config"]["alert_precision_note"]
+
+
+def test_latency_summary_interpolates_like_the_recorded_percentiles():
+    outcomes = {f"s{i}": {"base": e3.Outcome({}, False, first_ms=ms)} for i, ms in enumerate((100.0, 200.0))}
+    got = e3.latency_summary(outcomes, "trained")
+    assert got["p50_ms"] == 150.0 and got["p95_ms"] == pytest.approx(195.0)
