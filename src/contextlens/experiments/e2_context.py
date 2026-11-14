@@ -577,8 +577,8 @@ NUMBER_RULE_LIMITS = (
     "Known limits of the rule: it compares numbers by value (`_values` in `agents/single.py`), so a number word and its "
     "digits agree, and half, dozen and ordinals are read (entry 41 of `docs/DECISIONS.md`). What still fails closed: a lone one, "
     "couple, pair, once, twice and quarter are not numbers; `one and a half` is not 1.5; spoken years, `2.5k` and `15:00` "
-    "are not matched with other spellings. Records made before the fix ran on the old rule. `docs/interview-notes.md` does "
-    "not exist yet, so no interview-based limits are recorded.")
+    "are not matched with other spellings. Records made before the fix ran on the old rule. No "
+    "interview-based limits are recorded.")
 NOT_MEASURED = [
     "Whether each dropped finding was true: the counts below are of cases carrying the `missing` note. Rows written after "
     "the short-id fix also save each dropped finding's text and reason in `drops`; older rows have none, so their counts "

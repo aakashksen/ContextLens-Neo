@@ -8,7 +8,7 @@ are one audience the accessibility settings serve; they aren't the only audience
 Central question: **How can an assistant keep and find the right context quickly enough to help, without inventing memories or
 mistaking changed information for a contradiction?**
 
-The project also exists to demonstrate specific skills for the resume (`docs/RESUME-TARGETS.md`), so every feature must serve the product
+The project also exists to demonstrate specific skills for the resume, so every feature must serve the product
 *and* produce a measured result. Anything that serves neither is out.
 
 ## What the user sees

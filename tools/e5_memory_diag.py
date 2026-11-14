@@ -64,7 +64,7 @@ def measure(model, row: dict, n_per_micro: int, accum: int, slice_logits: bool) 
 
 def main() -> None:
     tok = AutoTokenizer.from_pretrained(PRIMARY)
-    examples = load_examples("train", Path("<local path>"), include_scenarios=True)
+    examples = load_examples("train", Path(__file__).resolve().parents[1] / "datasets" / "cards", include_scenarios=True)
     rows = [r for e in examples if (r := tokenize_example(tok, e, 10**6)) is not None]
     model = attach_lora(_load_4bit(PRIMARY))
     model.train()

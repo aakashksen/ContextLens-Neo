@@ -11,7 +11,7 @@
 **Spec:** `docs/DESIGN.md`. Testing rules: `docs/TESTING.md`.
 
 ## Final stretch, the person's direction (2026-11-04)
-This overrides older text in this plan where they differ. Background and evidence are in `docs/HANDOFF.md`. ContextLens starts only after SPROUT finishes, when the coordinator says go.
+This overrides older text in this plan where they differ. Background and evidence are in the handoff notes. ContextLens starts only after SPROUT finishes, when the coordinator says go.
 - **Start.** Merge `prep/grade` (entry 51's result) and the other finished branches named in the handoff, and record the combined arm. Set up and check the Haiku judge. Then follow the order below.
 - **GPU order, one at a time.** T7.1 (E6), T6.2 (E5), T8.5 (E7), T9.1 (E8). The GPU never waits on a build: build the next job on the CPU while the current one runs.
 - **Alongside on the CPU.** During E6: T6.2's code and E7's code. During T6.2: T7.2, which needs only E6's chosen prompt. During E7: T9.1's trimmed code. During T9.1: T9.3's template and Haiku judging.
@@ -77,12 +77,12 @@ class Scenario: id: str; conversation: Conversation; request: ButtonRequest; cat
 
 ### T0.3: Check the datasets
 **Agent:** use the `researcher` for lookups. **Files:** `docs/datasets.md`, `tools/check_datasets_doc.py`.
-**Do:** For DECODE, QMSum, LongMemEval, and the AMI Meeting Corpus, record from primary sources: URL, license and whether it allows this use, size, format, labels, and access steps. Confirm or correct the assumption that DECODE only labels contradiction vs not. Also list candidates for: diarization (pyannote and one alternative, with terms), the consistency base model, and the small LLM (runs in 4-bit under 7 GB). Apply the standing rule in `CLAUDE.md` and write an `Approved:` line for each, yes or `no, needs the person`, with the reason.
+**Do:** For DECODE, QMSum, LongMemEval, and the AMI Meeting Corpus, record from primary sources: URL, license and whether it allows this use, size, format, labels, and access steps. Confirm or correct the assumption that DECODE only labels contradiction vs not. Also list candidates for: diarization (pyannote and one alternative, with terms), the consistency base model, and the small LLM (runs in 4-bit under 7 GB). Apply the standing rule and write an `Approved:` line for each, yes or `no, needs the person`, with the reason.
 **Tests:** none beyond the check.
 **Accept:** `{py} tools/check_datasets_doc.py` (write this small script: fails unless each of the 4 datasets has a URL, License, Labels, and Approved line).
 
 ### H1: Check the dataset choices
-Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
+Doesn't block the build; blocks T9.1. See the list of human gates.
 
 ---
 
@@ -102,7 +102,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_scenarios.py -q`.
 
 ### H2: Review test labels
-Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
+Doesn't block the build; blocks T9.1. See the list of human gates.
 
 ### T1.3: Replay runner
 **Files:** `src/contextlens/replay/runner.py`, `src/contextlens/memory/store.py`, `tests/test_replay.py`.
@@ -195,7 +195,7 @@ Doesn't block the build; blocks T9.1. See `docs/HUMAN-GATES.md`.
 **Suggestions:** Also count, on the prompt-injection scenarios, injected claims that appear in a card's suggestion (T3.2's second call can still repeat one a kept finding repeated).
 **Tests:** tiny fixture with `FakeLLM` writes a valid record.
 **From phase review:** The cloud comparison runs on a named subset whose manifest in `datasets/splits/subsets/` is committed before the run. `tests/test_no_raw_text.py` misses a quote hard-wrapped across lines in a non-JSON file, and one used as a JSON dict key; close both before this task writes committed output from restricted sources.
-**Decision (the coordinator):** E2's error analysis has a named check for number-rule misses, so the data decides whether to revisit T3.2's rule. Its known limits: a lone "one", "half", "dozen", and ordinals aren't number tokens, and punctuation doesn't break a run. List them in `docs/interview-notes.md` once that file exists.
+**Decision (the coordinator):** E2's error analysis has a named check for number-rule misses, so the data decides whether to revisit T3.2's rule. Its known limits: a lone "one", "half", "dozen", and ordinals aren't number tokens, and punctuation doesn't break a run. List them with the other known limits once the report exists.
 **Accept:** `{py} -m pytest tests/test_e2.py -q`; `{py} -m contextlens.eval.check_run E2 --min-n 100 --split dev`.
 
 ---
@@ -368,7 +368,7 @@ Built against `tools/fake_server.py` and `docs/client-contract.md`, in parallel 
 **Accept:** `{py} -m pytest tests/test_integration.py -q`; `{py} tools/check_unity_schema.py`.
 
 ### H3: Try the Unity client
-See `docs/HUMAN-GATES.md`.
+See the list of human gates.
 
 ---
 
@@ -394,14 +394,14 @@ See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m pytest tests/test_e9.py -q`.
 
 ### H4: Run the user study
-See `docs/HUMAN-GATES.md`.
+See the list of human gates.
 
 **From phase review:** E3 measured the team without the `check_consistency` tool, while the design and `api/production.py` give the team `PromptedChecker`, and `CascadeChecker` is wired into the team nowhere (phase-4 D1). E8 measures the system that ships, and its record says which checker that is; E3's team figures are not presented as the shipping team. E3's abstention finding rests on 16 cases (D7): T9.1 and T9.3 state the count. The injection-in-suggestion count could not fail, and the respond rule reads the latest turn rather than the latest turn from another speaker (D8): the report says so and draws no claim from either.
 
 ### T9.3: Report, README, and bullets
 **The person's direction (2026-11-04):** gather every stat from the runs into the report. Doesn't wait for H3 or H4. Bullet 1's wording follows the results: the team's gain so far is in abstention, not in evidence under Sonnet, so don't claim improved grounded answers unless the test shows it. State the template-built new cases with agent-read labels, the guard's measured limits, and any gap between the selected and shipping systems.
-**Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `docs/RESUME-TARGETS.md`, `docs/interview-notes.md`, `tools/check_report_numbers.py`.
-**Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. `docs/interview-notes.md` explains each major decision, tradeoff, and failure, so the person can defend them.
+**Files:** `docs/REPORT.md`, `README.md`, `results/claims.json`, `tools/check_report_numbers.py`.
+**Do:** Write the report: problem, architecture, data, every experiment including failures, and limits. Fill `results/claims.json` from run records, then fill the bullets, rewording any that results don't support. Add clean setup steps and a demo script. Keep notes that explain each major decision, tradeoff, and failure, so the person can defend them.
 **Tests:** the claims checker, plus `tools/check_report_numbers.py`, which fails if a number in `docs/REPORT.md` or the bullets isn't in a run record, if any `[placeholder]` remains, or if `results/claims.json` is empty.
 **Decision (the coordinator):** `check_run` remembers passed records between lands, so this task and the final checks run the full check with `--all`, never from remembered passes.
 **Decision (the coordinator):** The report's limits state that statements restating a conflict are where both judges wobble.
@@ -411,4 +411,4 @@ See `docs/HUMAN-GATES.md`.
 **Accept:** `{py} -m contextlens.eval.claims check`; `{py} tools/check_report_numbers.py`; `{py} -m pytest -q`.
 
 ### H5: Final sign-off
-See `docs/HUMAN-GATES.md`.
+See the list of human gates.

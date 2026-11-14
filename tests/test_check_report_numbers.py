@@ -85,6 +85,7 @@ def test_a_record_no_claim_cites_gives_no_counts(tmp_path: Path) -> None:
     "See entry 41 and entries 49, 51 and 56, and entry 29a.",
     "Version v3 of Qwen3.5-2B and qwen3.5:4b-q4_K_M, task T9.3, gate H4.",
     "Python 3.12.",
+    "AMI is CC BY 4.0.",
     "recall@5 and p95 and ES2003a.",
     "## 3. Data\n\n### 4.2 Detail\n\n1. First\n2) Second\n",
     "```\ndocker run -p 8000:8000 --gpus 1\n```\n",
@@ -99,6 +100,7 @@ def test_the_narrow_ignore_rules(tmp_path: Path, text: str) -> None:
     "The 7 prompts.",
     "Entry results of 41 cases.",
     "Python 3.11.",
+    "CC BY 4.0 and 4.0 more.",
     "At 8000 ms.",
     "In 2026-11 only.",
 ])

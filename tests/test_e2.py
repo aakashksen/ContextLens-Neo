@@ -633,8 +633,7 @@ def test_the_cloud_stage_alone_needs_a_committed_unchanged_local_record(repo: Pa
 # ---------------------------------------------------------------- the error analysis
 
 STATED = ["Dev labels are unreviewed", "unreviewed judgements", "nearly the same turns", "high by construction",
-          "coordinator decided afterward", "under half of answerable cases", "Known limits of the rule",
-          "docs/interview-notes.md"]
+          "coordinator decided afterward", "under half of answerable cases", "Known limits of the rule"]
 
 
 def _commit_records(repo: Path) -> None:

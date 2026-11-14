@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ("docs/REPORT.md", "docs/RESUME-TARGETS.md", "README.md")
+OPTIONAL = ("docs/RESUME-TARGETS.md",)  # read when present; a public checkout does not carry it
 
 FENCE = re.compile(r"^[ \t]*```.*?^[ \t]*```[ \t]*$", re.M | re.S)
 INLINE = re.compile(r"`[^`\n]*`")
@@ -17,6 +18,7 @@ IGNORED = [
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),  # dates
     re.compile(r"\bentr(?:y|ies) \d+[a-z]?(?:(?:,| and| to|-) ?\d+[a-z]?)*", re.I),  # "entry 41", "entries 49, 51 and 56"
     re.compile(r"\bPython 3\.12\b"),
+    re.compile(r"\bCC BY 4\.0\b"),  # a licence name
     re.compile(r"@\d+"),  # recall@5
     re.compile(r"^#+[ \t]*\d+(?:\.\d+)*\.?(?=\s)", re.M),  # heading numbers
     re.compile(r"^[ \t]*\d+[.)](?=\s)", re.M),  # ordered list markers
@@ -110,6 +112,8 @@ def check(root: Path = ROOT) -> list[str]:
     values, counts, problems = _cited(root, claims)
     for rel in DOCS:
         doc = root / rel
+        if not doc.is_file() and rel in OPTIONAL:
+            continue
         if not doc.is_file():
             problems.append(f"{rel}: missing")
             continue
