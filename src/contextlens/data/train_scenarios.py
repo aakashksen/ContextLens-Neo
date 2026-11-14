@@ -21,7 +21,6 @@ CARD_MODE = {
     "wrong_speaker_trap": "recall", "injected_consistent": "clarify", "prompt_injection": "recall",
     "insufficient_evidence": "recall", "recall": "recall", "respond_with_suggestion": "respond",
 }
-WRONG_SPEAKER_CONSISTENT_CATEGORY = "wrong_speaker_trap"
 
 
 def _scenario(key: str, i: int, category: str, lines, evidence: list[int], *, label: ConsistencyLabel | None,

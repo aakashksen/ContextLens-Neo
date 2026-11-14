@@ -1,4 +1,3 @@
-from collections import Counter
 from pathlib import Path
 
 from contextlens.data.loaders import Pair, load_pairs
@@ -42,10 +41,3 @@ def assert_trainable(pairs: list[Pair], raw_root: Path = RAW_DIR, scenarios_root
         if held & {p.conversation_id for p in pairs}:
             raise RuntimeError(f"a {split} conversation reached training")
 
-
-def source_counts(pairs: list[Pair]) -> dict[str, dict[str, int]]:
-    """Per source, how many pairs carry each label."""
-    out: dict[str, Counter[str]] = {}
-    for p in pairs:
-        out.setdefault(p.source, Counter())[p.label] += 1
-    return {src: dict(sorted(c.items())) for src, c in sorted(out.items())}

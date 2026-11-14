@@ -343,17 +343,6 @@ def _save_calls(path: Path, calls: dict) -> None:
         raise LLMError(f"cannot write call counter {path}: {err}") from err
 
 
-def carry_over_counter(local: Path, shared: Path) -> None:
-    """Add a worktree's own counter to the shared one, once; the old file is kept beside it as `.carried`."""
-    local, shared = Path(local), Path(shared)
-    if local == shared or not local.exists():
-        return
-    with _locked(shared, LOCK_TIMEOUT_S):
-        mine, total = _load_calls(local), _load_calls(shared)
-        _save_calls(shared, {k: total[k] + mine[k] for k in _COUNTER_KEYS})
-        os.replace(local, local.with_name(local.name + ".carried"))
-
-
 class ClaudeCodeClient(_Base):
     def __init__(
         self,
