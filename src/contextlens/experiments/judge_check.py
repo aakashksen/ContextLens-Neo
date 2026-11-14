@@ -233,9 +233,12 @@ def open_rows(path: Path, header: dict[str, Any]) -> tuple[dict[str, dict[str, A
         path.parent.mkdir(parents=True, exist_ok=True)
         _fsync_append(path, json.dumps(header, sort_keys=True))
         return {}, 0
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
     if not lines or json.loads(lines[0]) != json.loads(json.dumps(header)):
         raise Refused(f"{path.name} was started with a different commit or sample; it cannot be resumed")
+    if not text.endswith("\n"):
+        _fsync_append(path, "")  # end the line a crash cut, so the next row does not join it and get lost
     rows: dict[str, dict[str, Any]] = {}
     asks = 0
     for ln in lines[1:]:

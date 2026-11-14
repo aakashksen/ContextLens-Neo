@@ -163,3 +163,12 @@ def test_a_cap_error_stops_the_run(tmp_path: Path) -> None:
     llm = Fake({k: "Claude Code call cap of 5000 reached; only the person can raise it" for k in range(1, 9)})
     out = pg.grade_single(_items(5), llm, _store(tmp_path), concurrency=1)
     assert out.stop_reason and "cap" in out.stop_reason and llm.n == 1
+
+
+def test_a_row_saved_after_a_crash_cut_the_last_line_is_not_lost(tmp_path: Path) -> None:
+    path = tmp_path / "rows.jsonl"
+    path.write_text(json.dumps(HEADER) + "\n" + '{"claim_id": "c0", "status": "ok", "cloud": true}\n{"claim_id": "c1", "sta',
+                    encoding="utf-8")
+    _store(tmp_path).save({"claim_id": "c2", "status": "ok", "cloud": False, "via": "single"})
+    rows, _ = open_rows(path, HEADER)
+    assert sorted(rows) == ["c0", "c2"]
