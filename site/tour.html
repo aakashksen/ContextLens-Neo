@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walkthrough, ContextLens Neo</title>
+<meta name="description" content="One invented meeting followed through the press: turns, memory, retrieval, agents, the evidence guard and the card.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="tour.html" aria-current="page">Walkthrough</a><a href="specs.html">How it’s built</a><a href="live.html">Live demo</a></nav>
+    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--tall">
+    <div class="container hero__grid">
+      <div>
+        <h1>One meeting, seven steps</h1>
+        <p class="lead">An invented planning sync, followed from speech to card.</p>
+      </div>
+      <div class="panels">
+        <div class="panel-cap">The meeting <span>invented</span></div>
+        <ol class="turns"><li class=""><span class="measured id">t1</span><span class="who">Maya</span><span>Let’s ship the beta on Friday.</span></li><li class=""><span class="measured id">t2</span><span class="who">Jordan</span><span>Design still owes the onboarding screens.</span></li><li class=""><span class="measured id">t3</span><span class="who">Jordan</span><span>Then QA needs two days, minimum.</span></li><li class=""><span class="measured id">t4</span><span class="who">Maya</span><span>Okay, make that Monday.</span></li><li class=""><span class="measured id">t5</span><span class="who">Jordan</span><span>I’ll send the QA plan tomorrow.</span></li><li class=""><span class="measured id">t6</span><span class="who">Maya</span><span>Anyone want coffee?</span></li></ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-label="Walkthrough">
+    <div class="container">
+      <ol class="story">
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">1</span>
+            <h2>Speech becomes turns</h2>
+            <p>Each turn arrives with the speaker unknown. A turn update names the speaker.</p>
+          </div>
+          <div class="panels">
+            <ul class="rows">
+              <li><span class="measured">audio</span><span class="what">a chunk of speech</span></li>
+              <li><span class="measured">transcript</span><span class="what">t1, speaker unknown</span></li>
+              <li><span class="measured">turn_update</span><span class="what">t1, speaker Maya</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">2</span>
+            <h2>Memory notes what matters</h2>
+            <p>A correction links to what it replaces. “Make that Monday” is not a conflict.</p>
+          </div>
+          <div class="panels">
+            <ul class="rows">
+              <li><span class="chip tag">decision</span><div><span class="what">Ship the beta on Friday.</span><div class="meta"><span class="measured">t1</span></div></div></li>
+              <li><span class="chip chip--person tag">correction</span><div><span class="what">Ship the beta on Monday.</span><div class="meta"><span class="measured">t4</span><span class="chip chip--cool">replaces t1</span></div></div></li>
+              <li><span class="chip tag">commitment</span><div><span class="what">Jordan sends the QA plan.</span><div class="meta"><span class="measured">t5</span></div></div></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">3</span>
+            <h2>The press freezes the moment</h2>
+            <p>“When does it ship?” is pressed after t5. Later turns cannot be cited.</p>
+          </div>
+          <div class="panels">
+            <ol class="turns">
+              <li class="is-cited"><span class="measured id">t5</span><span class="who">Jordan</span><span>I’ll send the QA plan tomorrow.</span></li>
+              <li class="is-late"><span class="measured id">t6</span><span class="who">Maya</span><span>Anyone want coffee?</span></li>
+            </ol>
+            <p class="panel-note">Pressed after t5. t6 is too late to cite.</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">4</span>
+            <h2>Retrieval finds the likely turns</h2>
+            <p>BM25 and embeddings run together over one-turn chunks.</p>
+          </div>
+          <div class="panels">
+            <ul class="rows">
+              <li><span class="rank">rank 1</span><div><span class="what">Let’s ship the beta on Friday.</span> <span class="measured">t1</span></div></li>
+              <li><span class="rank">rank 2</span><div><span class="what">Okay, make that Monday.</span> <span class="measured">t4</span></div></li>
+              <li><span class="rank">rank 3</span><div><span class="what">Then QA needs two days, minimum.</span> <span class="measured">t3</span></div></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">5</span>
+            <h2>Agents search and check</h2>
+            <p>Three agents work under an 8 s deadline.</p>
+          </div>
+          <div class="panels">
+            <ul class="rows">
+              <li><span class="chip chip--cool tag">memory</span><span class="what">A decision at t1, a correction at t4.</span></li>
+              <li><span class="chip chip--cool tag">consistency</span><span class="what">An update, not a contradiction.</span></li>
+              <li><span class="chip chip--cool tag">assistance</span><span class="what">Drafts two findings.</span></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">6</span>
+            <h2>The guard drops what it cannot quote</h2>
+            <p>Code checks every finding against the turns it cites.</p>
+          </div>
+          <div class="panels">
+            <ul class="rows">
+              <li><span class="chip chip--ok tag">kept</span><div><span class="what">Maya moved the beta to Monday.</span><div class="checks"><span class="chip">quotes found in t1, t4</span></div></div></li>
+              <li class="is-dropped"><span class="chip chip--bad tag">dropped</span><div><span class="what">QA will finish by Thursday.</span><div class="checks"><span class="chip chip--bad">no such quote in t3</span></div></div></li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step__text">
+            <span class="n">7</span>
+            <h2>The card</h2>
+            <p>The old date is struck through, with who changed it and where.</p>
+          </div>
+          <div class="panels">
+            <div class="answer">
+              <div><s class="measured was">Friday</s><span class="reading">Monday</span></div>
+              <dl class="sig">
+                <div><dt>Who</dt><dd class="person">Maya</dd></div>
+                <div><dt>Where</dt><dd class="measured instrument">t1, t4</dd></div>
+                <div><dt>Read as</dt><dd>An update, not a contradiction</dd></div>
+              </dl>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--band" aria-labelledby="none-h">
+    <div class="container built">
+      <div>
+        <h2 id="none-h">Nobody answered it</h2>
+        <p class="note">Who owns pricing? Nobody said.</p>
+      </div>
+      <div class="panels">
+        <div class="answer answer--big">
+          <div><span class="reading reading--quiet">Not enough information</span></div>
+          <dl class="sig">
+            <div><dt>Who</dt><dd>Nobody</dd></div>
+            <div><dt>Where</dt><dd class="measured instrument">no turn</dd></div>
+            <div><dt>Read as</dt><dd>Pricing never came up</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="unity-h">
+    <div class="container built">
+      <div>
+        <h2 id="unity-h">The Unity client</h2>
+        <p class="note"><span class="chip">built, not yet tried on a headset</span></p>
+        <div class="cta"><a class="btn btn--primary" href="live.html">Try a scripted replay</a><a class="btn" href="specs.html">How it’s built</a></div>
+      </div>
+      <div class="panels">
+        <ul class="rows">
+          <li><span class="chip chip--ok tag">done</span><span class="what">Written against the client contract.</span></li>
+          <li><span class="chip chip--ok tag">done</span><span class="what">The schema check passes.</span></li>
+          <li><span class="chip tag">not yet</span><span class="what">Run in the Unity editor.</span></li>
+          <li><span class="chip tag">not yet</span><span class="what">Tried on a headset.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="tour.html">Walkthrough</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="live.html">Live demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
