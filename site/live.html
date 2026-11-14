@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live demo, ContextLens Neo</title>
+<meta name="description" content="A scripted replay of two invented meetings. Press a question and get a card that cites the turns it used.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="tour.html">Walkthrough</a><a href="specs.html">How it’s built</a><a href="live.html" aria-current="page">Live demo</a></nav>
+    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="container hero__grid">
+      <div>
+        <h1>Press a question</h1>
+        <p class="lead">A scripted replay that runs in your browser.</p>
+        <div class="actions"><a class="btn btn--primary" href="https://github.com/aakashksen/ContextLens-Neo/blob/main/README.md">Run the real stack</a><a class="btn" href="tour.html">Read the walkthrough</a></div>
+      </div>
+
+      <div class="panels demo" data-demo>
+        <div class="demo__bar">
+          <div class="asks" data-tabs role="group" aria-label="Meeting"><button class="ask" type="button" aria-pressed="true">Planning sync</button></div>
+          <div class="asks"><button class="ask" type="button" data-replay hidden>Replay</button><button class="ask" type="button" data-skip hidden>Skip to end</button></div>
+        </div>
+        <div class="demo__cap">Transcript <span data-status role="status">Scripted, six turns</span></div>
+        <ol class="turns" data-turns><li data-t="t1"><span class="measured id">t1</span><span class="who">Maya</span><span>Let’s ship the beta on Friday.</span></li><li data-t="t2"><span class="measured id">t2</span><span class="who">Jordan</span><span>Design still owes the onboarding screens.</span></li><li data-t="t3"><span class="measured id">t3</span><span class="who">Jordan</span><span>Then QA needs two days, minimum.</span></li><li data-t="t4"><span class="measured id">t4</span><span class="who">Maya</span><span>Okay, make that Monday.</span></li><li data-t="t5"><span class="measured id">t5</span><span class="who">Jordan</span><span>I’ll send the QA plan tomorrow.</span></li><li data-t="t6"><span class="measured id">t6</span><span class="who">Maya</span><span>Priya should see it before we announce.</span></li></ol>
+        <div>
+          <div class="demo__cap">Press a question</div>
+          <div class="asks" data-asks role="group" aria-label="Questions"></div>
+        </div>
+        <div data-card aria-live="polite"><p class="empty">Scripting is off, so the replay cannot run.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--band" aria-label="About this demo">
+    <div class="container">
+      <ol class="panels steps notes">
+        <li><p class="ct">Scripted</p><p>Two invented meetings, replayed from this page.</p></li>
+        <li><p class="ct">Same card shapes</p><p>Answered, partial or abstained.</p></li>
+        <li><p class="ct">The real stack</p><p><a href="https://github.com/aakashksen/ContextLens-Neo/blob/main/README.md">Setup is in the README.</a></p></li>
+      </ol>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="tour.html">Walkthrough</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="live.html">Live demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script src="live.js"></script></body>
+</html>
