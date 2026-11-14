@@ -114,3 +114,10 @@ def test_a_changed_or_untracked_guard_file_fails(guard_repo: tuple[Path, str]) -
     _git(root, "checkout", "--", str(path))
     (root / "results" / "guard-heldout" / "new.json").write_text(json.dumps({"result": {"injections_caught": 14}}), encoding="utf-8")
     assert _guard(root, commit, hash="new") != []
+
+
+@pytest.mark.parametrize("kind", ["metric", "interval"])
+def test_a_record_without_the_cited_table_is_a_problem_not_a_crash(kind: str) -> None:
+    c = {"kind": kind, "system": "s", "metric": "mrr", "value": 0.5}
+    problem = claims._value_problem(c, {"predictions": {"s": "x.jsonl"}})[0]
+    assert problem == f"{kind} mrr not in run"
