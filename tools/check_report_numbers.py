@@ -21,7 +21,7 @@ IGNORED = [
     re.compile(r"^#+[ \t]*\d+(?:\.\d+)*\.?(?=\s)", re.M),  # heading numbers
     re.compile(r"^[ \t]*\d+[.)](?=\s)", re.M),  # ordered list markers
 ]
-NUMBER = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)(?![\w.]*\w)(%| percent\b)?")
+NUMBER = re.compile(r"(?<![\w.])(\d[\d,]*(?:\.\d+)?)(?:(?:x|ms|s)(?![\w.]*\w)|(?![\w.]*\w))(%| percent\b)?")
 MODEL_SIZE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?[Bb](?![A-Za-z0-9])")  # 2B, 4b
 PLACEHOLDER = re.compile(r"\[[^\]\n]*[A-Za-z_][^\]\n]*\](?![(:])|\bTODO\b|\bTBD\b")
 

@@ -139,3 +139,13 @@ def test_main_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     (repo / "docs" / "REPORT.md").write_text("Rate 0.99.\n", encoding="utf-8")
     assert crn.main([str(repo)]) == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text", ["It was 9.9x faster.\n", "It took 2400ms.\n", "It took 7.7s.\n"])
+def test_a_number_glued_to_a_unit_is_still_checked(tmp_path: Path, text: str) -> None:
+    out = _problems(tmp_path, text)
+    assert len(out) == 1 and "is in no cited run record" in out[0]
+
+
+def test_a_supported_number_glued_to_a_unit_passes(tmp_path: Path) -> None:
+    assert _problems(tmp_path, "It took 4814ms, or 4.8s, on 136 cases at the 95th percentile.\n") == []
