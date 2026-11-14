@@ -12,7 +12,8 @@ class EvidenceStore:
 
     def add(self, finding: Finding) -> None:
         with self._lock:
-            self._findings.append(finding)
+            if finding not in self._findings:  # a follow-up may find again what the first pass found
+                self._findings.append(finding)
 
     def all(self) -> list[Finding]:
         with self._lock:

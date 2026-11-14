@@ -483,3 +483,11 @@ def test_an_assistance_call_cut_off_at_the_deadline_is_noted_as_a_deadline_too()
     team, ctx, _ = build(ls, deadline_s=0.6)
     card = team.answer(req(), ctx)
     assert "assistance: deadline reached" in card.missing and not any("llm error" in m for m in card.missing)
+
+
+def test_a_followup_that_repeats_a_finding_does_not_duplicate_it_on_the_card():
+    ls = llms([MEM, MEM], [CON], [ask("memory"), PLAN])
+    team, ctx, _ = build(ls)
+    card = team.answer(req(), ctx)
+    assert len(ls["memory"].calls) == 2
+    assert sorted(f.agent for f in card.findings) == ["consistency", "memory"]
