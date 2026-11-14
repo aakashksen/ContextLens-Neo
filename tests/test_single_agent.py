@@ -818,3 +818,14 @@ def test_number_with_unit_letters_attached_is_one_number():
 
     assert numbers_supported("The meeting is at 10pm", ["we meet at 10 pm"], ["t1"])
     assert not numbers_supported("The meeting is at 10pm", ["we meet at 1 pm"], ["t1"])
+
+
+def test_blank_question_is_treated_as_no_question():
+    from contextlens.agents.assistance_agent import _messages
+    from contextlens.agents.single import DEFAULT_ASK, _suggestion_messages, _user_message
+
+    t = Turn(id="c:t0", conversation_id="c", seq=0, speaker="a", text="hi", start_ms=0, end_ms=1, source="synthetic")
+    req = ButtonRequest(conversation_id="c", as_of_seq=0, question="   ")
+    assert DEFAULT_ASK in _user_message([t], req)
+    assert DEFAULT_ASK in _suggestion_messages([], req)[1]["content"]
+    assert DEFAULT_ASK in _messages([], req)[1]["content"]

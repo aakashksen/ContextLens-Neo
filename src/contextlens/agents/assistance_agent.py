@@ -38,7 +38,7 @@ def _messages(findings: list[Finding], req: ButtonRequest) -> list[dict]:
     lines = "\n".join(
         f"- [{escape(f.agent)}{f' / {f.label}' if f.label else ''}] {escape(f.statement)}" for f in findings
     )
-    ask = escape(req.question) if req.question else DEFAULT_ASK
+    ask = escape(req.question) if (req.question or "").strip() else DEFAULT_ASK
     return [
         {"role": "system", "content": _SYSTEM},
         {"role": "user", "content": f"<findings>\n{lines}\n</findings>\nQuestion: {ask}"},

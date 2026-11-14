@@ -103,7 +103,7 @@ def tool_result_block(result: Any) -> str:
 
 
 def _user_message(turns: list[Turn], req: ButtonRequest) -> str:
-    ask = escape(req.question) if req.question else DEFAULT_ASK
+    ask = escape(req.question) if (req.question or "").strip() else DEFAULT_ASK
     return f"{render_transcript_block(turns)}\nQuestion: {ask}"
 
 
@@ -313,7 +313,7 @@ def _suggestion_messages(findings: list[Finding], req: ButtonRequest) -> list[di
     """Verified statements and the question, escaped. Quotes are left out: they are raw transcript text,
     the one place an instruction could come from, and the statement already carries the fact."""
     lines = "\n".join(f"- {escape(f.statement)}" for f in findings)
-    ask = escape(req.question) if req.question else DEFAULT_ASK
+    ask = escape(req.question) if (req.question or "").strip() else DEFAULT_ASK
     return [
         {"role": "system", "content": _SUGGEST_SYSTEM},
         {"role": "user", "content": f"<findings>\n{lines}\n</findings>\nQuestion: {ask}"},
