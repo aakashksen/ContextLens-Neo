@@ -55,8 +55,8 @@ class ArmMissing(RuntimeError):
     """An arm the config names is not registered in production.ASSISTANTS."""
 
 
-def load_config(root: Path = ROOT) -> dict[str, Any]:
-    return json.loads((root / CONFIG_REL).read_text(encoding="utf-8"))
+def load_config(root: Path = ROOT, rel: Path | None = None) -> dict[str, Any]:
+    return json.loads((root / (rel or CONFIG_REL)).read_text(encoding="utf-8"))
 
 
 def config_sha(cfg: dict[str, Any]) -> str:
@@ -399,8 +399,9 @@ def run_key(root: Path, cfg: dict[str, Any], commit: str | None = None) -> str:
     return f"{config_sha(cfg)}:{(commit or head_commit(root))[:12]}"
 
 
-def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | None, run_conditions: str, say=print) -> dict[str, Any]:
-    cfg = load_config(root)
+def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | None, run_conditions: str, say=print,
+        config: Path | None = None) -> dict[str, Any]:
+    cfg = load_config(root, config)
     check_arms(arms)
     check_pins(cfg, root)
     scs, meta, digest = e10_cases.load_cases(split, root)
@@ -433,7 +434,11 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
             todo = [a for a in arms if sc.id not in have.get(a, {})]
             if not todo:
                 continue
-            items, info = build_memory(sc, mem_llm, chunk, root, num_ctx, max_chunk_chars=cfg['memory'].get('max_chunk_chars'))
+            if cfg["memory"].get("cached_only") and not _cached(root, memory_key(sc, chunk, production.MODEL, num_ctx)):
+                items, info = [], {"cached": True, "ms": 0.0, "failed_chunks": 0, "absent": True}  # no notes: every arm runs without them
+                timing["memory_absent_cases"] = timing.get("memory_absent_cases", 0) + 1
+            else:
+                items, info = build_memory(sc, mem_llm, chunk, root, num_ctx, max_chunk_chars=cfg['memory'].get('max_chunk_chars'))
             if info["failed_chunks"]:
                 raise RuntimeError(f"memory for {sc.id} is incomplete ({info['failed_chunks']} chunk(s) failed); run prebuild again "
                                    "rather than pressing on a meeting with missing notes")
@@ -488,7 +493,7 @@ def write_report(root: Path, split: str, arms: list[str], scs: list[Scenario], m
     rows = {a: {i: p for i, p in r.items() if i in ids} for a, r in rows.items()}
     tables = tables_from_rows(scs, meta, rows, arms)
     now = datetime.now(timezone.utc)
-    run_id = f"{EXPERIMENT}-{'S' if smoke else ''}{split}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
+    run_id = f"{cfg.get('experiment', EXPERIMENT)}-{'S' if smoke else ''}{split}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
     local = root / (SMOKE_DIR if smoke else LOCAL_DIR)
     local.mkdir(parents=True, exist_ok=True)
     (root / (SMOKE_DIR if smoke else RECORD_DIR)).mkdir(parents=True, exist_ok=True)
@@ -496,7 +501,7 @@ def write_report(root: Path, split: str, arms: list[str], scs: list[Scenario], m
         write_atomic(local / f"{run_id}.{a}.predictions.jsonl", "".join(p.model_dump_json() + "\n" for p in r.values()))
     types = Counter(meta[s.id]["type"] for s in scs)
     record = {
-        "run_id": run_id, "experiment": EXPERIMENT, "split": split, "smoke": smoke,
+        "run_id": run_id, "experiment": cfg.get("experiment", EXPERIMENT), "split": split, "smoke": smoke,
         "git_commit": head_commit(root), "dirty": is_dirty(root), "rows_key": key, "config_sha256": config_sha(cfg), "cases_hash": digest,
         "scenario_source": "e10", "labels_reviewed": False, "label_source": "e10_templated",
         "label_note": "Conflict and twin statements are invented from templates and no person has read a sample of them yet; "
@@ -523,12 +528,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--smoke", action="store_true", help="a few cases of each type; the record goes to git-ignored results/local")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--commit", help="report: the commit whose saved rows to use (default: HEAD)")
+    ap.add_argument("--config", type=Path, help="config under the repo root; default configs/e10.json (E11 is configs/e11.json)")
     ap.add_argument("--run-conditions", default="", help="what else was running while latency was measured")
     args = ap.parse_args(argv)
-    cfg = load_config(ROOT)
+    cfg = load_config(ROOT, args.config)
     arms = args.arms.split(",") if args.arms else cfg["arms"]
     if not set(arms) <= set(cfg["arms"]):
-        ap.error(f"arms must come from configs/e10.json: {cfg['arms']}")
+        ap.error(f"arms must come from the config: {cfg['arms']}")
     if args.command == "prebuild":
         prebuild(ROOT, args.split.split(","))
         return 0
@@ -537,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run":
         if not args.run_conditions.strip() and not args.smoke:
             ap.error("--run-conditions is required: say what else was running while latency was measured")
-        run(ROOT, args.split, arms, smoke=args.smoke, limit=args.limit, run_conditions=args.run_conditions)
+        run(ROOT, args.split, arms, smoke=args.smoke, limit=args.limit, run_conditions=args.run_conditions, config=args.config)
     else:
         check_pins(cfg, ROOT)
         scs, meta, digest = e10_cases.load_cases(args.split, ROOT)
