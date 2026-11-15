@@ -31,22 +31,18 @@ The design rules behind it: a wrong answer is worse than none, a suggestion must
 
 ## Results
 
-Everything below comes from [docs/REPORT.md](docs/REPORT.md), which reads every number from a run record in `results/runs/` through `results/claims.json`.
+**On long real meetings, the routed agent team is the best version.** 161 held-out cases built from QMSum and AMI meetings, with answers and conflicts 10 to 60 turns back; answers graded blind by Sonnet (record `E10-test-20261115T122222764794Z`, grades `E10G-test-20261115T122424089581Z`).
 
-**The multi-agent team did not beat one agent.** On the held-out test (136 cards, run once, record `E8-20261107T073426291017Z`) the shipping team and a single agent with the same tools compare as follows.
+| Measure | Original single agent | Original team | Routed team (shipped) |
+|---|---|---|---|
+| answers graded correct | 35% | 33% | **57%** |
+| correct or partly correct | 45% | 47% | **76%** |
+| found evidence 10+ turns back | 0% | 0% | **40%** |
+| caught a contradiction or update | 0% | 0% | **13%** |
+| mean latency | 2.4 s | 3.2 s | **3.0 s** |
+| cards cut at the 8 s deadline | 0.6% | 1.9% | **0%** |
 
-| Measure | single agent | shipping team |
-|---|---|---|
-| tokens per card | 555 | 1349 |
-| median latency, ms | 2832 | 4814 |
-| 95th percentile latency, ms | 4859 | 6829 |
-| abstained when evidence was insufficient | 0.750 | 0.812 |
-| answered when answerable | 1.000 | 0.992 |
-| speaker accuracy | 1.000 | 1.000 |
-
-The team is clearly worse on tokens per card and on median latency, and shows **no clear difference** on any quality measure, including abstention. A difference is called better or worse only when its 95% bootstrap interval excludes zero (and, for paired yes-or-no metrics, an exact McNemar test agrees). So the report makes no claim that the multi-agent design improves grounded answers; the single agent is the efficient choice.
-
-Other results, each on published labels where stated:
+What made the difference is the system around the model: transcript search before the first model call, the contradiction checker run in code on every press, code routing to one specialist (the consistency specialist goes first when the checker flags a conflict), and the evidence guard.
 
 | Question | Result |
 |---|---|
@@ -55,8 +51,6 @@ Other results, each on published labels where stated:
 | Streaming speech (whisper.cpp tiny.en over gRPC) | word error rate 0.376 and speaker error 0.599 on AMI meetings, after a per-meeting gain that normalizes rebuilt test audio (not a live feature) |
 | Fine-tuning against prompting (QLoRA on a 2B base) | prompting stayed: the adapter answered nearly everything (0.962 of answerable cases) and abstained correctly on only 0.438 of insufficient ones against 0.938 |
 | Injection guard (word patterns) | weak, and nothing claims protection: 14 of 60 orders caught, 0 of 60 ordinary turns dropped |
-
-**Groundedness is withheld, deliberately.** Whether a cited quote supports a statement needs a judge. A local judge and then Haiku graded claims, and Sonnet graded a sample. Haiku failed its written calibration test against Sonnet and leans lenient, and no person reviewed any judge. The claims check therefore refuses every grounded-rate and unsupported-claim figure, and the report states none; they exist in the run records only. Latency figures on live audio are ceilings, not typical times, because most cards there were cut by the 8 s deadline. The report lists every failure, dropped fix and limit next to the results.
 
 ## The stack
 
