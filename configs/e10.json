@@ -21,7 +21,9 @@
  "memory": {
   "chunk_turns": 40,
   "num_ctx": 16384,
-  "note": "The extractor reads the transcript in chunks of 40 turns, each chunk seeing the notes so far; built before the press, outside the card timing. num_ctx 16384 for memory calls only: the largest QMSum chunk is 10487 prompt tokens (measured) and Ollama's default window is 4096. The cache key is the meeting words plus model, chunk_turns, num_ctx and the extraction prompt, never the commit."
+  "note": "The extractor reads the transcript in chunks of 40 turns, each chunk seeing the notes so far; built before the press, outside the card timing. num_ctx 16384 for memory calls only: the largest QMSum chunk is 10487 prompt tokens (measured) and Ollama's default window is 4096. The cache key is the meeting words plus model, chunk_turns, num_ctx and the extraction prompt, never the commit. Calls get 900 s each (not the extractor's 60 s) and two attempts; a chunk that still fails leaves the entry unfinished, to be redone alone, and the card run refuses unfinished memory. Why: on 2026-11-14 a game was using the GPU, generation fell to about 5-15 tokens/s, 60 s calls timed out, and Ollama kept generating the abandoned requests.",
+  "call_timeout_s": 900,
+  "attempts": 2
  },
  "cases": {
   "manifest": "datasets/splits/e10-scenarios.json",

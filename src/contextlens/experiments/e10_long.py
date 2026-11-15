@@ -138,47 +138,85 @@ def memory_key(sc: Scenario, chunk: int, model: str, num_ctx: int | None = None)
     return h.hexdigest()
 
 
-def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: int | None = None,
-                 on_chunk: Callable[[int, int, float], None] | None = None) -> tuple[list[MemoryItem], dict[str, Any]]:
-    """Memory built the way the live stream builds it: the extractor reads the turns in chunks, each chunk seeing what is already
-    known. Cached on disk by the transcript's words (QMSum questions on one meeting share it); a failed chunk is skipped and counted.
-    Building is outside every card's timing, as in the product, where it runs in the background."""
-    key = memory_key(sc, chunk, production.MODEL, num_ctx)
-    path, cid = root / MEMORY_REL, sc.conversation.id
+def _entry(root: Path, key: str) -> dict[str, Any] | None:
+    """The newest saved entry for this key (a redo appends a newer one), or None."""
+    path, found = root / MEMORY_REL, None
     if path.is_file():
         for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if e.get("key") == key:
-                items = [MemoryItem.model_validate(i) for i in json.loads(e["items"].replace("\x00CID\x00", cid))]
-                return items, {"cached": True, "ms": 0.0, "failed_chunks": e["failed_chunks"], "chunks": e["chunks"]}
-    turns = _store(sc).turns(cid, sc.request.as_of_seq)
-    extractor, items, failed, t0 = MemoryExtractor(llm), [], 0, time.perf_counter()
-    chunks = [turns[i:i + chunk] for i in range(0, len(turns), chunk)]
-    for n, part in enumerate(chunks, 1):
-        t1 = time.perf_counter()
-        try:
-            items.extend(extractor.update(part, items))
-        except Exception as exc:
-            failed += 1
-            print(f"memory chunk failed for {sc.id}: {type(exc).__name__}", file=sys.stderr)
-        if on_chunk:
-            on_chunk(n, len(chunks), time.perf_counter() - t1)
-    blob = json.dumps([i.model_dump(mode="json") for i in items]).replace(cid, "\x00CID\x00")
-    _append(path, json.dumps({"key": key, "items": blob, "failed_chunks": failed, "chunks": len(chunks)}))
-    return items, {"cached": False, "ms": (time.perf_counter() - t0) * 1000, "failed_chunks": failed, "chunks": len(chunks)}
-
-
-def memory_client(cfg: dict[str, Any]) -> OllamaClient:
-    """The writer with the context size the memory prompts need (the default of 4096 tokens cuts the biggest QMSum chunks)."""
-    return OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE, num_ctx=cfg["memory"].get("num_ctx"))
+            if f'"key": "{key}"' in line[:120]:
+                try:
+                    found = json.loads(line)
+                except ValueError:
+                    continue
+    return found
 
 
 def _cached(root: Path, key: str) -> bool:
-    path = root / MEMORY_REL
-    return path.is_file() and f'"key": "{key}"' in path.read_text(encoding="utf-8")
+    """A finished entry: every chunk produced notes or was read successfully. An entry with failed chunks is not finished."""
+    e = _entry(root, key)
+    return bool(e) and e["failed_chunks"] == 0
+
+
+class Patient:
+    """A client that never gives the model less than `timeout_s` per call. The extractor asks for 60 s, but a call that times out
+    on our side keeps running inside Ollama and queues behind the next ones, so a short timeout on a busy GPU turns one slow chunk
+    into a pile of failures."""
+
+    def __init__(self, inner: LLMClient, timeout_s: float) -> None:
+        self.inner, self.timeout_s = inner, timeout_s
+
+    def complete(self, messages: list[dict], **kw: Any) -> Any:
+        kw["timeout_s"] = max(kw.get("timeout_s") or 0.0, self.timeout_s)
+        return self.inner.complete(messages, **kw)
+
+
+def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: int | None = None,
+                 on_chunk: Callable[[int, int, float], None] | None = None, attempts: int = 2) -> tuple[list[MemoryItem], dict[str, Any]]:
+    """Memory built the way the live stream builds it: the extractor reads the turns in chunks, each chunk seeing the notes of the
+    chunks before it. Cached on disk by the transcript's words (QMSum questions on one meeting share it). A chunk that fails after
+    `attempts` tries is recorded as failed and the entry is NOT finished: the next call redoes only the failed chunks and keeps the
+    rest. Building is outside every card's timing, as in the product, where it runs in the background."""
+    key = memory_key(sc, chunk, production.MODEL, num_ctx)
+    path, cid = root / MEMORY_REL, sc.conversation.id
+    turns = _store(sc).turns(cid, sc.request.as_of_seq)
+    chunks = [turns[i:i + chunk] for i in range(0, len(turns), chunk)]
+    entry = _entry(root, key)
+    items: list[MemoryItem] = []
+    if entry:
+        items = [MemoryItem.model_validate(i) for i in json.loads(entry["items"].replace("\x00CID\x00", cid))]
+        if entry["failed_chunks"] == 0:
+            return items, {"cached": True, "ms": 0.0, "failed_chunks": 0, "chunks": entry["chunks"], "redone": 0}
+        have = {i.as_of_seq for i in items}
+        todo = entry.get("failed") or [n for n, part in enumerate(chunks) if part[-1].seq not in have]  # old entries: chunks with no notes
+    else:
+        todo = list(range(len(chunks)))
+    extractor, failed, t0 = MemoryExtractor(llm), [], time.perf_counter()
+    for n in todo:
+        part, t1 = chunks[n], time.perf_counter()
+        before = [i for i in items if i.as_of_seq < part[0].seq]
+        for attempt in range(attempts):
+            try:
+                items.extend(extractor.update(part, before))
+                break
+            except Exception as exc:
+                print(f"memory chunk {n + 1}/{len(chunks)} failed for {sc.id} (try {attempt + 1}): {type(exc).__name__}", file=sys.stderr)
+        else:
+            failed.append(n)
+        if on_chunk:
+            on_chunk(n + 1, len(chunks), time.perf_counter() - t1)
+    items.sort(key=lambda i: i.as_of_seq)
+    blob = json.dumps([i.model_dump(mode="json") for i in items]).replace(cid, "\x00CID\x00")
+    _append(path, json.dumps({"key": key, "items": blob, "failed_chunks": len(failed), "failed": failed, "chunks": len(chunks)}))
+    return items, {"cached": False, "ms": (time.perf_counter() - t0) * 1000, "failed_chunks": len(failed), "chunks": len(chunks),
+                   "redone": len(todo) if entry else 0}
+
+
+def memory_client(cfg: dict[str, Any]) -> LLMClient:
+    """The writer with the context size the memory prompts need (the default of 4096 tokens cuts the biggest QMSum chunks) and a
+    long per-call timeout (see Patient)."""
+    m = cfg["memory"]
+    return Patient(OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE, num_ctx=m.get("num_ctx")),
+                   m.get("call_timeout_s", 900.0))
 
 
 def prebuild(root: Path, splits: list[str], say: Callable[[str], None] = print) -> dict[str, Any]:
@@ -202,7 +240,12 @@ def prebuild(root: Path, splits: list[str], say: Callable[[str], None] = print) 
                 seen.add(k)
                 work.append((sp, sc, k))
     todo = [(sp, sc) for sp, sc, k in work if not _cached(root, k)]
-    total = sum(-(-len(_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)) // chunk) for _, sc in todo)
+    def chunks_left(sc: Scenario, k: str) -> int:
+        e = _entry(root, k)
+        n = -(-len(_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)) // chunk)
+        return e["failed_chunks"] if e else n
+
+    total = sum(chunks_left(sc, memory_key(sc, chunk, production.MODEL, num_ctx)) for _, sc in todo)
     log(f"prebuild {splits}: {len(work)} distinct transcripts, {len(work) - len(todo)} cached, {len(todo)} to build, "
         f"{total} chunks, chunk_turns={chunk}, num_ctx={num_ctx}")
     done, secs, t0 = 0, 0.0, time.perf_counter()
@@ -214,7 +257,9 @@ def prebuild(root: Path, splits: list[str], say: Callable[[str], None] = print) 
                 log(f"{sp} {sc.id} ({i}/{len(todo)}) chunk {n}/{of} {s:.1f}s | total {done}/{total} chunks, "
                     f"{secs / done:.1f} s/chunk, eta {(total - done) * secs / done / 60:.0f} min")
 
-            build_memory(sc, llm, chunk, root, num_ctx, on_chunk)
+            _, info = build_memory(sc, llm, chunk, root, num_ctx, on_chunk)
+            if info["failed_chunks"]:
+                log(f"WARNING {sc.id}: {info['failed_chunks']} chunk(s) still failed; the entry stays unfinished and is redone next time")
     finally:
         if os.environ.get("E10_KEEP_LOADED") != "1":
             production.unload_local_models()
@@ -311,6 +356,9 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
             if not todo:
                 continue
             items, info = build_memory(sc, mem_llm, chunk, root, num_ctx)
+            if info["failed_chunks"]:
+                raise RuntimeError(f"memory for {sc.id} is incomplete ({info['failed_chunks']} chunk(s) failed); run prebuild again "
+                                   "rather than pressing on a meeting with missing notes")
             timing["memory_ms"] += info["ms"]
             timing["memory_failed_chunks"] += info["failed_chunks"]
             timing["memory_cases_built"] += not info["cached"]

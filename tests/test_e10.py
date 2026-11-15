@@ -287,20 +287,52 @@ def test_memory_key_ignores_commit_and_case_id_but_not_memory_settings():
     assert k != L.memory_key(a.model_copy(update={"request": a.request.model_copy(update={"as_of_seq": 5})}), 40, "m", 16384)
 
 
-def test_build_memory_is_cached_by_content_and_logs_chunks(tmp_path):
-    from contextlens.llm.client import FakeLLM
+class _Extractor:
+    """A stand-in model: one note per call, citing the first turn of the chunk it is shown; calls in `fail` raise."""
 
-    class Boom:
-        def complete(self, *a, **k):
-            raise RuntimeError("no model")
+    def __init__(self, fail=()):
+        self.calls, self.fail = 0, set(fail)
 
-    sc = _sc("qmsum_long", [1], q="q?", n=90)
+    def complete(self, messages, **kw):
+        import re
+        from types import SimpleNamespace
+
+        from contextlens.memory import extract as X
+
+        self.calls += 1
+        if self.calls in self.fail:
+            raise RuntimeError("timed out")
+        first = re.search(r"\[(c1:t\d+)\]", messages[1]["content"]).group(1)
+        return SimpleNamespace(parsed=X._Out(items=[X._Raw(kind="fact", subject="s", statement=f"note {first}", source_turn_ids=[first])]))
+
+
+def test_failed_chunk_is_not_cached_and_only_it_is_redone(tmp_path):
+    sc = _sc("qmsum_long", [1], q="q?", n=90)  # three chunks of 40, 40, 10
     seen = []
-    items, info = L.build_memory(sc, Boom(), 40, tmp_path, 16384, lambda n, of, s: seen.append((n, of)))
-    assert seen == [(1, 3), (2, 3), (3, 3)] and info["failed_chunks"] == 3 and info["cached"] is False
-    again, info2 = L.build_memory(sc, FakeLLM([]), 40, tmp_path, 16384)  # a later commit or case id: found by content
-    assert info2["cached"] is True and again == items
-    assert L._cached(tmp_path, L.memory_key(sc, 40, L.production.MODEL, 16384))
+    first = _Extractor(fail={2, 3})  # chunk 2 fails on both attempts
+    items, info = L.build_memory(sc, first, 40, tmp_path, 16384, lambda n, of, s: seen.append((n, of)), attempts=2)
+    assert [i.as_of_seq for i in items] == [39, 89] and info["failed_chunks"] == 1 and seen == [(1, 3), (2, 3), (3, 3)]
+    key = L.memory_key(sc, 40, L.production.MODEL, 16384)
+    assert not L._cached(tmp_path, key)  # an unfinished entry is not reused as memory
+    again = _Extractor()
+    items2, info2 = L.build_memory(sc, again, 40, tmp_path, 16384)
+    assert again.calls == 1 and info2["redone"] == 1 and info2["failed_chunks"] == 0  # only the failed chunk
+    assert sorted(i.as_of_seq for i in items2) == [39, 79, 89] and L._cached(tmp_path, key)
+    cached, info3 = L.build_memory(sc, _Extractor(), 40, tmp_path, 16384)  # later commit or case id: found by content
+    assert info3["cached"] is True and cached == items2
+
+
+def test_patient_client_never_shortens_a_timeout():
+    seen = {}
+
+    class Inner:
+        def complete(self, messages, **kw):
+            seen.update(kw)
+
+    L.Patient(Inner(), 900).complete([], timeout_s=60.0)
+    assert seen["timeout_s"] == 900
+    L.Patient(Inner(), 900).complete([], timeout_s=2000.0)
+    assert seen["timeout_s"] == 2000
 
 
 def test_config_sets_memory_context():
