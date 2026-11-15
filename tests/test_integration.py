@@ -50,6 +50,7 @@ def team_llms():
 
 
 def make(backend=None, speech=None, registry=None, **kw):
+    kw.setdefault("assistant", "team")  # the fakes above answer as the original team
     prod = production.build_services(
         store=InMemoryTranscriptStore(), embedder=NoEmbed(), llms=team_llms(), background_llm=None,
         speech=speech or FakeSpeech(), make_backend=(lambda: backend) if backend else None,
