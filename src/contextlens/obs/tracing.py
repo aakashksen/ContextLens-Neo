@@ -24,7 +24,7 @@ from contextlens.schemas import ButtonRequest, Card
 
 log = logging.getLogger(__name__)
 
-AGENTS = ("memory", "consistency", "assistance", "single")  # the only agent label values; else "other"
+AGENTS = ("memory", "consistency", "assistance", "single", "checker")  # the only agent label values; else "other"
 SINGLE_STAGES = ("llm", "tools", "suggestion")  # SingleAgent's stage_ms keys; they are stages of agent "single"
 MAX_PENDING = 256  # telemetry jobs waiting for the background thread; beyond this they are dropped
 _BUCKETS = (0.1, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15)
