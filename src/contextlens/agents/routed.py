@@ -10,7 +10,7 @@ import functools
 import time
 
 from contextlens.agents import consistency_agent, memory_agent
-from contextlens.agents.precheck import Prep, prepare
+from contextlens.agents.precheck import prepare
 from contextlens.agents.single import (
     LATEST_EXCHANGE, MARGIN_S, _Abandoned, _abstained, _bounded, _finish, _recent, _Run,
 )  # fmt: skip
@@ -25,6 +25,17 @@ _ASSIST_ROLE = (
     "You are the assistance agent. No question was asked, so find what earlier in the conversation is relevant to the "
     "latest exchange, and who said it. Name a speaker only as the transcript shows them."
 )
+
+
+def label_conflict(findings: list[Finding], label: str | None, statement_id: str) -> list[Finding]:
+    """The checker flagged the latest turn: a finding that cites it and an earlier turn states that conflict, so it
+    carries the checker's label (set in code, never by a model)."""
+    out = []
+    for f in findings:
+        ids = [e.turn_id for e in f.evidence]
+        both = statement_id in ids and len(set(ids)) >= 2
+        out.append(f.model_copy(update={"label": label}) if both else f)
+    return out
 
 
 def merge(findings: list[Finding]) -> list[Finding]:
@@ -64,7 +75,10 @@ class RoutedTeam:
             return _abstained("the conversation has no turns yet")
         prep = prepare(self.tools, req, turns, end)
         asked = bool((req.question or "").strip())
-        names = ["memory" if asked else "assistance", *(["consistency"] if prep.flagged else [])]
+        primary = "memory" if asked else "assistance"
+        # A flagged conflict is what the consistency specialist is for, so it goes first and cannot be starved by the
+        # deadline; with no question it is the only specialist, with a question memory follows it.
+        names = (["consistency", "memory"] if asked else ["consistency"]) if prep.flagged else [primary]
         runs = {n: _Run() for n in names}
         found: list[Finding] = []
         notes, degraded, primary_empty = list(prep.notes), False, False
@@ -89,6 +103,8 @@ class RoutedTeam:
             ctx.stage_ms[f"{n}_tokens"] = sum(r.prompt_tokens + r.completion_tokens for r in runs[n].results)
             ctx.stage_ms[f"ran_{n}"] = 1
         ctx.stage_ms.update(prep.stage())
+        if prep.flagged and not any(f.label for f in found):
+            found = label_conflict(found, prep.label, turns[-1].id)
         findings = merge(found)
         total = _Run()
         total.results = [r for n in names for r in runs[n].results]

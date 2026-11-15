@@ -166,3 +166,25 @@ def test_both_names_are_registered_and_built_by_the_shared_factory():
     llms = {"memory": llm, "consistency": llm, "assistance": llm}
     for name, cls in (("team_routed", production._RoutedPerPress), ("single_plus", production._SinglePlusPerPress)):
         assert isinstance(production.build_assistant(name, store, r, MemoryStore(), llms), cls)
+
+
+def test_a_flagged_conflict_runs_the_consistency_specialist_first_and_alone_without_a_question():
+    team, llm, ctx, _ = build([done(OLD, NEW)], FakeChecker("update"))
+    card = team.answer(req(), ctx)
+    assert len(llm.calls) == 1 and ctx.stage_ms["ran_consistency"] == 1 and "ran_assistance" not in ctx.stage_ms
+    assert card.findings and all(f.label == "update" for f in card.findings)
+
+
+def test_a_flagged_conflict_with_a_question_runs_consistency_before_memory():
+    team, llm, ctx, _ = build([done(OLD, NEW), done(NEW)], FakeChecker("contradiction"))
+    team.answer(req(QUESTION), ctx)
+    assert "consistency" in llm.calls[0][0]["content"].lower() and ctx.stage_ms["ran_memory"] == 1
+
+
+def test_code_labels_a_finding_that_cites_both_sides_when_no_finding_carries_the_label():
+    from contextlens.agents.routed import label_conflict
+
+    both = Finding.model_validate({**OLD, "agent": "memory", "evidence": OLD["evidence"] + NEW["evidence"]})
+    one = Finding.model_validate({**NEW, "agent": "memory"})
+    out = label_conflict([both, one], "contradiction", "t10")
+    assert [f.label for f in out] == ["contradiction", None]
