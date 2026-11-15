@@ -256,3 +256,19 @@ ol.panels { margin: 0; padding: 0; }
 @media (max-width: 60rem) { .notes { grid-template-columns: minmax(0, 1fr); } }
 .ct { font-size: var(--text-title); font-weight: 500; line-height: 1.2; }
 @media (max-width: 60rem) { .hero { padding-block: var(--space-xl); } }
+
+/* live: local model mode, shown only when tools/live_demo.py answers */
+.hero__grid.is-live { grid-template-columns: minmax(0, 1fr); }
+.hero__grid.is-live .lead { max-width: 60ch; }
+.livebadge { display: inline-block; margin-bottom: var(--space-sm); }
+.turns--edit li { grid-template-columns: 3rem 7rem minmax(0, 1fr) auto; }
+.turns--edit li.turns__add { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 40rem) { .turns--edit li { grid-template-columns: 2.5rem minmax(0, 1fr) auto; } .turns--edit li .field--who { grid-column: 2 / 4; } .turns--edit li .field--text { grid-column: 1 / 3; } }
+.field { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; padding: 0 var(--space-xs); border: var(--rule-hair) solid var(--color-rule-2); border-radius: 4px; background: var(--color-paper-3); color: var(--color-ink); font: inherit; font-size: var(--text-sm); }
+.field::placeholder { color: var(--color-muted); }
+.livebar { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; padding: 0 var(--space-lg) var(--space-md); }
+.livebar .field { flex: 1 1 16rem; width: auto; }
+.livecols { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: var(--rule-hair); background: var(--color-rule); }
+.livecols > * { background: var(--color-paper-2); min-width: 0; }
+@media (max-width: 60rem) { .livecols { grid-template-columns: minmax(0, 1fr); } }
+.livecols .card { border-top: 0; }

@@ -87,6 +87,8 @@
     }
   ];
 
+  window.CL_MEETINGS = MEETINGS; // read by live-local.js when a local server answers
+
   root.querySelectorAll('[hidden]').forEach((n) => { n.hidden = false; });
 
   const STEP_MS = 2200;
