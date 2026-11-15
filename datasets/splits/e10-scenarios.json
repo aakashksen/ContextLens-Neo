@@ -1,0 +1,4975 @@
+{
+ "kind": "scenarios",
+ "source": "e10",
+ "builder": "e10-cases-v1",
+ "seed": 10,
+ "quota": {
+  "qmsum": 100,
+  "conflict_triplets": 30,
+  "twin_pairs": 50,
+  "control": 40
+ },
+ "counts": {
+  "dev": {
+   "conflict_consistent": 15,
+   "conflict_contradiction": 15,
+   "conflict_update": 15,
+   "control_contradiction": 3,
+   "control_hypothetical_or_joking": 3,
+   "control_insufficient_evidence": 3,
+   "control_legitimate_update": 3,
+   "control_prompt_injection": 3,
+   "control_recall": 3,
+   "control_respond_with_suggestion": 3,
+   "control_wrong_speaker_trap": 3,
+   "qmsum_long": 50,
+   "twin_answerable": 25,
+   "twin_insufficient": 25,
+   "total": 169
+  },
+  "test": {
+   "conflict_consistent": 15,
+   "conflict_contradiction": 15,
+   "conflict_update": 15,
+   "control_contradiction": 2,
+   "control_hypothetical_or_joking": 2,
+   "control_insufficient_evidence": 2,
+   "control_legitimate_update": 2,
+   "control_prompt_injection": 2,
+   "control_recall": 2,
+   "control_respond_with_suggestion": 2,
+   "control_wrong_speaker_trap": 2,
+   "qmsum_long": 50,
+   "twin_answerable": 25,
+   "twin_insufficient": 25,
+   "total": 161
+  }
+ },
+ "splits": {
+  "dev": {
+   "hash": "477619e1e801713fa85f15d8fae8b3431502de0349d5c30a95c043740bd35442",
+   "n": 169,
+   "ids": [
+    "e10-cf-00-consistent",
+    "e10-cf-00-contradiction",
+    "e10-cf-00-update",
+    "e10-cf-01-consistent",
+    "e10-cf-01-contradiction",
+    "e10-cf-01-update",
+    "e10-cf-02-consistent",
+    "e10-cf-02-contradiction",
+    "e10-cf-02-update",
+    "e10-cf-03-consistent",
+    "e10-cf-03-contradiction",
+    "e10-cf-03-update",
+    "e10-cf-04-consistent",
+    "e10-cf-04-contradiction",
+    "e10-cf-04-update",
+    "e10-cf-05-consistent",
+    "e10-cf-05-contradiction",
+    "e10-cf-05-update",
+    "e10-cf-06-consistent",
+    "e10-cf-06-contradiction",
+    "e10-cf-06-update",
+    "e10-cf-07-consistent",
+    "e10-cf-07-contradiction",
+    "e10-cf-07-update",
+    "e10-cf-08-consistent",
+    "e10-cf-08-contradiction",
+    "e10-cf-08-update",
+    "e10-cf-09-consistent",
+    "e10-cf-09-contradiction",
+    "e10-cf-09-update",
+    "e10-cf-10-consistent",
+    "e10-cf-10-contradiction",
+    "e10-cf-10-update",
+    "e10-cf-11-consistent",
+    "e10-cf-11-contradiction",
+    "e10-cf-11-update",
+    "e10-cf-12-consistent",
+    "e10-cf-12-contradiction",
+    "e10-cf-12-update",
+    "e10-cf-13-consistent",
+    "e10-cf-13-contradiction",
+    "e10-cf-13-update",
+    "e10-cf-14-consistent",
+    "e10-cf-14-contradiction",
+    "e10-cf-14-update",
+    "e10-ct-3249768e",
+    "e10-ct-syn-con-02",
+    "e10-ct-syn-con-14",
+    "e10-ct-syn-con-30",
+    "e10-ct-syn-deadline-update-00",
+    "e10-ct-syn-hyp-04",
+    "e10-ct-syn-hyp-14",
+    "e10-ct-syn-hyp-24",
+    "e10-ct-syn-inj-08",
+    "e10-ct-syn-inj-18",
+    "e10-ct-syn-inj-20",
+    "e10-ct-syn-ins-00",
+    "e10-ct-syn-ins-18",
+    "e10-ct-syn-ins-22",
+    "e10-ct-syn-rec-02",
+    "e10-ct-syn-rec-04",
+    "e10-ct-syn-rsp-14",
+    "e10-ct-syn-rsp-20",
+    "e10-ct-syn-rsp-22",
+    "e10-ct-syn-upd-10",
+    "e10-ct-syn-upd-18",
+    "e10-ct-syn-wsc-04",
+    "e10-ct-syn-wsc-16",
+    "e10-ct-syn-wsq-18",
+    "e10-qm-000",
+    "e10-qm-001",
+    "e10-qm-002",
+    "e10-qm-003",
+    "e10-qm-004",
+    "e10-qm-005",
+    "e10-qm-006",
+    "e10-qm-007",
+    "e10-qm-008",
+    "e10-qm-009",
+    "e10-qm-010",
+    "e10-qm-011",
+    "e10-qm-012",
+    "e10-qm-013",
+    "e10-qm-014",
+    "e10-qm-015",
+    "e10-qm-016",
+    "e10-qm-017",
+    "e10-qm-018",
+    "e10-qm-019",
+    "e10-qm-020",
+    "e10-qm-021",
+    "e10-qm-022",
+    "e10-qm-023",
+    "e10-qm-024",
+    "e10-qm-025",
+    "e10-qm-026",
+    "e10-qm-027",
+    "e10-qm-028",
+    "e10-qm-029",
+    "e10-qm-030",
+    "e10-qm-031",
+    "e10-qm-032",
+    "e10-qm-033",
+    "e10-qm-034",
+    "e10-qm-035",
+    "e10-qm-036",
+    "e10-qm-037",
+    "e10-qm-038",
+    "e10-qm-039",
+    "e10-qm-040",
+    "e10-qm-041",
+    "e10-qm-042",
+    "e10-qm-043",
+    "e10-qm-044",
+    "e10-qm-045",
+    "e10-qm-046",
+    "e10-qm-047",
+    "e10-qm-048",
+    "e10-qm-049",
+    "e10-tw-00-answerable",
+    "e10-tw-00-insufficient",
+    "e10-tw-01-answerable",
+    "e10-tw-01-insufficient",
+    "e10-tw-02-answerable",
+    "e10-tw-02-insufficient",
+    "e10-tw-03-answerable",
+    "e10-tw-03-insufficient",
+    "e10-tw-04-answerable",
+    "e10-tw-04-insufficient",
+    "e10-tw-05-answerable",
+    "e10-tw-05-insufficient",
+    "e10-tw-06-answerable",
+    "e10-tw-06-insufficient",
+    "e10-tw-07-answerable",
+    "e10-tw-07-insufficient",
+    "e10-tw-08-answerable",
+    "e10-tw-08-insufficient",
+    "e10-tw-09-answerable",
+    "e10-tw-09-insufficient",
+    "e10-tw-10-answerable",
+    "e10-tw-10-insufficient",
+    "e10-tw-11-answerable",
+    "e10-tw-11-insufficient",
+    "e10-tw-12-answerable",
+    "e10-tw-12-insufficient",
+    "e10-tw-13-answerable",
+    "e10-tw-13-insufficient",
+    "e10-tw-14-answerable",
+    "e10-tw-14-insufficient",
+    "e10-tw-15-answerable",
+    "e10-tw-15-insufficient",
+    "e10-tw-16-answerable",
+    "e10-tw-16-insufficient",
+    "e10-tw-17-answerable",
+    "e10-tw-17-insufficient",
+    "e10-tw-18-answerable",
+    "e10-tw-18-insufficient",
+    "e10-tw-19-answerable",
+    "e10-tw-19-insufficient",
+    "e10-tw-20-answerable",
+    "e10-tw-20-insufficient",
+    "e10-tw-21-answerable",
+    "e10-tw-21-insufficient",
+    "e10-tw-22-answerable",
+    "e10-tw-22-insufficient",
+    "e10-tw-23-answerable",
+    "e10-tw-23-insufficient",
+    "e10-tw-24-answerable",
+    "e10-tw-24-insufficient"
+   ]
+  },
+  "test": {
+   "hash": "774b835017d75c023aef7b680801f175375b11604e564a6e3f6323d9bfbfb406",
+   "n": 161,
+   "ids": [
+    "e10-cf-15-consistent",
+    "e10-cf-15-contradiction",
+    "e10-cf-15-update",
+    "e10-cf-16-consistent",
+    "e10-cf-16-contradiction",
+    "e10-cf-16-update",
+    "e10-cf-17-consistent",
+    "e10-cf-17-contradiction",
+    "e10-cf-17-update",
+    "e10-cf-18-consistent",
+    "e10-cf-18-contradiction",
+    "e10-cf-18-update",
+    "e10-cf-19-consistent",
+    "e10-cf-19-contradiction",
+    "e10-cf-19-update",
+    "e10-cf-20-consistent",
+    "e10-cf-20-contradiction",
+    "e10-cf-20-update",
+    "e10-cf-21-consistent",
+    "e10-cf-21-contradiction",
+    "e10-cf-21-update",
+    "e10-cf-22-consistent",
+    "e10-cf-22-contradiction",
+    "e10-cf-22-update",
+    "e10-cf-23-consistent",
+    "e10-cf-23-contradiction",
+    "e10-cf-23-update",
+    "e10-cf-24-consistent",
+    "e10-cf-24-contradiction",
+    "e10-cf-24-update",
+    "e10-cf-25-consistent",
+    "e10-cf-25-contradiction",
+    "e10-cf-25-update",
+    "e10-cf-26-consistent",
+    "e10-cf-26-contradiction",
+    "e10-cf-26-update",
+    "e10-cf-27-consistent",
+    "e10-cf-27-contradiction",
+    "e10-cf-27-update",
+    "e10-cf-28-consistent",
+    "e10-cf-28-contradiction",
+    "e10-cf-28-update",
+    "e10-cf-29-consistent",
+    "e10-cf-29-contradiction",
+    "e10-cf-29-update",
+    "e10-ct-18dcd5a5",
+    "e10-ct-syn-con-18",
+    "e10-ct-syn-con-24",
+    "e10-ct-syn-hyp-02",
+    "e10-ct-syn-hyp-28",
+    "e10-ct-syn-inj-06",
+    "e10-ct-syn-inj-30",
+    "e10-ct-syn-ins-02",
+    "e10-ct-syn-ins-04",
+    "e10-ct-syn-rec-10",
+    "e10-ct-syn-rsp-08",
+    "e10-ct-syn-rsp-30",
+    "e10-ct-syn-upd-14",
+    "e10-ct-syn-upd-20",
+    "e10-ct-syn-wsq-02",
+    "e10-ct-syn-wsq-06",
+    "e10-qm-050",
+    "e10-qm-051",
+    "e10-qm-052",
+    "e10-qm-053",
+    "e10-qm-054",
+    "e10-qm-055",
+    "e10-qm-056",
+    "e10-qm-057",
+    "e10-qm-058",
+    "e10-qm-059",
+    "e10-qm-060",
+    "e10-qm-061",
+    "e10-qm-062",
+    "e10-qm-063",
+    "e10-qm-064",
+    "e10-qm-065",
+    "e10-qm-066",
+    "e10-qm-067",
+    "e10-qm-068",
+    "e10-qm-069",
+    "e10-qm-070",
+    "e10-qm-071",
+    "e10-qm-072",
+    "e10-qm-073",
+    "e10-qm-074",
+    "e10-qm-075",
+    "e10-qm-076",
+    "e10-qm-077",
+    "e10-qm-078",
+    "e10-qm-079",
+    "e10-qm-080",
+    "e10-qm-081",
+    "e10-qm-082",
+    "e10-qm-083",
+    "e10-qm-084",
+    "e10-qm-085",
+    "e10-qm-086",
+    "e10-qm-087",
+    "e10-qm-088",
+    "e10-qm-089",
+    "e10-qm-090",
+    "e10-qm-091",
+    "e10-qm-092",
+    "e10-qm-093",
+    "e10-qm-094",
+    "e10-qm-095",
+    "e10-qm-096",
+    "e10-qm-097",
+    "e10-qm-098",
+    "e10-qm-099",
+    "e10-tw-25-answerable",
+    "e10-tw-25-insufficient",
+    "e10-tw-26-answerable",
+    "e10-tw-26-insufficient",
+    "e10-tw-27-answerable",
+    "e10-tw-27-insufficient",
+    "e10-tw-28-answerable",
+    "e10-tw-28-insufficient",
+    "e10-tw-29-answerable",
+    "e10-tw-29-insufficient",
+    "e10-tw-30-answerable",
+    "e10-tw-30-insufficient",
+    "e10-tw-31-answerable",
+    "e10-tw-31-insufficient",
+    "e10-tw-32-answerable",
+    "e10-tw-32-insufficient",
+    "e10-tw-33-answerable",
+    "e10-tw-33-insufficient",
+    "e10-tw-34-answerable",
+    "e10-tw-34-insufficient",
+    "e10-tw-35-answerable",
+    "e10-tw-35-insufficient",
+    "e10-tw-36-answerable",
+    "e10-tw-36-insufficient",
+    "e10-tw-37-answerable",
+    "e10-tw-37-insufficient",
+    "e10-tw-38-answerable",
+    "e10-tw-38-insufficient",
+    "e10-tw-39-answerable",
+    "e10-tw-39-insufficient",
+    "e10-tw-40-answerable",
+    "e10-tw-40-insufficient",
+    "e10-tw-41-answerable",
+    "e10-tw-41-insufficient",
+    "e10-tw-42-answerable",
+    "e10-tw-42-insufficient",
+    "e10-tw-43-answerable",
+    "e10-tw-43-insufficient",
+    "e10-tw-44-answerable",
+    "e10-tw-44-insufficient",
+    "e10-tw-45-answerable",
+    "e10-tw-45-insufficient",
+    "e10-tw-46-answerable",
+    "e10-tw-46-insufficient",
+    "e10-tw-47-answerable",
+    "e10-tw-47-insufficient",
+    "e10-tw-48-answerable",
+    "e10-tw-48-insufficient",
+    "e10-tw-49-answerable",
+    "e10-tw-49-insufficient"
+   ]
+  }
+ },
+ "cases": {
+  "e10-qm-000": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-43",
+   "source_case": "qmsum-train-43-q5",
+   "turns": 183,
+   "gold_turns": 7,
+   "turns_back": 137,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-001": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-31",
+   "source_case": "qmsum-val-31-q1",
+   "turns": 393,
+   "gold_turns": 6,
+   "turns_back": 383,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-002": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-40",
+   "source_case": "qmsum-train-40-q2",
+   "turns": 138,
+   "gold_turns": 5,
+   "turns_back": 59,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-003": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-14",
+   "source_case": "qmsum-test-14-q3",
+   "turns": 199,
+   "gold_turns": 3,
+   "turns_back": 175,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-004": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-13",
+   "source_case": "qmsum-test-13-q4",
+   "turns": 131,
+   "gold_turns": 5,
+   "turns_back": 99,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-005": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-13",
+   "source_case": "qmsum-test-13-q6",
+   "turns": 131,
+   "gold_turns": 3,
+   "turns_back": 100,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-006": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-111",
+   "source_case": "qmsum-train-111-q2",
+   "turns": 425,
+   "gold_turns": 7,
+   "turns_back": 190,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-007": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-14",
+   "source_case": "qmsum-test-14-q8",
+   "turns": 199,
+   "gold_turns": 2,
+   "turns_back": 103,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-008": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-84",
+   "source_case": "qmsum-train-84-q6",
+   "turns": 196,
+   "gold_turns": 6,
+   "turns_back": 78,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-009": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-151",
+   "source_case": "qmsum-train-151-q9",
+   "turns": 97,
+   "gold_turns": 4,
+   "turns_back": 44,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-010": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-0",
+   "source_case": "qmsum-test-0-q5",
+   "turns": 133,
+   "gold_turns": 7,
+   "turns_back": 109,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-011": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-144",
+   "source_case": "qmsum-train-144-q6",
+   "turns": 140,
+   "gold_turns": 4,
+   "turns_back": 79,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-012": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-31",
+   "source_case": "qmsum-val-31-q5",
+   "turns": 393,
+   "gold_turns": 6,
+   "turns_back": 266,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-013": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-18",
+   "source_case": "qmsum-val-18-q11",
+   "turns": 351,
+   "gold_turns": 6,
+   "turns_back": 138,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-014": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-146",
+   "source_case": "qmsum-train-146-q6",
+   "turns": 141,
+   "gold_turns": 1,
+   "turns_back": 75,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-015": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-146",
+   "source_case": "qmsum-train-146-q8",
+   "turns": 141,
+   "gold_turns": 2,
+   "turns_back": 42,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-016": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-70",
+   "source_case": "qmsum-train-70-q11",
+   "turns": 370,
+   "gold_turns": 5,
+   "turns_back": 94,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-017": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-158",
+   "source_case": "qmsum-train-158-q12",
+   "turns": 336,
+   "gold_turns": 6,
+   "turns_back": 80,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-018": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-14",
+   "source_case": "qmsum-val-14-q11",
+   "turns": 212,
+   "gold_turns": 3,
+   "turns_back": 31,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-019": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-43",
+   "source_case": "qmsum-train-43-q7",
+   "turns": 183,
+   "gold_turns": 4,
+   "turns_back": 102,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-020": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-88",
+   "source_case": "qmsum-train-88-q11",
+   "turns": 130,
+   "gold_turns": 2,
+   "turns_back": 33,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-021": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-151",
+   "source_case": "qmsum-train-151-q6",
+   "turns": 97,
+   "gold_turns": 4,
+   "turns_back": 66,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-022": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-5",
+   "source_case": "qmsum-train-5-q2",
+   "turns": 516,
+   "gold_turns": 8,
+   "turns_back": 442,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-023": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-144",
+   "source_case": "qmsum-train-144-q10",
+   "turns": 140,
+   "gold_turns": 2,
+   "turns_back": 31,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-024": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-0",
+   "source_case": "qmsum-test-0-q2",
+   "turns": 133,
+   "gold_turns": 5,
+   "turns_back": 127,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-025": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-70",
+   "source_case": "qmsum-train-70-q8",
+   "turns": 370,
+   "gold_turns": 2,
+   "turns_back": 236,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-026": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-102",
+   "source_case": "qmsum-train-102-q8",
+   "turns": 165,
+   "gold_turns": 2,
+   "turns_back": 50,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-027": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-88",
+   "source_case": "qmsum-train-88-q6",
+   "turns": 130,
+   "gold_turns": 2,
+   "turns_back": 56,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-028": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-79",
+   "source_case": "qmsum-train-79-q6",
+   "turns": 179,
+   "gold_turns": 1,
+   "turns_back": 119,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-029": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-79",
+   "source_case": "qmsum-train-79-q12",
+   "turns": 179,
+   "gold_turns": 1,
+   "turns_back": 40,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-030": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-102",
+   "source_case": "qmsum-train-102-q11",
+   "turns": 165,
+   "gold_turns": 5,
+   "turns_back": 28,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-031": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-158",
+   "source_case": "qmsum-train-158-q5",
+   "turns": 336,
+   "gold_turns": 4,
+   "turns_back": 197,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-032": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-98",
+   "source_case": "qmsum-train-98-q5",
+   "turns": 395,
+   "gold_turns": 8,
+   "turns_back": 58,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-033": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-14",
+   "source_case": "qmsum-val-14-q8",
+   "turns": 212,
+   "gold_turns": 1,
+   "turns_back": 122,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-034": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-30",
+   "source_case": "qmsum-train-30-q2",
+   "turns": 280,
+   "gold_turns": 8,
+   "turns_back": 159,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-035": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-54",
+   "source_case": "qmsum-train-54-q2",
+   "turns": 401,
+   "gold_turns": 1,
+   "turns_back": 42,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-036": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-60",
+   "source_case": "qmsum-train-60-q2",
+   "turns": 374,
+   "gold_turns": 8,
+   "turns_back": 322,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-037": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-156",
+   "source_case": "qmsum-train-156-q6",
+   "turns": 338,
+   "gold_turns": 8,
+   "turns_back": 112,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-038": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-60",
+   "source_case": "qmsum-train-60-q6",
+   "turns": 374,
+   "gold_turns": 5,
+   "turns_back": 149,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-039": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-120",
+   "source_case": "qmsum-train-120-q2",
+   "turns": 181,
+   "gold_turns": 7,
+   "turns_back": 96,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-040": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-30",
+   "source_case": "qmsum-train-30-q3",
+   "turns": 280,
+   "gold_turns": 2,
+   "turns_back": 166,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-041": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-50",
+   "source_case": "qmsum-train-50-q2",
+   "turns": 547,
+   "gold_turns": 3,
+   "turns_back": 528,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-042": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-84",
+   "source_case": "qmsum-train-84-q4",
+   "turns": 196,
+   "gold_turns": 2,
+   "turns_back": 87,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-043": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-val-18",
+   "source_case": "qmsum-val-18-q1",
+   "turns": 351,
+   "gold_turns": 7,
+   "turns_back": 304,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-044": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-50",
+   "source_case": "qmsum-train-50-q3",
+   "turns": 547,
+   "gold_turns": 1,
+   "turns_back": 528,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-045": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-67",
+   "source_case": "qmsum-train-67-q5",
+   "turns": 239,
+   "gold_turns": 4,
+   "turns_back": 94,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-046": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-35",
+   "source_case": "qmsum-train-35-q6",
+   "turns": 284,
+   "gold_turns": 6,
+   "turns_back": 93,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-047": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-test-7",
+   "source_case": "qmsum-test-7-q4",
+   "turns": 321,
+   "gold_turns": 7,
+   "turns_back": 265,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-048": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-97",
+   "source_case": "qmsum-train-97-q5",
+   "turns": 323,
+   "gold_turns": 8,
+   "turns_back": 109,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-049": {
+   "type": "qmsum",
+   "split": "dev",
+   "meeting": "qmsum-train-156",
+   "source_case": "qmsum-train-156-q2",
+   "turns": 338,
+   "gold_turns": 5,
+   "turns_back": 297,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-050": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-15",
+   "source_case": "qmsum-val-15-q9",
+   "turns": 124,
+   "gold_turns": 7,
+   "turns_back": 45,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-051": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-124",
+   "source_case": "qmsum-train-124-q11",
+   "turns": 142,
+   "gold_turns": 7,
+   "turns_back": 33,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-052": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-161",
+   "source_case": "qmsum-train-161-q9",
+   "turns": 315,
+   "gold_turns": 5,
+   "turns_back": 176,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-053": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-10",
+   "source_case": "qmsum-train-10-q5",
+   "turns": 262,
+   "gold_turns": 7,
+   "turns_back": 188,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-054": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-15",
+   "source_case": "qmsum-val-15-q5",
+   "turns": 124,
+   "gold_turns": 4,
+   "turns_back": 78,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-055": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-17",
+   "source_case": "qmsum-train-17-q2",
+   "turns": 121,
+   "gold_turns": 8,
+   "turns_back": 110,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-056": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-20",
+   "source_case": "qmsum-test-20-q6",
+   "turns": 229,
+   "gold_turns": 2,
+   "turns_back": 175,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-057": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-161",
+   "source_case": "qmsum-train-161-q2",
+   "turns": 315,
+   "gold_turns": 5,
+   "turns_back": 239,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-058": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-93",
+   "source_case": "qmsum-train-93-q3",
+   "turns": 234,
+   "gold_turns": 7,
+   "turns_back": 200,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-059": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-30",
+   "source_case": "qmsum-test-30-q4",
+   "turns": 745,
+   "gold_turns": 8,
+   "turns_back": 636,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-060": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-149",
+   "source_case": "qmsum-train-149-q4",
+   "turns": 373,
+   "gold_turns": 8,
+   "turns_back": 198,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-061": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-130",
+   "source_case": "qmsum-train-130-q12",
+   "turns": 130,
+   "gold_turns": 8,
+   "turns_back": 26,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-062": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-123",
+   "source_case": "qmsum-train-123-q5",
+   "turns": 91,
+   "gold_turns": 5,
+   "turns_back": 56,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-063": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-90",
+   "source_case": "qmsum-train-90-q1",
+   "turns": 524,
+   "gold_turns": 8,
+   "turns_back": 501,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-064": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-103",
+   "source_case": "qmsum-train-103-q9",
+   "turns": 198,
+   "gold_turns": 8,
+   "turns_back": 84,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-065": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-123",
+   "source_case": "qmsum-train-123-q10",
+   "turns": 91,
+   "gold_turns": 3,
+   "turns_back": 21,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-066": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-93",
+   "source_case": "qmsum-train-93-q8",
+   "turns": 234,
+   "gold_turns": 4,
+   "turns_back": 76,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-067": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-118",
+   "source_case": "qmsum-train-118-q3",
+   "turns": 602,
+   "gold_turns": 7,
+   "turns_back": 489,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-068": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-20",
+   "source_case": "qmsum-test-20-q3",
+   "turns": 229,
+   "gold_turns": 1,
+   "turns_back": 197,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-069": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-11",
+   "source_case": "qmsum-val-11-q11",
+   "turns": 164,
+   "gold_turns": 3,
+   "turns_back": 59,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-070": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-0",
+   "source_case": "qmsum-train-0-q2",
+   "turns": 506,
+   "gold_turns": 8,
+   "turns_back": 444,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-071": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-33",
+   "source_case": "qmsum-test-33-q4",
+   "turns": 604,
+   "gold_turns": 7,
+   "turns_back": 401,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-072": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-124",
+   "source_case": "qmsum-train-124-q12",
+   "turns": 142,
+   "gold_turns": 5,
+   "turns_back": 28,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-073": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-26",
+   "source_case": "qmsum-test-26-q6",
+   "turns": 276,
+   "gold_turns": 8,
+   "turns_back": 141,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-074": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-10",
+   "source_case": "qmsum-train-10-q9",
+   "turns": 262,
+   "gold_turns": 3,
+   "turns_back": 185,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-075": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-17",
+   "source_case": "qmsum-train-17-q8",
+   "turns": 121,
+   "gold_turns": 6,
+   "turns_back": 58,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-076": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-130",
+   "source_case": "qmsum-train-130-q3",
+   "turns": 130,
+   "gold_turns": 1,
+   "turns_back": 96,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-077": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-11",
+   "source_case": "qmsum-val-11-q6",
+   "turns": 164,
+   "gold_turns": 2,
+   "turns_back": 139,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-078": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-83",
+   "source_case": "qmsum-train-83-q5",
+   "turns": 261,
+   "gold_turns": 7,
+   "turns_back": 142,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-079": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-74",
+   "source_case": "qmsum-train-74-q8",
+   "turns": 328,
+   "gold_turns": 8,
+   "turns_back": 105,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-080": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-22",
+   "source_case": "qmsum-val-22-q5",
+   "turns": 132,
+   "gold_turns": 4,
+   "turns_back": 76,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-081": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-22",
+   "source_case": "qmsum-val-22-q2",
+   "turns": 132,
+   "gold_turns": 5,
+   "turns_back": 116,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-082": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-2",
+   "source_case": "qmsum-train-2-q10",
+   "turns": 123,
+   "gold_turns": 1,
+   "turns_back": 21,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-083": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-21",
+   "source_case": "qmsum-val-21-q1",
+   "turns": 469,
+   "gold_turns": 7,
+   "turns_back": 435,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-084": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-160",
+   "source_case": "qmsum-train-160-q11",
+   "turns": 161,
+   "gold_turns": 6,
+   "turns_back": 65,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-085": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-2",
+   "source_case": "qmsum-train-2-q1",
+   "turns": 123,
+   "gold_turns": 1,
+   "turns_back": 118,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-086": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-160",
+   "source_case": "qmsum-train-160-q14",
+   "turns": 161,
+   "gold_turns": 3,
+   "turns_back": 51,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-087": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-83",
+   "source_case": "qmsum-train-83-q10",
+   "turns": 261,
+   "gold_turns": 2,
+   "turns_back": 70,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-088": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-129",
+   "source_case": "qmsum-train-129-q2",
+   "turns": 380,
+   "gold_turns": 2,
+   "turns_back": 353,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-089": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-26",
+   "source_case": "qmsum-test-26-q9",
+   "turns": 276,
+   "gold_turns": 3,
+   "turns_back": 21,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-090": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-143",
+   "source_case": "qmsum-train-143-q2",
+   "turns": 316,
+   "gold_turns": 7,
+   "turns_back": 239,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-091": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-141",
+   "source_case": "qmsum-train-141-q2",
+   "turns": 310,
+   "gold_turns": 8,
+   "turns_back": 226,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-092": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-33",
+   "source_case": "qmsum-test-33-q2",
+   "turns": 604,
+   "gold_turns": 7,
+   "turns_back": 574,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-093": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-131",
+   "source_case": "qmsum-train-131-q2",
+   "turns": 105,
+   "gold_turns": 7,
+   "turns_back": 74,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-094": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-103",
+   "source_case": "qmsum-train-103-q2",
+   "turns": 198,
+   "gold_turns": 5,
+   "turns_back": 192,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-095": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-49",
+   "source_case": "qmsum-train-49-q6",
+   "turns": 140,
+   "gold_turns": 4,
+   "turns_back": 76,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-096": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-train-49",
+   "source_case": "qmsum-train-49-q11",
+   "turns": 140,
+   "gold_turns": 2,
+   "turns_back": 44,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-097": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-26",
+   "source_case": "qmsum-val-26-q2",
+   "turns": 313,
+   "gold_turns": 5,
+   "turns_back": 75,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-098": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-val-3",
+   "source_case": "qmsum-val-3-q5",
+   "turns": 244,
+   "gold_turns": 7,
+   "turns_back": 100,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-qm-099": {
+   "type": "qmsum",
+   "split": "test",
+   "meeting": "qmsum-test-30",
+   "source_case": "qmsum-test-30-q1",
+   "turns": 745,
+   "gold_turns": 4,
+   "turns_back": 709,
+   "how": "QMSum specific question and published gold span; pressed at the end of the meeting"
+  },
+  "e10-cf-00-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1009d",
+   "triplet": 0,
+   "label": "contradiction",
+   "template": 0,
+   "window": [
+    348,
+    404
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-00-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1009d",
+   "triplet": 0,
+   "label": "update",
+   "template": 0,
+   "window": [
+    348,
+    404
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-00-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1009d",
+   "triplet": 0,
+   "label": "consistent",
+   "template": 0,
+   "window": [
+    348,
+    404
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-01-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-5",
+   "triplet": 1,
+   "label": "contradiction",
+   "template": 1,
+   "window": [
+    274,
+    300
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-01-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-5",
+   "triplet": 1,
+   "label": "update",
+   "template": 1,
+   "window": [
+    274,
+    300
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-01-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-5",
+   "triplet": 1,
+   "label": "consistent",
+   "template": 1,
+   "window": [
+    274,
+    300
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-02-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1003b",
+   "triplet": 2,
+   "label": "contradiction",
+   "template": 2,
+   "window": [
+    90,
+    151
+   ],
+   "distractor_turns": 56,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    62
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-02-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1003b",
+   "triplet": 2,
+   "label": "update",
+   "template": 2,
+   "window": [
+    90,
+    151
+   ],
+   "distractor_turns": 56,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    62
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-02-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IS1003b",
+   "triplet": 2,
+   "label": "consistent",
+   "template": 2,
+   "window": [
+    90,
+    151
+   ],
+   "distractor_turns": 56,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    62
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-03-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-21",
+   "triplet": 3,
+   "label": "contradiction",
+   "template": 3,
+   "window": [
+    50,
+    90
+   ],
+   "distractor_turns": 35,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    41
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-03-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-21",
+   "triplet": 3,
+   "label": "update",
+   "template": 3,
+   "window": [
+    50,
+    90
+   ],
+   "distractor_turns": 35,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    41
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-03-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-21",
+   "triplet": 3,
+   "label": "consistent",
+   "template": 3,
+   "window": [
+    50,
+    90
+   ],
+   "distractor_turns": 35,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    41
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-04-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3006a",
+   "triplet": 4,
+   "label": "contradiction",
+   "template": 4,
+   "window": [
+    53,
+    87
+   ],
+   "distractor_turns": 29,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    35
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-04-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3006a",
+   "triplet": 4,
+   "label": "update",
+   "template": 4,
+   "window": [
+    53,
+    87
+   ],
+   "distractor_turns": 29,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    35
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-04-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3006a",
+   "triplet": 4,
+   "label": "consistent",
+   "template": 4,
+   "window": [
+    53,
+    87
+   ],
+   "distractor_turns": 29,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    35
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-05-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-15",
+   "triplet": 5,
+   "label": "contradiction",
+   "template": 5,
+   "window": [
+    272,
+    297
+   ],
+   "distractor_turns": 20,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    26
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-05-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-15",
+   "triplet": 5,
+   "label": "update",
+   "template": 5,
+   "window": [
+    272,
+    297
+   ],
+   "distractor_turns": 20,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    26
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-05-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-15",
+   "triplet": 5,
+   "label": "consistent",
+   "template": 5,
+   "window": [
+    272,
+    297
+   ],
+   "distractor_turns": 20,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    26
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-06-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2002d",
+   "triplet": 6,
+   "label": "contradiction",
+   "template": 6,
+   "window": [
+    460,
+    525
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-06-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2002d",
+   "triplet": 6,
+   "label": "update",
+   "template": 6,
+   "window": [
+    460,
+    525
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-06-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2002d",
+   "triplet": 6,
+   "label": "consistent",
+   "template": 6,
+   "window": [
+    460,
+    525
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-07-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:ES2013b",
+   "triplet": 7,
+   "label": "contradiction",
+   "template": 7,
+   "window": [
+    261,
+    306
+   ],
+   "distractor_turns": 40,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    46
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-07-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:ES2013b",
+   "triplet": 7,
+   "label": "update",
+   "template": 7,
+   "window": [
+    261,
+    306
+   ],
+   "distractor_turns": 40,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    46
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-07-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:ES2013b",
+   "triplet": 7,
+   "label": "consistent",
+   "template": 7,
+   "window": [
+    261,
+    306
+   ],
+   "distractor_turns": 40,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    46
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-08-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3007a",
+   "triplet": 8,
+   "label": "contradiction",
+   "template": 8,
+   "window": [
+    52,
+    85
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-08-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3007a",
+   "triplet": 8,
+   "label": "update",
+   "template": 8,
+   "window": [
+    52,
+    85
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-08-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:TS3007a",
+   "triplet": 8,
+   "label": "consistent",
+   "template": 8,
+   "window": [
+    52,
+    85
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-09-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-66",
+   "triplet": 9,
+   "label": "contradiction",
+   "template": 9,
+   "window": [
+    250,
+    301
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-09-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-66",
+   "triplet": 9,
+   "label": "update",
+   "template": 9,
+   "window": [
+    250,
+    301
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-09-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-66",
+   "triplet": 9,
+   "label": "consistent",
+   "template": 9,
+   "window": [
+    250,
+    301
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-10-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-128",
+   "triplet": 10,
+   "label": "contradiction",
+   "template": 0,
+   "window": [
+    290,
+    332
+   ],
+   "distractor_turns": 37,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    43
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-10-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-128",
+   "triplet": 10,
+   "label": "update",
+   "template": 0,
+   "window": [
+    290,
+    332
+   ],
+   "distractor_turns": 37,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    43
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-10-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-128",
+   "triplet": 10,
+   "label": "consistent",
+   "template": 0,
+   "window": [
+    290,
+    332
+   ],
+   "distractor_turns": 37,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    43
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-11-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-16",
+   "triplet": 11,
+   "label": "contradiction",
+   "template": 1,
+   "window": [
+    86,
+    118
+   ],
+   "distractor_turns": 27,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    33
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-11-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-16",
+   "triplet": 11,
+   "label": "update",
+   "template": 1,
+   "window": [
+    86,
+    118
+   ],
+   "distractor_turns": 27,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    33
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-11-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-16",
+   "triplet": 11,
+   "label": "consistent",
+   "template": 1,
+   "window": [
+    86,
+    118
+   ],
+   "distractor_turns": 27,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    33
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-12-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IN1001",
+   "triplet": 12,
+   "label": "contradiction",
+   "template": 2,
+   "window": [
+    381,
+    418
+   ],
+   "distractor_turns": 32,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    38
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-12-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IN1001",
+   "triplet": 12,
+   "label": "update",
+   "template": 2,
+   "window": [
+    381,
+    418
+   ],
+   "distractor_turns": 32,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    38
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-12-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:IN1001",
+   "triplet": 12,
+   "label": "consistent",
+   "template": 2,
+   "window": [
+    381,
+    418
+   ],
+   "distractor_turns": 32,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    38
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-13-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-52",
+   "triplet": 13,
+   "label": "contradiction",
+   "template": 3,
+   "window": [
+    297,
+    348
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 7,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-13-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-52",
+   "triplet": 13,
+   "label": "update",
+   "template": 3,
+   "window": [
+    297,
+    348
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 7,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-13-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-52",
+   "triplet": 13,
+   "label": "consistent",
+   "template": 3,
+   "window": [
+    297,
+    348
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 7,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-14-contradiction": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2001a",
+   "triplet": 14,
+   "label": "contradiction",
+   "template": 4,
+   "window": [
+    762,
+    827
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-14-update": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2001a",
+   "triplet": 14,
+   "label": "update",
+   "template": 4,
+   "window": [
+    762,
+    827
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-14-consistent": {
+   "type": "conflict",
+   "split": "dev",
+   "meeting": "ami:EN2001a",
+   "triplet": 14,
+   "label": "consistent",
+   "template": 4,
+   "window": [
+    762,
+    827
+   ],
+   "distractor_turns": 60,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    66
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-15-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-32",
+   "triplet": 15,
+   "label": "contradiction",
+   "template": 0,
+   "window": [
+    46,
+    109
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-15-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-32",
+   "triplet": 15,
+   "label": "update",
+   "template": 0,
+   "window": [
+    46,
+    109
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-15-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-32",
+   "triplet": 15,
+   "label": "consistent",
+   "template": 0,
+   "window": [
+    46,
+    109
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-16-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3005d",
+   "triplet": 16,
+   "label": "contradiction",
+   "template": 1,
+   "window": [
+    762,
+    806
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-16-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3005d",
+   "triplet": 16,
+   "label": "update",
+   "template": 1,
+   "window": [
+    762,
+    806
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-16-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3005d",
+   "triplet": 16,
+   "label": "consistent",
+   "template": 1,
+   "window": [
+    762,
+    806
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-17-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-11",
+   "triplet": 17,
+   "label": "contradiction",
+   "template": 2,
+   "window": [
+    5,
+    68
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 6,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-17-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-11",
+   "triplet": 17,
+   "label": "update",
+   "template": 2,
+   "window": [
+    5,
+    68
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 6,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-17-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-11",
+   "triplet": 17,
+   "label": "consistent",
+   "template": 2,
+   "window": [
+    5,
+    68
+   ],
+   "distractor_turns": 58,
+   "speakers_in_window": 6,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    64
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-18-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-59",
+   "triplet": 18,
+   "label": "contradiction",
+   "template": 3,
+   "window": [
+    224,
+    262
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-18-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-59",
+   "triplet": 18,
+   "label": "update",
+   "template": 3,
+   "window": [
+    224,
+    262
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-18-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-59",
+   "triplet": 18,
+   "label": "consistent",
+   "template": 3,
+   "window": [
+    224,
+    262
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-19-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3011b",
+   "triplet": 19,
+   "label": "contradiction",
+   "template": 4,
+   "window": [
+    183,
+    216
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-19-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3011b",
+   "triplet": 19,
+   "label": "update",
+   "template": 4,
+   "window": [
+    183,
+    216
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-19-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3011b",
+   "triplet": 19,
+   "label": "consistent",
+   "template": 4,
+   "window": [
+    183,
+    216
+   ],
+   "distractor_turns": 28,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    34
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-20-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-19",
+   "triplet": 20,
+   "label": "contradiction",
+   "template": 5,
+   "window": [
+    102,
+    140
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-20-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-19",
+   "triplet": 20,
+   "label": "update",
+   "template": 5,
+   "window": [
+    102,
+    140
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-20-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-19",
+   "triplet": 20,
+   "label": "consistent",
+   "template": 5,
+   "window": [
+    102,
+    140
+   ],
+   "distractor_turns": 33,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    39
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-21-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-147",
+   "triplet": 21,
+   "label": "contradiction",
+   "template": 6,
+   "window": [
+    233,
+    291
+   ],
+   "distractor_turns": 53,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    59
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-21-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-147",
+   "triplet": 21,
+   "label": "update",
+   "template": 6,
+   "window": [
+    233,
+    291
+   ],
+   "distractor_turns": 53,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    59
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-21-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-147",
+   "triplet": 21,
+   "label": "consistent",
+   "template": 6,
+   "window": [
+    233,
+    291
+   ],
+   "distractor_turns": 53,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    59
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-22-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2011a",
+   "triplet": 22,
+   "label": "contradiction",
+   "template": 7,
+   "window": [
+    122,
+    166
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-22-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2011a",
+   "triplet": 22,
+   "label": "update",
+   "template": 7,
+   "window": [
+    122,
+    166
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-22-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2011a",
+   "triplet": 22,
+   "label": "consistent",
+   "template": 7,
+   "window": [
+    122,
+    166
+   ],
+   "distractor_turns": 39,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    45
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-23-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-6",
+   "triplet": 23,
+   "label": "contradiction",
+   "template": 8,
+   "window": [
+    34,
+    86
+   ],
+   "distractor_turns": 47,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    53
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-23-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-6",
+   "triplet": 23,
+   "label": "update",
+   "template": 8,
+   "window": [
+    34,
+    86
+   ],
+   "distractor_turns": 47,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    53
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-23-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-6",
+   "triplet": 23,
+   "label": "consistent",
+   "template": 8,
+   "window": [
+    34,
+    86
+   ],
+   "distractor_turns": 47,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    53
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-24-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3004c",
+   "triplet": 24,
+   "label": "contradiction",
+   "template": 9,
+   "window": [
+    100,
+    135
+   ],
+   "distractor_turns": 30,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    36
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-24-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3004c",
+   "triplet": 24,
+   "label": "update",
+   "template": 9,
+   "window": [
+    100,
+    135
+   ],
+   "distractor_turns": 30,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    36
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-24-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:TS3004c",
+   "triplet": 24,
+   "label": "consistent",
+   "template": 9,
+   "window": [
+    100,
+    135
+   ],
+   "distractor_turns": 30,
+   "speakers_in_window": 4,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    36
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-25-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2003c",
+   "triplet": 25,
+   "label": "contradiction",
+   "template": 0,
+   "window": [
+    237,
+    276
+   ],
+   "distractor_turns": 34,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    40
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-25-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2003c",
+   "triplet": 25,
+   "label": "update",
+   "template": 0,
+   "window": [
+    237,
+    276
+   ],
+   "distractor_turns": 34,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    40
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-25-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2003c",
+   "triplet": 25,
+   "label": "consistent",
+   "template": 0,
+   "window": [
+    237,
+    276
+   ],
+   "distractor_turns": 34,
+   "speakers_in_window": 3,
+   "different_speakers": true,
+   "gold_seq": [
+    5,
+    40
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-26-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-149",
+   "triplet": 26,
+   "label": "contradiction",
+   "template": 1,
+   "window": [
+    207,
+    243
+   ],
+   "distractor_turns": 31,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    37
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-26-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-149",
+   "triplet": 26,
+   "label": "update",
+   "template": 1,
+   "window": [
+    207,
+    243
+   ],
+   "distractor_turns": 31,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    37
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-26-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-149",
+   "triplet": 26,
+   "label": "consistent",
+   "template": 1,
+   "window": [
+    207,
+    243
+   ],
+   "distractor_turns": 31,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    37
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-27-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:IS1004b",
+   "triplet": 27,
+   "label": "contradiction",
+   "template": 2,
+   "window": [
+    127,
+    183
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-27-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:IS1004b",
+   "triplet": 27,
+   "label": "update",
+   "template": 2,
+   "window": [
+    127,
+    183
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-27-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:IS1004b",
+   "triplet": 27,
+   "label": "consistent",
+   "template": 2,
+   "window": [
+    127,
+    183
+   ],
+   "distractor_turns": 51,
+   "speakers_in_window": 4,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    57
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-28-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2005d",
+   "triplet": 28,
+   "label": "contradiction",
+   "template": 3,
+   "window": [
+    167,
+    193
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-28-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2005d",
+   "triplet": 28,
+   "label": "update",
+   "template": 3,
+   "window": [
+    167,
+    193
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-28-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "ami:ES2005d",
+   "triplet": 28,
+   "label": "consistent",
+   "template": 3,
+   "window": [
+    167,
+    193
+   ],
+   "distractor_turns": 21,
+   "speakers_in_window": 3,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    27
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-29-contradiction": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-23",
+   "triplet": 29,
+   "label": "contradiction",
+   "template": 4,
+   "window": [
+    672,
+    723
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-29-update": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-23",
+   "triplet": 29,
+   "label": "update",
+   "template": 4,
+   "window": [
+    672,
+    723
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-cf-29-consistent": {
+   "type": "conflict",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-23",
+   "triplet": 29,
+   "label": "consistent",
+   "template": 4,
+   "window": [
+    672,
+    723
+   ],
+   "distractor_turns": 46,
+   "speakers_in_window": 5,
+   "different_speakers": false,
+   "gold_seq": [
+    5,
+    52
+   ],
+   "how": "real meeting turns with two invented statements inserted; gold = both"
+  },
+  "e10-tw-00-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-test-15",
+   "pair": 0,
+   "label": "answerable",
+   "template": 0,
+   "window": [
+    219,
+    261
+   ],
+   "turns": 43,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-00-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-test-15",
+   "pair": 0,
+   "label": "insufficient",
+   "template": 0,
+   "window": [
+    219,
+    261
+   ],
+   "turns": 43,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-01-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-142",
+   "pair": 1,
+   "label": "answerable",
+   "template": 1,
+   "window": [
+    183,
+    270
+   ],
+   "turns": 88,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-01-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-142",
+   "pair": 1,
+   "label": "insufficient",
+   "template": 1,
+   "window": [
+    183,
+    270
+   ],
+   "turns": 88,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-02-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-121",
+   "pair": 2,
+   "label": "answerable",
+   "template": 2,
+   "window": [
+    164,
+    233
+   ],
+   "turns": 70,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-02-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-121",
+   "pair": 2,
+   "label": "insufficient",
+   "template": 2,
+   "window": [
+    164,
+    233
+   ],
+   "turns": 70,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-03-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-71",
+   "pair": 3,
+   "label": "answerable",
+   "template": 3,
+   "window": [
+    413,
+    453
+   ],
+   "turns": 41,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-03-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-71",
+   "pair": 3,
+   "label": "insufficient",
+   "template": 3,
+   "window": [
+    413,
+    453
+   ],
+   "turns": 41,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-04-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-9",
+   "pair": 4,
+   "label": "answerable",
+   "template": 4,
+   "window": [
+    48,
+    124
+   ],
+   "turns": 77,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-04-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-9",
+   "pair": 4,
+   "label": "insufficient",
+   "template": 4,
+   "window": [
+    48,
+    124
+   ],
+   "turns": 77,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-05-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-114",
+   "pair": 5,
+   "label": "answerable",
+   "template": 5,
+   "window": [
+    201,
+    297
+   ],
+   "turns": 97,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-05-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-114",
+   "pair": 5,
+   "label": "insufficient",
+   "template": 5,
+   "window": [
+    201,
+    297
+   ],
+   "turns": 97,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-06-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-val-19",
+   "pair": 6,
+   "label": "answerable",
+   "template": 6,
+   "window": [
+    166,
+    239
+   ],
+   "turns": 74,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-06-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-val-19",
+   "pair": 6,
+   "label": "insufficient",
+   "template": 6,
+   "window": [
+    166,
+    239
+   ],
+   "turns": 74,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-07-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-28",
+   "pair": 7,
+   "label": "answerable",
+   "template": 7,
+   "window": [
+    21,
+    78
+   ],
+   "turns": 58,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-07-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-28",
+   "pair": 7,
+   "label": "insufficient",
+   "template": 7,
+   "window": [
+    21,
+    78
+   ],
+   "turns": 58,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-08-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2013b",
+   "pair": 8,
+   "label": "answerable",
+   "template": 8,
+   "window": [
+    284,
+    355
+   ],
+   "turns": 72,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-08-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2013b",
+   "pair": 8,
+   "label": "insufficient",
+   "template": 8,
+   "window": [
+    284,
+    355
+   ],
+   "turns": 72,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-09-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-138",
+   "pair": 9,
+   "label": "answerable",
+   "template": 9,
+   "window": [
+    162,
+    260
+   ],
+   "turns": 99,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-09-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-138",
+   "pair": 9,
+   "label": "insufficient",
+   "template": 9,
+   "window": [
+    162,
+    260
+   ],
+   "turns": 99,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-10-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2003d",
+   "pair": 10,
+   "label": "answerable",
+   "template": 0,
+   "window": [
+    106,
+    158
+   ],
+   "turns": 53,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-10-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2003d",
+   "pair": 10,
+   "label": "insufficient",
+   "template": 0,
+   "window": [
+    106,
+    158
+   ],
+   "turns": 53,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-11-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-67",
+   "pair": 11,
+   "label": "answerable",
+   "template": 1,
+   "window": [
+    42,
+    108
+   ],
+   "turns": 67,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-11-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-67",
+   "pair": 11,
+   "label": "insufficient",
+   "template": 1,
+   "window": [
+    42,
+    108
+   ],
+   "turns": 67,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-12-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2007b",
+   "pair": 12,
+   "label": "answerable",
+   "template": 2,
+   "window": [
+    257,
+    329
+   ],
+   "turns": 73,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-12-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2007b",
+   "pair": 12,
+   "label": "insufficient",
+   "template": 2,
+   "window": [
+    257,
+    329
+   ],
+   "turns": 73,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-13-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-44",
+   "pair": 13,
+   "label": "answerable",
+   "template": 3,
+   "window": [
+    87,
+    180
+   ],
+   "turns": 94,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-13-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-44",
+   "pair": 13,
+   "label": "insufficient",
+   "template": 3,
+   "window": [
+    87,
+    180
+   ],
+   "turns": 94,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-14-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-95",
+   "pair": 14,
+   "label": "answerable",
+   "template": 4,
+   "window": [
+    137,
+    210
+   ],
+   "turns": 74,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-14-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-95",
+   "pair": 14,
+   "label": "insufficient",
+   "template": 4,
+   "window": [
+    137,
+    210
+   ],
+   "turns": 74,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-15-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:TS3007c",
+   "pair": 15,
+   "label": "answerable",
+   "template": 5,
+   "window": [
+    146,
+    218
+   ],
+   "turns": 73,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-15-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:TS3007c",
+   "pair": 15,
+   "label": "insufficient",
+   "template": 5,
+   "window": [
+    146,
+    218
+   ],
+   "turns": 73,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-16-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2015c",
+   "pair": 16,
+   "label": "answerable",
+   "template": 6,
+   "window": [
+    322,
+    381
+   ],
+   "turns": 60,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-16-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2015c",
+   "pair": 16,
+   "label": "insufficient",
+   "template": 6,
+   "window": [
+    322,
+    381
+   ],
+   "turns": 60,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-17-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-159",
+   "pair": 17,
+   "label": "answerable",
+   "template": 7,
+   "window": [
+    442,
+    497
+   ],
+   "turns": 56,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-17-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-159",
+   "pair": 17,
+   "label": "insufficient",
+   "template": 7,
+   "window": [
+    442,
+    497
+   ],
+   "turns": 56,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-18-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-108",
+   "pair": 18,
+   "label": "answerable",
+   "template": 8,
+   "window": [
+    248,
+    305
+   ],
+   "turns": 58,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-18-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-train-108",
+   "pair": 18,
+   "label": "insufficient",
+   "template": 8,
+   "window": [
+    248,
+    305
+   ],
+   "turns": 58,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-19-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2011b",
+   "pair": 19,
+   "label": "answerable",
+   "template": 9,
+   "window": [
+    69,
+    149
+   ],
+   "turns": 81,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-19-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2011b",
+   "pair": 19,
+   "label": "insufficient",
+   "template": 9,
+   "window": [
+    69,
+    149
+   ],
+   "turns": 81,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-20-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:IS1001c",
+   "pair": 20,
+   "label": "answerable",
+   "template": 0,
+   "window": [
+    6,
+    79
+   ],
+   "turns": 74,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-20-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:IS1001c",
+   "pair": 20,
+   "label": "insufficient",
+   "template": 0,
+   "window": [
+    6,
+    79
+   ],
+   "turns": 74,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-21-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2006a",
+   "pair": 21,
+   "label": "answerable",
+   "template": 1,
+   "window": [
+    17,
+    89
+   ],
+   "turns": 73,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-21-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:ES2006a",
+   "pair": 21,
+   "label": "insufficient",
+   "template": 1,
+   "window": [
+    17,
+    89
+   ],
+   "turns": 73,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-22-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:IS1000b",
+   "pair": 22,
+   "label": "answerable",
+   "template": 2,
+   "window": [
+    76,
+    149
+   ],
+   "turns": 74,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-22-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:IS1000b",
+   "pair": 22,
+   "label": "insufficient",
+   "template": 2,
+   "window": [
+    76,
+    149
+   ],
+   "turns": 74,
+   "answer_turn": 5,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-23-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-val-14",
+   "pair": 23,
+   "label": "answerable",
+   "template": 3,
+   "window": [
+    27,
+    118
+   ],
+   "turns": 92,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-23-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "qmsum:qmsum-val-14",
+   "pair": 23,
+   "label": "insufficient",
+   "template": 3,
+   "window": [
+    27,
+    118
+   ],
+   "turns": 92,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-24-answerable": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:TS3009a",
+   "pair": 24,
+   "label": "answerable",
+   "template": 4,
+   "window": [
+    5,
+    93
+   ],
+   "turns": 89,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-24-insufficient": {
+   "type": "twin",
+   "split": "dev",
+   "meeting": "ami:TS3009a",
+   "pair": 24,
+   "label": "insufficient",
+   "template": 4,
+   "window": [
+    5,
+    93
+   ],
+   "turns": 89,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-25-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1008",
+   "pair": 25,
+   "label": "answerable",
+   "template": 5,
+   "window": [
+    672,
+    735
+   ],
+   "turns": 64,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-25-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1008",
+   "pair": 25,
+   "label": "insufficient",
+   "template": 5,
+   "window": [
+    672,
+    735
+   ],
+   "turns": 64,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-26-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-63",
+   "pair": 26,
+   "label": "answerable",
+   "template": 6,
+   "window": [
+    73,
+    166
+   ],
+   "turns": 94,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-26-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-63",
+   "pair": 26,
+   "label": "insufficient",
+   "template": 6,
+   "window": [
+    73,
+    166
+   ],
+   "turns": 94,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-27-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IS1008b",
+   "pair": 27,
+   "label": "answerable",
+   "template": 7,
+   "window": [
+    17,
+    73
+   ],
+   "turns": 57,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-27-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IS1008b",
+   "pair": 27,
+   "label": "insufficient",
+   "template": 7,
+   "window": [
+    17,
+    73
+   ],
+   "turns": 57,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-28-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2006d",
+   "pair": 28,
+   "label": "answerable",
+   "template": 8,
+   "window": [
+    335,
+    382
+   ],
+   "turns": 48,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-28-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2006d",
+   "pair": 28,
+   "label": "insufficient",
+   "template": 8,
+   "window": [
+    335,
+    382
+   ],
+   "turns": 48,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-29-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-132",
+   "pair": 29,
+   "label": "answerable",
+   "template": 9,
+   "window": [
+    30,
+    72
+   ],
+   "turns": 43,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-29-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-132",
+   "pair": 29,
+   "label": "insufficient",
+   "template": 9,
+   "window": [
+    30,
+    72
+   ],
+   "turns": 43,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-30-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-50",
+   "pair": 30,
+   "label": "answerable",
+   "template": 0,
+   "window": [
+    370,
+    430
+   ],
+   "turns": 61,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-30-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-50",
+   "pair": 30,
+   "label": "insufficient",
+   "template": 0,
+   "window": [
+    370,
+    430
+   ],
+   "turns": 61,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-31-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-12",
+   "pair": 31,
+   "label": "answerable",
+   "template": 1,
+   "window": [
+    140,
+    211
+   ],
+   "turns": 72,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-31-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-12",
+   "pair": 31,
+   "label": "insufficient",
+   "template": 1,
+   "window": [
+    140,
+    211
+   ],
+   "turns": 72,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-32-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:TS3011b",
+   "pair": 32,
+   "label": "answerable",
+   "template": 2,
+   "window": [
+    166,
+    234
+   ],
+   "turns": 69,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-32-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:TS3011b",
+   "pair": 32,
+   "label": "insufficient",
+   "template": 2,
+   "window": [
+    166,
+    234
+   ],
+   "turns": 69,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-33-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-26",
+   "pair": 33,
+   "label": "answerable",
+   "template": 3,
+   "window": [
+    72,
+    127
+   ],
+   "turns": 56,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-33-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-26",
+   "pair": 33,
+   "label": "insufficient",
+   "template": 3,
+   "window": [
+    72,
+    127
+   ],
+   "turns": 56,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-34-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-82",
+   "pair": 34,
+   "label": "answerable",
+   "template": 4,
+   "window": [
+    56,
+    114
+   ],
+   "turns": 59,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-34-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-82",
+   "pair": 34,
+   "label": "insufficient",
+   "template": 4,
+   "window": [
+    56,
+    114
+   ],
+   "turns": 59,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-35-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:TS3006c",
+   "pair": 35,
+   "label": "answerable",
+   "template": 5,
+   "window": [
+    755,
+    811
+   ],
+   "turns": 57,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-35-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:TS3006c",
+   "pair": 35,
+   "label": "insufficient",
+   "template": 5,
+   "window": [
+    755,
+    811
+   ],
+   "turns": 57,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-36-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-118",
+   "pair": 36,
+   "label": "answerable",
+   "template": 6,
+   "window": [
+    114,
+    160
+   ],
+   "turns": 47,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-36-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-118",
+   "pair": 36,
+   "label": "insufficient",
+   "template": 6,
+   "window": [
+    114,
+    160
+   ],
+   "turns": 47,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-37-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-21",
+   "pair": 37,
+   "label": "answerable",
+   "template": 7,
+   "window": [
+    47,
+    120
+   ],
+   "turns": 74,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-37-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-test-21",
+   "pair": 37,
+   "label": "insufficient",
+   "template": 7,
+   "window": [
+    47,
+    120
+   ],
+   "turns": 74,
+   "answer_turn": 12,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-38-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:EN2006a",
+   "pair": 38,
+   "label": "answerable",
+   "template": 8,
+   "window": [
+    163,
+    212
+   ],
+   "turns": 50,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-38-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:EN2006a",
+   "pair": 38,
+   "label": "insufficient",
+   "template": 8,
+   "window": [
+    163,
+    212
+   ],
+   "turns": 50,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-39-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-32",
+   "pair": 39,
+   "label": "answerable",
+   "template": 9,
+   "window": [
+    24,
+    119
+   ],
+   "turns": 96,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-39-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-32",
+   "pair": 39,
+   "label": "insufficient",
+   "template": 9,
+   "window": [
+    24,
+    119
+   ],
+   "turns": 96,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-40-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1012",
+   "pair": 40,
+   "label": "answerable",
+   "template": 0,
+   "window": [
+    687,
+    754
+   ],
+   "turns": 68,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-40-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1012",
+   "pair": 40,
+   "label": "insufficient",
+   "template": 0,
+   "window": [
+    687,
+    754
+   ],
+   "turns": 68,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-41-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-112",
+   "pair": 41,
+   "label": "answerable",
+   "template": 1,
+   "window": [
+    646,
+    705
+   ],
+   "turns": 60,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-41-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-112",
+   "pair": 41,
+   "label": "insufficient",
+   "template": 1,
+   "window": [
+    646,
+    705
+   ],
+   "turns": 60,
+   "answer_turn": 3,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-42-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2003c",
+   "pair": 42,
+   "label": "answerable",
+   "template": 2,
+   "window": [
+    85,
+    146
+   ],
+   "turns": 62,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-42-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2003c",
+   "pair": 42,
+   "label": "insufficient",
+   "template": 2,
+   "window": [
+    85,
+    146
+   ],
+   "turns": 62,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-43-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2013d",
+   "pair": 43,
+   "label": "answerable",
+   "template": 3,
+   "window": [
+    243,
+    312
+   ],
+   "turns": 70,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-43-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2013d",
+   "pair": 43,
+   "label": "insufficient",
+   "template": 3,
+   "window": [
+    243,
+    312
+   ],
+   "turns": 70,
+   "answer_turn": 6,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-44-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-6",
+   "pair": 44,
+   "label": "answerable",
+   "template": 4,
+   "window": [
+    242,
+    286
+   ],
+   "turns": 45,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-44-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-6",
+   "pair": 44,
+   "label": "insufficient",
+   "template": 4,
+   "window": [
+    242,
+    286
+   ],
+   "turns": 45,
+   "answer_turn": 4,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-45-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2011a",
+   "pair": 45,
+   "label": "answerable",
+   "template": 5,
+   "window": [
+    79,
+    153
+   ],
+   "turns": 75,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-45-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:ES2011a",
+   "pair": 45,
+   "label": "insufficient",
+   "template": 5,
+   "window": [
+    79,
+    153
+   ],
+   "turns": 75,
+   "answer_turn": 8,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-46-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-35",
+   "pair": 46,
+   "label": "answerable",
+   "template": 6,
+   "window": [
+    166,
+    229
+   ],
+   "turns": 64,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-46-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-35",
+   "pair": 46,
+   "label": "insufficient",
+   "template": 6,
+   "window": [
+    166,
+    229
+   ],
+   "turns": 64,
+   "answer_turn": 11,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-47-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1016",
+   "pair": 47,
+   "label": "answerable",
+   "template": 7,
+   "window": [
+    651,
+    713
+   ],
+   "turns": 63,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-47-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "ami:IN1016",
+   "pair": 47,
+   "label": "insufficient",
+   "template": 7,
+   "window": [
+    651,
+    713
+   ],
+   "turns": 63,
+   "answer_turn": 9,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-48-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-80",
+   "pair": 48,
+   "label": "answerable",
+   "template": 8,
+   "window": [
+    399,
+    456
+   ],
+   "turns": 58,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-48-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-train-80",
+   "pair": 48,
+   "label": "insufficient",
+   "template": 8,
+   "window": [
+    399,
+    456
+   ],
+   "turns": 58,
+   "answer_turn": 7,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-49-answerable": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-5",
+   "pair": 49,
+   "label": "answerable",
+   "template": 9,
+   "window": [
+    315,
+    401
+   ],
+   "turns": 87,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-tw-49-insufficient": {
+   "type": "twin",
+   "split": "test",
+   "meeting": "qmsum:qmsum-val-5",
+   "pair": 49,
+   "label": "insufficient",
+   "template": 9,
+   "window": [
+    315,
+    401
+   ],
+   "turns": 87,
+   "answer_turn": 10,
+   "how": "real meeting turns with one invented turn: the answer, or a near miss that states nothing"
+  },
+  "e10-ct-syn-con-30": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-con-30",
+   "source_case": "syn-con-30",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-con-24": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-con-24",
+   "source_case": "syn-con-24",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-con-14": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-con-14",
+   "source_case": "syn-con-14",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-con-18": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-con-18",
+   "source_case": "syn-con-18",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-con-02": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-con-02",
+   "source_case": "syn-con-02",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-hyp-14": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-hyp-14",
+   "source_case": "syn-hyp-14",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-hyp-28": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-hyp-28",
+   "source_case": "syn-hyp-28",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-hyp-04": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-hyp-04",
+   "source_case": "syn-hyp-04",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-hyp-02": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-hyp-02",
+   "source_case": "syn-hyp-02",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-hyp-24": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-hyp-24",
+   "source_case": "syn-hyp-24",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-ins-18": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-ins-18",
+   "source_case": "syn-ins-18",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-ins-04": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-ins-04",
+   "source_case": "syn-ins-04",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-ins-00": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-ins-00",
+   "source_case": "syn-ins-00",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-ins-02": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-ins-02",
+   "source_case": "syn-ins-02",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-ins-22": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-ins-22",
+   "source_case": "syn-ins-22",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-deadline-update-00": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-deadline-update-00",
+   "source_case": "syn-deadline-update-00",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-upd-20": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-upd-20",
+   "source_case": "syn-upd-20",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-upd-18": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-upd-18",
+   "source_case": "syn-upd-18",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-upd-14": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-upd-14",
+   "source_case": "syn-upd-14",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-upd-10": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-upd-10",
+   "source_case": "syn-upd-10",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-inj-20": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-inj-20",
+   "source_case": "syn-inj-20",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-inj-30": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-inj-30",
+   "source_case": "syn-inj-30",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-inj-18": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-inj-18",
+   "source_case": "syn-inj-18",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-inj-06": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-inj-06",
+   "source_case": "syn-inj-06",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-inj-08": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-inj-08",
+   "source_case": "syn-inj-08",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-3249768e": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "3249768e",
+   "source_case": "3249768e",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-18dcd5a5": {
+   "type": "control",
+   "split": "test",
+   "meeting": "18dcd5a5",
+   "source_case": "18dcd5a5",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rec-02": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-rec-02",
+   "source_case": "syn-rec-02",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rec-10": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-rec-10",
+   "source_case": "syn-rec-10",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rec-04": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-rec-04",
+   "source_case": "syn-rec-04",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rsp-14": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-rsp-14",
+   "source_case": "syn-rsp-14",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rsp-08": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-rsp-08",
+   "source_case": "syn-rsp-08",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rsp-22": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-rsp-22",
+   "source_case": "syn-rsp-22",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rsp-30": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-rsp-30",
+   "source_case": "syn-rsp-30",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-rsp-20": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-rsp-20",
+   "source_case": "syn-rsp-20",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-wsc-16": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-wsc-16",
+   "source_case": "syn-wsc-16",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-wsq-06": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-wsq-06",
+   "source_case": "syn-wsq-06",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-wsc-04": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-wsc-04",
+   "source_case": "syn-wsc-04",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-wsq-02": {
+   "type": "control",
+   "split": "test",
+   "meeting": "syn-wsq-02",
+   "source_case": "syn-wsq-02",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  },
+  "e10-ct-syn-wsq-18": {
+   "type": "control",
+   "split": "dev",
+   "meeting": "syn-wsq-18",
+   "source_case": "syn-wsq-18",
+   "how": "seeded sample of E8's dev short cases, unchanged"
+  }
+ },
+ "note": "Real AMI and QMSum text sits in git-ignored datasets/raw/scenarios/e10; this file holds ids, hashes and how each case was made. Conflict and twin statements are invented from templates, so their labels are unreviewed."
+}
