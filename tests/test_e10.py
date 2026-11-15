@@ -351,3 +351,65 @@ def test_timed_out_call_at_the_deadline_counts_as_a_cut():
     assert M.deadline_cut(p) is False  # 3 s: an outage-style timeout, not the deadline
     p.stage_latency_ms["total"] = 8030
     assert M.deadline_cut(p) is True
+
+
+# ---------------------------------------------------------------- long chunks and truncated replies
+
+_CUT = ('{\n "items": [\n  {"kind": "fact", "subject": "a", "statement": "one", "source_turn_ids": ["c1:t1"]},\n'
+        '  {"kind": "fact", "subject": "b", "statement": "two", "source_turn_ids": ["c1:t2"]},\n'
+        '  {"kind": "fact", "subject": "c", "statement": "thr')
+
+
+def test_salvage_keeps_the_complete_items_of_a_cut_off_reply():
+    from contextlens.memory import extract as X
+
+    kept = L.salvage_items(_CUT, X._Out)
+    assert [i.statement for i in kept.items] == ["one", "two"]
+    assert L.salvage_items('{"items": [{"kind": "fact", "subj', X._Out) is None
+    assert L.salvage_items("not json", X._Out) is None
+
+
+def test_patient_salvages_a_reply_that_hit_the_cap_and_does_not_regenerate():
+    from contextlens.llm.client import LLMError, LLMResult
+    from contextlens.memory import extract as X
+
+    class Inner:
+        def __init__(self, text):
+            self.text, self.calls = text, 0
+
+        def _raw(self, messages, schema, max_tokens, temperature, timeout_s):
+            self.calls += 1
+            return LLMResult(text=self.text, model="m", prompt_tokens=10, completion_tokens=max_tokens, latency_ms=1.0)
+
+    inner = Inner(_CUT)
+    res = L.Patient(inner, 900).complete([], schema=X._Out, max_tokens=300, timeout_s=60.0)
+    assert inner.calls == 1 and len(res.parsed.items) == 2
+    bad = Inner('{"items": [{"kind"')
+    p = L.Patient(bad, 900)
+    with pytest.raises(LLMError, match="cap 300"):
+        p.complete([], schema=X._Out, max_tokens=300, timeout_s=60.0)
+    assert bad.calls == 1 and p.last["hit_cap"] is True
+
+
+def test_split_chunk_by_characters_keeps_order_and_a_long_turn_alone():
+    turns = [Turn(id=f"c1:t{i}", conversation_id="c1", seq=i, speaker="A", text="x" * n, start_ms=0, end_ms=1, source="dataset")
+             for i, n in enumerate([100, 100, 5000, 100, 100, 100])]
+    pieces = L.split_chunk(turns, 1000)
+    assert [[t.seq for t in p] for p in pieces] == [[0, 1], [2], [3, 4, 5]]
+    assert L.split_chunk(turns[:2], 1000) == [turns[:2]] and L.split_chunk([], 1000) == []
+
+
+def test_build_memory_reads_a_long_chunk_in_pieces_and_logs_why_a_chunk_fails(tmp_path):
+    sc = _sc("qmsum_long", [1], q="q?", n=30)
+    sc.conversation.turns[:] = [t.model_copy(update={"text": "w" * 400}) for t in sc.conversation.turns]  # 30 turns of 400 chars
+    ex = _Extractor()
+    items, info = L.build_memory(sc, ex, 40, tmp_path, 16384, max_chunk_chars=2000)
+    assert ex.calls >= 6 and info["failed_chunks"] == 0 and len({i.as_of_seq for i in items}) == ex.calls
+    lines = []
+    sc2 = _sc("qmsum_long", [2], q="q?", n=30)
+    bad = _Extractor(fail={1, 2})
+    _, info2 = L.build_memory(sc2, bad, 40, tmp_path, 16384, attempts=2, on_fail=lines.append)
+    assert info2["failed_chunks"] == 1 and len(lines) == 2 and "RuntimeError" in lines[0] and "30 turns" in lines[0]
+    again = _Extractor()
+    redone, info3 = L.build_memory(sc2, again, 40, tmp_path, 16384, attempts=2)
+    assert info3["redone"] == 1 and info3["failed_chunks"] == 0 and len(redone) == 1  # no duplicates from the failed try

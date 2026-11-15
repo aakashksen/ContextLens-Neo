@@ -30,7 +30,7 @@ from contextlens.api import production
 from contextlens.data import e10_cases
 from contextlens.eval import e10_metrics as M
 from contextlens.eval.records import ROOT, head_commit, is_dirty, write_atomic
-from contextlens.llm.client import LLMClient, OllamaClient
+from contextlens.llm.client import LLMClient, LLMError, OllamaClient
 from contextlens.memory.extract import MemoryExtractor
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Prediction, replay
@@ -158,24 +158,90 @@ def _cached(root: Path, key: str) -> bool:
 
 
 class Patient:
-    """A client that never gives the model less than `timeout_s` per call. The extractor asks for 60 s, but a call that times out
-    on our side keeps running inside Ollama and queues behind the next ones, so a short timeout on a busy GPU turns one slow chunk
-    into a pile of failures."""
+    """The memory writer, for extraction. Three differences from the plain client:
+    - a call gets at least `timeout_s` (the extractor asks for 60 s; a call abandoned on our side keeps running inside Ollama and
+      queues behind the next ones, so a short timeout on a busy GPU turns one slow chunk into a pile of failures);
+    - no second generation after bad JSON: the client's schema retry repeats the same long request, which is how a truncated reply
+      cost 2 x 130 s and still failed;
+    - a reply cut off at the token cap keeps its complete items instead of being thrown away (`salvage_items`).
+    `last` describes the latest call (completion tokens, whether the cap was hit, how many items were kept) for the progress log."""
 
     def __init__(self, inner: LLMClient, timeout_s: float) -> None:
-        self.inner, self.timeout_s = inner, timeout_s
+        self.inner, self.timeout_s, self.last = inner, timeout_s, {}
 
     def complete(self, messages: list[dict], **kw: Any) -> Any:
         kw["timeout_s"] = max(kw.get("timeout_s") or 0.0, self.timeout_s)
-        return self.inner.complete(messages, **kw)
+        schema = kw.get("schema")
+        raw = getattr(self.inner, "_raw", None)
+        if schema is None or raw is None:
+            return self.inner.complete(messages, **kw)
+        cap = kw.get("max_tokens", 512)
+        res = raw(messages, schema, cap, kw.get("temperature", 0.0), kw["timeout_s"])
+        self.last = {"completion_tokens": res.completion_tokens, "hit_cap": res.completion_tokens >= cap, "salvaged": False}
+        try:
+            res.parsed = schema.model_validate_json(res.text.strip())
+            return res
+        except ValueError:
+            kept = salvage_items(res.text, schema)
+        if kept is None:
+            raise LLMError(f"invalid model reply ({res.completion_tokens} tokens, cap {cap}, no complete item)", results=[res])
+        self.last.update(salvaged=True, kept=len(kept.items))
+        res.parsed = kept
+        return res
+
+
+def salvage_items(text: str, schema: Any) -> Any:
+    """The complete items of a reply of the form {"items": [ {...}, {...}, <cut off>: each object that parses and validates, in
+    order, up to the first one that does not. None when there is none."""
+    start = text.find("[", text.find('"items"'))
+    if start < 0:
+        return None
+    dec, pos, kept = json.JSONDecoder(), start + 1, []
+    item_type = schema.model_fields["items"].annotation.__args__[0]
+    while pos < len(text):
+        while pos < len(text) and text[pos] in " \n\r\t,":
+            pos += 1
+        if pos >= len(text) or text[pos] == "]":
+            break
+        try:
+            obj, pos = dec.raw_decode(text, pos)
+            kept.append(item_type.model_validate(obj))
+        except ValueError:
+            break
+    return schema(items=kept) if kept else None
+
+
+def split_chunk(part: list[Any], max_chars: int) -> list[list[Any]]:
+    """A chunk of turns cut into runs of at most `max_chars` of text (a single longer turn stays alone), in order. The extractor's
+    reply is about as long as its input, and the reply is capped, so a chunk of very long turns must be read in pieces."""
+    out, cur, size = [], [], 0
+    for t in part:
+        n = len(t.text) + len(t.speaker) + len(t.id) + 8
+        if cur and size + n > max_chars:
+            out.append(cur)
+            cur, size = [], 0
+        cur.append(t)
+        size += n
+    return [*out, cur] if cur else out
+
+
+def _why(exc: Exception, llm: Any) -> str:
+    """One line for the log: the exception type, and the model call's numbers. No transcript or model text."""
+    last = getattr(llm, "last", {}) or {}
+    msg = str(exc)
+    safe = msg[:120] if msg.startswith(("request to ", "invalid model reply", "too many")) else ""
+    bits = [type(exc).__name__, safe, f"completion_tokens={last.get('completion_tokens')}", f"hit_cap={last.get('hit_cap')}"]
+    return " ".join(b for b in bits if b)
 
 
 def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: int | None = None,
-                 on_chunk: Callable[[int, int, float], None] | None = None, attempts: int = 2) -> tuple[list[MemoryItem], dict[str, Any]]:
-    """Memory built the way the live stream builds it: the extractor reads the turns in chunks, each chunk seeing the notes of the
-    chunks before it. Cached on disk by the transcript's words (QMSum questions on one meeting share it). A chunk that fails after
-    `attempts` tries is recorded as failed and the entry is NOT finished: the next call redoes only the failed chunks and keeps the
-    rest. Building is outside every card's timing, as in the product, where it runs in the background."""
+                 on_chunk: Callable[[int, int, float], None] | None = None, attempts: int = 2,
+                 max_chunk_chars: int | None = None, on_fail: Callable[[str], None] | None = None) -> tuple[list[MemoryItem], dict[str, Any]]:
+    """Memory built the way the live stream builds it: the extractor reads the turns in chunks of `chunk` turns, each piece seeing
+    the notes of the text before it; a chunk whose text is longer than `max_chunk_chars` is read in pieces (split_chunk). Cached on
+    disk by the transcript's words (QMSum questions on one meeting share it). A chunk that still fails after `attempts` tries is
+    recorded as failed and the entry is NOT finished: the next call redoes only the failed chunks, dropping their partial notes, and
+    keeps the rest. Building is outside every card's timing, as in the product, where it runs in the background."""
     key = memory_key(sc, chunk, production.MODEL, num_ctx)
     path, cid = root / MEMORY_REL, sc.conversation.id
     turns = _store(sc).turns(cid, sc.request.as_of_seq)
@@ -190,17 +256,29 @@ def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: 
         todo = entry.get("failed") or [n for n, part in enumerate(chunks) if part[-1].seq not in have]  # old entries: chunks with no notes
     else:
         todo = list(range(len(chunks)))
-    extractor, failed, t0 = MemoryExtractor(llm), [], time.perf_counter()
+    extractor, failed, t0, kept_partial = MemoryExtractor(llm), [], time.perf_counter(), 0
     for n in todo:
         part, t1 = chunks[n], time.perf_counter()
-        before = [i for i in items if i.as_of_seq < part[0].seq]
-        for attempt in range(attempts):
-            try:
-                items.extend(extractor.update(part, before))
+        lo, hi = part[0].seq, part[-1].seq
+        items = [i for i in items if not lo <= i.as_of_seq <= hi]  # a redo starts the chunk afresh
+        ok = True
+        for piece in (split_chunk(part, max_chunk_chars) if max_chunk_chars else [part]):
+            before = [i for i in items if i.as_of_seq < piece[0].seq]
+            for attempt in range(attempts):
+                try:
+                    items.extend(extractor.update(piece, before))
+                    kept_partial += bool(getattr(llm, "last", {}).get("salvaged"))
+                    break
+                except Exception as exc:
+                    line = f"{sc.id} chunk {n + 1}/{len(chunks)} (try {attempt + 1}/{attempts}, {len(piece)} turns, " \
+                           f"{sum(len(t.text) for t in piece)} chars): {_why(exc, llm)}"
+                    print("memory chunk failed:", line, file=sys.stderr)
+                    if on_fail:
+                        on_fail(line)
+            else:
+                ok = False
                 break
-            except Exception as exc:
-                print(f"memory chunk {n + 1}/{len(chunks)} failed for {sc.id} (try {attempt + 1}): {type(exc).__name__}", file=sys.stderr)
-        else:
+        if not ok:
             failed.append(n)
         if on_chunk:
             on_chunk(n + 1, len(chunks), time.perf_counter() - t1)
@@ -208,7 +286,7 @@ def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: 
     blob = json.dumps([i.model_dump(mode="json") for i in items]).replace(cid, "\x00CID\x00")
     _append(path, json.dumps({"key": key, "items": blob, "failed_chunks": len(failed), "failed": failed, "chunks": len(chunks)}))
     return items, {"cached": False, "ms": (time.perf_counter() - t0) * 1000, "failed_chunks": len(failed), "chunks": len(chunks),
-                   "redone": len(todo) if entry else 0}
+                   "redone": len(todo) if entry else 0, "truncated_replies_kept": kept_partial}
 
 
 def memory_client(cfg: dict[str, Any]) -> LLMClient:
@@ -257,7 +335,7 @@ def prebuild(root: Path, splits: list[str], say: Callable[[str], None] = print) 
                 log(f"{sp} {sc.id} ({i}/{len(todo)}) chunk {n}/{of} {s:.1f}s | total {done}/{total} chunks, "
                     f"{secs / done:.1f} s/chunk, eta {(total - done) * secs / done / 60:.0f} min")
 
-            _, info = build_memory(sc, llm, chunk, root, num_ctx, on_chunk)
+            _, info = build_memory(sc, llm, chunk, root, num_ctx, on_chunk, max_chunk_chars=cfg['memory'].get('max_chunk_chars'), on_fail=lambda m: log('FAILED ' + m))
             if info["failed_chunks"]:
                 log(f"WARNING {sc.id}: {info['failed_chunks']} chunk(s) still failed; the entry stays unfinished and is redone next time")
     finally:
@@ -355,7 +433,7 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
             todo = [a for a in arms if sc.id not in have.get(a, {})]
             if not todo:
                 continue
-            items, info = build_memory(sc, mem_llm, chunk, root, num_ctx)
+            items, info = build_memory(sc, mem_llm, chunk, root, num_ctx, max_chunk_chars=cfg['memory'].get('max_chunk_chars'))
             if info["failed_chunks"]:
                 raise RuntimeError(f"memory for {sc.id} is incomplete ({info['failed_chunks']} chunk(s) failed); run prebuild again "
                                    "rather than pressing on a meeting with missing notes")

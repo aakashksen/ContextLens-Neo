@@ -21,9 +21,10 @@
  "memory": {
   "chunk_turns": 40,
   "num_ctx": 16384,
-  "note": "The extractor reads the transcript in chunks of 40 turns, each chunk seeing the notes so far; built before the press, outside the card timing. num_ctx 16384 for memory calls only: the largest QMSum chunk is 10487 prompt tokens (measured) and Ollama's default window is 4096. The cache key is the meeting words plus model, chunk_turns, num_ctx and the extraction prompt, never the commit. Calls get 900 s each (not the extractor's 60 s) and two attempts; a chunk that still fails leaves the entry unfinished, to be redone alone, and the card run refuses unfinished memory. Why: on 2026-11-14 a game was using the GPU, generation fell to about 5-15 tokens/s, 60 s calls timed out, and Ollama kept generating the abandoned requests.",
+  "note": "The extractor reads the transcript in chunks of 40 turns, each chunk seeing the notes so far; built before the press, outside the card timing. num_ctx 16384 for memory calls only: the largest QMSum chunk is 10487 prompt tokens (measured) and Ollama's default window is 4096. The cache key is the meeting words plus model, chunk_turns, num_ctx and the extraction prompt, never the commit. Calls get 900 s each (not the extractor's 60 s) and two attempts; a chunk that still fails leaves the entry unfinished, to be redone alone, and the card run refuses unfinished memory. Why: on 2026-11-14 a game was using the GPU, generation fell to about 5-15 tokens/s, 60 s calls timed out, and Ollama kept generating the abandoned requests. 2026-11-14 second cause: a chunk of long QMSum turns (40 turns = 5,779 prompt tokens) makes the extractor's reply hit its own 1600-token cap, the JSON is cut off and invalid, and the client's schema retry repeated the same long generation (2 x 130 s) before failing. Fix: chunks of 40 turns whose text exceeds max_chunk_chars (6000, about 1,500 tokens; a reply is about 0.75x its input) are read in pieces; a reply cut off at the cap keeps its complete items; no second generation after bad JSON. Finished cache entries from before this change are kept (their chunks parsed).",
   "call_timeout_s": 900,
-  "attempts": 2
+  "attempts": 2,
+  "max_chunk_chars": 6000
  },
  "cases": {
   "manifest": "datasets/splits/e10-scenarios.json",
