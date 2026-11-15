@@ -37,9 +37,13 @@ def _press(prod):
     return prod.traced.inner.answer(req, Context(store=prod.services.store, as_of_seq=0))
 
 
-def test_the_default_is_the_team_and_it_answers_with_a_consistency_checker(monkeypatch):
+def test_the_default_is_the_routed_team(monkeypatch):
     monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
-    assert production.assistant_kind() == "team" and production.DEFAULT_ASSISTANT == "team"
+    assert production.assistant_kind() == "team_routed" == production.DEFAULT_ASSISTANT
+
+
+def test_the_team_answers_with_a_consistency_checker(monkeypatch):
+    monkeypatch.setenv("CONTEXTLENS_ASSISTANT", "team")
     seen = []
 
     class Spy(TeamAssistant):
@@ -51,7 +55,7 @@ def test_the_default_is_the_team_and_it_answers_with_a_consistency_checker(monke
     llms = {"memory": FakeLLM([{"tool": "final", "findings": [_evidence("memory")]}] * 3),
             "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
             "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
-    prod = _build(llms)
+    prod = _build(llms, assistant="team")
     card = _press(prod)
     assert card.status == "answered" and card.findings[0].evidence[0].turn_id == "c1-t0"
     assert len(seen) == 1 and isinstance(seen[0], production.PromptedChecker)
@@ -101,7 +105,7 @@ def test_the_shipped_team_runs_without_either_team_fix(monkeypatch):
     llms = {"memory": FakeLLM([{"tool": "final", "findings": [_evidence("memory")]}] * 3),
             "consistency": FakeLLM([{"tool": "final", "findings": []}] * 3),
             "assistance": FakeLLM([{"mode": "recall", "followup": None}] * 3)}
-    _press(_build(llms))
+    _press(_build(llms, assistant="team"))
     assert {k: seen[0][k] for k in production.TEAM_SETTINGS} == {"prefetch_memory": False, "specialist_deadline_s": None}
     assert production.TEAM_SETTINGS == {"prefetch_memory": False, "specialist_deadline_s": None}
     assert not any(m["content"].startswith("<tool_result>") for m in llms["memory"].calls[0])  # starts with no search result
@@ -112,7 +116,7 @@ def test_team_shipping_changed_builds_the_arm_the_experiment_measured_and_the_de
     from contextlens.experiments import team_attempt as ta
     from test_e3 import NoEmbed as E3NoEmbed, scenario, turn
 
-    assert production.DEFAULT_ASSISTANT == "team" and "team_shipping_changed" in production.ASSISTANTS
+    assert production.DEFAULT_ASSISTANT == "team_routed" and "team_shipping_changed" in production.ASSISTANTS
     monkeypatch.setenv("CONTEXTLENS_ASSISTANT", "team_shipping_changed")
     assert production.assistant_kind() == "team_shipping_changed"
 

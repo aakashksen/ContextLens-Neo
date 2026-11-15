@@ -9,7 +9,7 @@ export const DEFAULTS = {
   askHotkey: 'Ctrl+Shift+Q',
   mic: true,
   loopback: false,
-  assistant: 'single_plus', // applied when the app starts the backend (CONTEXTLENS_ASSISTANT)
+  assistant: 'team_routed', // applied when the app starts the backend (CONTEXTLENS_ASSISTANT)
   detail: 'standard',
   autoHideSeconds: 12,
   corner: 'top-right',

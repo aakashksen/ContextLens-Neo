@@ -402,7 +402,7 @@ def test_refuses_when_the_manifest_is_not_committed_with_the_config(repo: Path, 
 
 def test_product_prompt_is_v3_and_the_default_assistant_is_unchanged() -> None:
     assert production.PROMPT_VERSION == "v3" == e8.PROMPT  # E8 measures the prompt the product ships
-    assert production.DEFAULT_ASSISTANT == "team"
+    assert production.DEFAULT_ASSISTANT == "team_routed"
 
 
 # ---------------------------------------------------------------- no lost work (the person, via the coordinator, 2026-11-06)
