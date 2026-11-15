@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+<title>ContextLens overlay</title>
+<link rel="stylesheet" href="styles.css">
+<body class="overlay">
+  <div id="frame">
+    <div id="bar"><span id="title">ContextLens</span><button id="pin" title="Keep this card on screen">Pin</button><button id="close" title="Dismiss">Close</button></div>
+    <div id="notice" hidden></div>
+    <form id="ask" hidden><input id="q" type="text" placeholder="Ask about this conversation, then Enter" autocomplete="off"></form>
+    <div id="card"></div>
+  </div>
+  <script type="module" src="overlay.js"></script>
+</body>
