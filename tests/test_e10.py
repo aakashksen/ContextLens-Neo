@@ -306,3 +306,16 @@ def test_build_memory_is_cached_by_content_and_logs_chunks(tmp_path):
 def test_config_sets_memory_context():
     m = L.load_config(ROOT)["memory"]
     assert m["chunk_turns"] == 40 and m["num_ctx"] >= 12288
+
+
+def test_claim_verdict_survives_zero_tokens_in_the_base_arm():
+    zero = _arm(5, 20, tok=0)
+    v = M.claim_verdict({"single": zero, "single_plus": _arm(10, 20), "team_shipping_changed": _arm(5, 20), "team_routed": _arm(36, 20)})
+    assert v["decided"] and v["cost"] == {} and v["may_add_single_agent_cost"] is False
+
+
+def test_timed_out_call_at_the_deadline_counts_as_a_cut():
+    p = _card([], status="abstained", missing=["llm error: request to x failed: timed out"])
+    assert M.deadline_cut(p) is False  # 3 s: an outage-style timeout, not the deadline
+    p.stage_latency_ms["total"] = 8030
+    assert M.deadline_cut(p) is True

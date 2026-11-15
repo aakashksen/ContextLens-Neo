@@ -27,6 +27,7 @@ from contextlens.schemas import Card, Scenario
 ALERTS = ("contradiction", "update")
 CONFLICT = ("conflict_contradiction", "conflict_update", "conflict_consistent")
 EXPECTED_RESPOND = "control_respond_with_suggestion"
+CUT_MS = 7700  # a press this long that ended in a timeout was cut by the 8 s deadline
 
 
 def cited_turns(card: Card) -> set[str]:
@@ -34,7 +35,13 @@ def cited_turns(card: Card) -> set[str]:
 
 
 def deadline_cut(p: Prediction) -> bool:
-    return p.card is not None and any("deadline reached" in n for n in p.card.missing)
+    """The card says the deadline cut it: a stage note "deadline reached", or a model call that timed out at the deadline
+    (the single agent reports that as an llm error, with the press at about 8 s)."""
+    if p.card is None:
+        return False
+    if any("deadline reached" in n for n in p.card.missing):
+        return True
+    return p.stage_latency_ms.get("total", 0) >= CUT_MS and any("timed out" in n for n in p.card.missing)
 
 
 def case_scores(sc: Scenario, p: Prediction, group: str) -> dict[str, Any]:
@@ -227,7 +234,7 @@ def claim_verdict(tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     lat_a = [v for _, _, v in units([r for r in a if r["category"].startswith("control_")], "latency_ms")]
     tok_d = [v for _, _, v in units([r for r in d if r["category"].startswith("control_")], "tokens")]
     tok_a = [v for _, _, v in units([r for r in a if r["category"].startswith("control_")], "tokens")]
-    if lat_d and lat_a and tok_d and tok_a:
+    if lat_d and lat_a and tok_d and tok_a and percentile(lat_a, 50) > 0 and sum(tok_a) > 0:  # a zero base has no ratio
         cost = {"latency_ratio": percentile(lat_d, 50) / percentile(lat_a, 50), "token_ratio": (sum(tok_d) / len(tok_d)) / (sum(tok_a) / len(tok_a))}
     team_claim = bool(wins) and not worse and cut is not None and cut <= CUT_MAX
     return {"decided": True, "team_beats_single_plus_on": wins, "team_clearly_worse_on": worse, "d_deadline_cut_rate": cut,
