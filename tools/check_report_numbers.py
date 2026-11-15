@@ -84,6 +84,28 @@ def _cited(root: Path, claims: list[dict]) -> tuple[list[float], set[int], list[
     return values, counts, problems
 
 
+def _e10_values(root: Path) -> list[float]:
+    """E10 keeps its run and grade records in results/e10 (ids, booleans and numbers only): their numbers count too."""
+    out: list[float] = []
+
+    def walk(o: object) -> None:
+        if isinstance(o, bool):
+            return
+        if isinstance(o, (int, float)):
+            out.append(float(o))
+        elif isinstance(o, dict):
+            for k, v in o.items():
+                if k != "per_case":
+                    walk(v)
+        elif isinstance(o, list):
+            for x in o:
+                walk(x)
+
+    for path in sorted((root / "results" / "e10").glob("E10*.json")):
+        walk(json.loads(path.read_text(encoding="utf-8")))
+    return out
+
+
 def _rounds_to(value: float, printed: str) -> bool:
     shown = Decimal(printed)
     exp = shown.as_tuple().exponent
@@ -110,6 +132,7 @@ def check(root: Path = ROOT) -> list[str]:
     if not claims:
         return ["results/claims.json is empty or missing, so no number can be supported"]
     values, counts, problems = _cited(root, claims)
+    values += _e10_values(root)
     for rel in DOCS:
         doc = root / rel
         if not doc.is_file() and rel in OPTIONAL:

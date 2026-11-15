@@ -151,3 +151,12 @@ def test_a_number_glued_to_a_unit_is_still_checked(tmp_path: Path, text: str) ->
 
 def test_a_supported_number_glued_to_a_unit_passes(tmp_path: Path) -> None:
     assert _problems(tmp_path, "It took 4814ms, or 4.8s, on 136 cases at the 95th percentile.\n") == []
+
+
+def test_numbers_in_an_e10_record_pass(tmp_path: Path) -> None:
+    import json as _json
+
+    _repo(tmp_path, "Graded correct 57%, mean latency 3.0 s.")
+    (tmp_path / "results" / "e10").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "results" / "e10" / "E10-test-x.json").write_text(_json.dumps({"metrics": {"a": 0.5714, "lat": 2986.6}}), encoding="utf-8")
+    assert crn.check(tmp_path) == []

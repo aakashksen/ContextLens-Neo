@@ -5,7 +5,6 @@ import functools
 import time
 from dataclasses import dataclass, field
 
-from contextlens.agents.consistency_check import ConsistencyChecker
 from contextlens.agents.single import MARGIN_S, _bounded
 from contextlens.agents.tools import Tools
 from contextlens.llm.untrusted import escape
