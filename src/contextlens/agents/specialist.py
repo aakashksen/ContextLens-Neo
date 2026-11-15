@@ -90,14 +90,15 @@ def _prefetched_search(tools: Tools, question: str, end: float, run: _Run) -> li
 def run_specialist(
     *, name: str, kind: Literal["recall", "consistency"], system: str, tool_names: list[str], llm: LLMClient,
     tools: Tools, ctx: Context, req: ButtonRequest, turns: list[Turn], end: float, run: _Run,
-    request: str | None = None, prefetch: bool = False,
+    request: str | None = None, prefetch: bool = False, context: str = "",
 ) -> Outcome:  # fmt: skip
     """One specialist's pass. Its findings are checked here, so nothing unchecked reaches the shared store.
     `request` is a follow-up from the assistance agent; it is model text, so it is escaped.
     `prefetch` runs one search on the question before the first model call and shows the model its result as if it had
     asked (a first tool step it no longer has to spend a model call on). It does nothing for a follow-up or when there is
-    no question, and a search that fails is skipped so the model can use its own tools."""
-    user = _user_message(fit_turns(turns, CONTEXT_TOKENS), req)
+    no question, and a search that fails is skipped so the model can use its own tools.
+    `context` is text appended to the user message (the routed team's retrieval hits and checker verdict)."""
+    user = _user_message(fit_turns(turns, CONTEXT_TOKENS), req) + context
     if request:
         user += f"\nFollow-up request from the assistance agent: {escape(request)}"
     messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": user}]

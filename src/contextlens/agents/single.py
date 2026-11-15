@@ -460,8 +460,10 @@ class SingleAgent:
     a result that arrives after the deadline (in the margin) is never an answer."""
 
     def __init__(
-        self, llm: LLMClient, tools: Tools, prompt_version: str, max_steps: int = 4, deadline_s: float = 8.0
+        self, llm: LLMClient, tools: Tools, prompt_version: str, max_steps: int = 4, deadline_s: float = 8.0,
+        prepare: Callable[[ButtonRequest, list[Turn], float], Any] | None = None,
     ) -> None:
+        self.prepare = prepare  # single_plus: code that runs before the first call; returns a precheck.Prep
         self.llm, self.tools, self.max_steps, self.deadline_s = llm, tools, max_steps, deadline_s
         names = [n for n in _TOOL_HELP if n != "check_consistency" or tools.checker is not None]
         self.system = get_prompt("recall", prompt_version).text + "\n\n" + _PROTOCOL % ", ".join(
@@ -491,9 +493,14 @@ class SingleAgent:
             return _abstained(f"store failed: {type(exc).__name__}")
         if not turns:
             return _abstained("the conversation has no turns yet")
+        extra = ""
+        if self.prepare is not None:
+            prep = self.prepare(req, turns, end)
+            extra = prep.context
+            ctx.stage_ms.update(prep.stage())
         messages: list[dict] = [
             {"role": "system", "content": self.system},
-            {"role": "user", "content": _user_message(fit_turns(turns, CONTEXT_TOKENS), req)},
+            {"role": "user", "content": _user_message(fit_turns(turns, CONTEXT_TOKENS), req) + extra},
         ]
         card: Card | None = None
         reason = ""
