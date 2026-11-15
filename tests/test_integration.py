@@ -307,7 +307,7 @@ class Stub:
 
 
 def test_each_press_gets_a_fresh_context():
-    prod, client = make()
+    prod, client = make(assistant="team_routed")
     prod.traced.inner = stub = Stub()
     with client.websocket_connect("/ws/c1") as ws:
         ws.receive_json()
