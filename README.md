@@ -227,6 +227,8 @@ flowchart LR
 
 [**Pages, design tokens and the demo**](docs/architecture/website.md)
 
+[**Desktop client: tray app, hotkey, overlay**](docs/architecture/desktop-client.md)
+
 ---
 
 ## Setup

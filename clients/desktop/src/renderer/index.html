@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+<title>ContextLens</title>
+<link rel="stylesheet" href="styles.css">
+<body class="main">
+  <header>
+    <h1>ContextLens</h1>
+    <span id="listening" class="pill" role="status">Connecting</span>
+    <span class="spacer"></span>
+    <button id="press">What was said?</button>
+    <button id="toggle">Pause</button>
+    <button id="forget" class="danger">Forget this conversation</button>
+  </header>
+  <p id="privacy" class="privacy">Everything stays on this machine. Audio and transcripts go only to the backend running here (localhost), and this app sends no telemetry.</p>
+  <p id="problem" class="problem" hidden></p>
+
+  <section id="backend" aria-label="Backend">
+    <h2>Backend</h2>
+    <ul id="health"></ul>
+    <p><button id="start">Start backend</button> <button id="stop" hidden>Stop backend</button> <span id="backend-note" class="muted"></span></p>
+    <pre id="backend-log" hidden></pre>
+  </section>
+
+  <nav role="tablist">
+    <button role="tab" data-tab="transcript" aria-selected="true">Transcript</button>
+    <button role="tab" data-tab="memory">Memory</button>
+    <button role="tab" data-tab="cards">Past cards</button>
+    <button role="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <section id="tab-transcript"><ol id="transcript" class="turns"></ol><p id="transcript-empty" class="muted">Nothing heard yet.</p></section>
+  <section id="tab-memory" hidden><ul id="memory"></ul><p id="memory-empty" class="muted">No memory items. They appear here when the backend sends them.</p></section>
+  <section id="tab-cards" hidden>
+    <ul id="cards" class="cards"></ul><p id="cards-empty" class="muted">No cards yet. Press the hotkey during a conversation.</p>
+    <div id="card-detail"></div>
+  </section>
+  <section id="tab-settings" hidden>
+    <form id="settings">
+      <label>Hotkey <input name="hotkey" type="text"></label>
+      <label>Ask-a-question hotkey <input name="askHotkey" type="text"></label>
+      <label class="check"><input name="mic" type="checkbox"> Microphone</label>
+      <label class="check"><input name="loopback" type="checkbox"> System audio (Windows loopback, hears the other side of a call)</label>
+      <label>Assistant
+        <select name="assistant"><option>single_plus</option><option>team_routed</option><option>team</option><option>single</option><option>team_shipping_changed</option></select>
+      </label>
+      <p class="muted">The assistant is chosen when the backend starts. If you change it, press Stop backend then Start backend.</p>
+      <label>Detail
+        <select name="detail"><option>brief</option><option>standard</option><option>detailed</option></select>
+      </label>
+      <label>Hide the card after (seconds) <input name="autoHideSeconds" type="number" min="2" max="120"></label>
+      <label>Overlay corner
+        <select name="corner"><option>top-right</option><option>top-left</option><option>bottom-right</option><option>bottom-left</option></select>
+      </label>
+      <label>Server <input name="serverUrl" type="text"></label>
+      <label>ContextLens folder (for Start backend) <input name="repoRoot" type="text" placeholder="auto when run from the repo"></label>
+      <label>Python <input name="pythonPath" type="text" placeholder="the repo's .venv"></label>
+      <button type="submit">Save</button> <span id="settings-note" class="muted"></span>
+    </form>
+  </section>
+  <script type="module" src="app.js"></script>
+</body>
