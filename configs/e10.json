@@ -1,0 +1,20 @@
+{
+ "kind": "e10-config",
+ "experiment": "E10",
+ "question": "On cases that need long-range evidence or conflict detection, does a routed team with a real checker beat a single agent at similar cost?",
+ "arms": ["single", "single_plus", "team_shipping_changed", "team_routed"],
+ "arm_roles": {"A": "single", "B": "single_plus", "C": "team_shipping_changed", "D": "team_routed"},
+ "prompt_version": "v3",
+ "deadline_s": 8.0,
+ "writer_model": "qwen3.5:4b-q4_K_M",
+ "embedder_model": "nomic-embed-text",
+ "memory": {"chunk_turns": 40, "note": "extractor reads the transcript in chunks of 40 turns, each chunk seeing the notes so far; built before the press, outside the card timing"},
+ "cases": {
+  "manifest": "datasets/splits/e10-scenarios.json",
+  "manifest_sha256": "dd2744fa33be29a6786ee8e719289407cd33d3876c21c06a21434b002c579750",
+  "files": "datasets/raw/scenarios/e10/{dev,test}.jsonl (git-ignored: real meeting text; hashes are in the manifest)",
+  "order": "dev first, test once the configuration is chosen"
+ },
+ "grading": {"model": "sonnet", "cards": 200, "batch_size": 25, "seed": 13, "rubric": "docs/e10-grading-rubric.md", "blind": "arm identity hidden"},
+ "claim_rule": "src/contextlens/eval/e10_metrics.py CLAIM_RULE"
+}
