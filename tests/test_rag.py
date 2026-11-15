@@ -209,3 +209,10 @@ def test_both_arms_are_registered():
 
     assert {"team_rag", "team_rag_nomem"} <= set(production.PER_PRESS)
     assert production.PER_PRESS["team_rag"].use_memory and not production.PER_PRESS["team_rag_nomem"].use_memory
+
+
+def test_verdict_line_is_read_and_dropped_from_the_statement():
+    assert rag.refused("VERDICT: NOT_IN_EVIDENCE") and not rag.refused("VERDICT: ANSWERED\nFive thousand [1].")
+    assert statement_of("VERDICT: ANSWERED\nThe budget is five thousand dollars [1].") == "The budget is five thousand dollars."
+    team, _, ctx = build(["VERDICT: NOT_IN_EVIDENCE"])
+    assert team.answer(req(Q), ctx).status == "abstained"
