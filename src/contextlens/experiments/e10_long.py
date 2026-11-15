@@ -30,7 +30,7 @@ from contextlens.data import e10_cases
 from contextlens.eval import e10_metrics as M
 from contextlens.eval.records import ROOT, head_commit, is_dirty, write_atomic
 from contextlens.llm.client import LLMClient, OllamaClient
-from contextlens.memory.extract import MemoryExtractor, MemoryStore
+from contextlens.memory.extract import MemoryExtractor
 from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.replay.runner import Prediction, replay
 from contextlens.retrieval.query import query_for
@@ -277,6 +277,8 @@ def write_report(root: Path, split: str, arms: list[str], scs: list[Scenario], m
     now = datetime.now(timezone.utc)
     run_id = f"{EXPERIMENT}-{'S' if smoke else ''}{split}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
     local = root / (SMOKE_DIR if smoke else LOCAL_DIR)
+    local.mkdir(parents=True, exist_ok=True)
+    (root / (SMOKE_DIR if smoke else RECORD_DIR)).mkdir(parents=True, exist_ok=True)
     for a, r in rows.items():  # the cards, with meeting text: local only
         write_atomic(local / f"{run_id}.{a}.predictions.jsonl", "".join(p.model_dump_json() + "\n" for p in r.values()))
     types = Counter(meta[s.id]["type"] for s in scs)
