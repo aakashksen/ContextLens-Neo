@@ -2,14 +2,21 @@
 speaker model, telemetry and the scene store. `build_services` takes every outside piece as an argument so tests
 can swap in fakes; `create_production_app` passes the real ones. Live paths use local models only."""
 
+import json
+import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 
 from contextlens.agents.consistency_check import PromptedChecker
+from contextlens.agents.cascade import CascadeChecker
 from contextlens.agents.graph import TeamAssistant
+from contextlens.agents.precheck import prepare
+from contextlens.agents.routed import RoutedTeam
 from contextlens.agents.single import SingleAgent
 from contextlens.agents.tools import Tools
 from contextlens.api.app import create_app
@@ -38,7 +45,7 @@ SPECIALIST_DEADLINE_S = 5.5  # the value the dropped sub-deadline fix was measur
 TEAM_SETTINGS = {"prefetch_memory": False, "specialist_deadline_s": None}
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
-ASSISTANTS = ("team", "single", "team_shipping_changed")
+ASSISTANTS = ("team", "single", "team_shipping_changed", "team_routed", "single_plus")
 DEFAULT_ASSISTANT = "team"
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
@@ -48,7 +55,7 @@ def database_url() -> str:
 
 
 def assistant_kind() -> str:
-    """CONTEXTLENS_ASSISTANT picks the system behind the button: `team` (the default), `single`, or `team_shipping_changed`."""
+    """CONTEXTLENS_ASSISTANT picks the system behind the button: `team` (the default), `single`, `team_shipping_changed`, `team_routed` or `single_plus`."""
     kind = os.environ.get("CONTEXTLENS_ASSISTANT", DEFAULT_ASSISTANT)
     if kind not in ASSISTANTS:
         raise ValueError(f"CONTEXTLENS_ASSISTANT must be one of {ASSISTANTS}, got {kind!r}")
@@ -125,6 +132,63 @@ class _SinglePerPress(TeamPerPress):
         return SingleAgent(self.llms["assistance"], tools, PROMPT_VERSION, deadline_s=self.deadline_s).answer(req, ctx)
 
 
+class _SinglePlusPerPress(TeamPerPress):
+    """The single agent plus code before its first call: a search with the question, and the cascade checker whose verdict
+    the model is shown. The checker is not a tool here."""
+
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        args = (self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id)
+        checking = Tools(*args, cascade_checker(self.llms["consistency"]))
+        agent = SingleAgent(self.llms["assistance"], Tools(*args), PROMPT_VERSION, deadline_s=self.deadline_s,
+                            prepare=lambda req, turns, end: prepare(checking, req, turns, end))
+        return agent.answer(req, ctx)
+
+
+class _RoutedPerPress(TeamPerPress):
+    """`team_routed`: see agents/routed.py."""
+
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id,
+                      cascade_checker(self.llms["consistency"]))
+        return RoutedTeam(self.llms["assistance"], tools, PROMPT_VERSION, self.deadline_s).answer(req, ctx)
+
+
+PER_PRESS: dict[str, type[TeamPerPress]] = {
+    "team": TeamPerPress, "single": _SinglePerPress, "team_shipping_changed": _TeamChangedPerPress,
+    "team_routed": _RoutedPerPress, "single_plus": _SinglePlusPerPress,
+}
+
+
+def build_assistant(name: str, store: TranscriptStore, retriever: Retriever, memory: MemoryStore,
+                    llms: dict[str, LLMClient], deadline_s: float = DEADLINE_S) -> Assistant:
+    """The one way production and the evaluation runners build an assistant by name."""
+    if name not in PER_PRESS:
+        raise ValueError(f"assistant must be one of {ASSISTANTS}, got {name!r}")
+    return PER_PRESS[name](store, retriever, memory, llms, deadline_s)
+
+
+_TRAINED: dict[str, Any] = {}
+
+
+def cascade_checker(llm: LLMClient):
+    """The shipped cascade (configs/cascade.json): the trained model screens, the prompted checker confirms what it flags.
+    If the trained checkpoint is missing or does not load, the prompted checker alone (one model call per press)."""
+    root = Path(__file__).resolve().parents[3]
+    cfg = json.loads((root / "configs" / "cascade.json").read_text(encoding="utf-8"))
+    second = PromptedChecker(llm)
+    path = Path(os.environ.get("CONTEXTLENS_CHECKER_DIR") or root / cfg["trained_checkpoint"])
+    if "first" not in _TRAINED:
+        try:
+            from contextlens.consistency.model import TrainedChecker
+
+            _TRAINED["first"] = TrainedChecker.from_checkpoint(path, strip_instructions=False)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("trained checker not loaded (%s: %s); using the prompted checker alone", type(exc).__name__, exc)
+            _TRAINED["first"] = None
+    first = _TRAINED["first"]
+    return second if first is None else CascadeChecker(first, second, cfg["flag_threshold"])
+
+
 def build_services(
     *, store: TranscriptStore, embedder, llms: dict[str, LLMClient], background_llm: LLMClient | None,
     speech: SpeechService, make_backend=None, telemetry: Telemetry | None = None,
@@ -135,8 +199,7 @@ def build_services(
         raise ValueError(f"assistant must be one of {ASSISTANTS}, got {assistant!r}")
     retriever, memory = Retriever(store, embedder), MemoryStore()
     telemetry = telemetry or Telemetry()
-    per_press = {"single": _SinglePerPress, "team_shipping_changed": _TeamChangedPerPress}.get(assistant, TeamPerPress)
-    inner: Assistant = per_press(store, retriever, memory, llms, deadline_s)
+    inner = build_assistant(assistant, store, retriever, memory, llms, deadline_s)
     traced, scenes = TracedAssistant(inner, telemetry), SceneStore()
 
     def forget(conversation_id: str) -> None:
