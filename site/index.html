@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ContextLens Neo</title>
-<meta name="description" content="Press a button mid-conversation and get one short card, every line cited to the turn it came from.">
+<meta name="description" content="A meeting copilot that runs on your computer and on smart glasses. Press once and get one short card, every line cited to the turn it came from.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,8 @@
 <header class="nav">
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
-    <nav class="nav__links" aria-label="Main"><a href="tour.html">Walkthrough</a><a href="specs.html">How it’s built</a><a href="live.html">Live demo</a></nav>
-    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
   </div>
 </header>
 
@@ -24,9 +24,9 @@
   <section class="hero">
     <div class="container hero__grid">
       <div>
-        <h1>Who moved the launch date?</h1>
-        <p class="lead">Press once mid-meeting. The card cites every turn it used.</p>
-        <div class="actions"><a class="btn btn--primary" href="live.html">Try the demo</a><a class="btn" href="https://github.com/aakashksen/ContextLens-Neo/blob/main/docs/REPORT.md">Read the report</a></div>
+        <h1>Press once. Know what was said.</h1>
+        <p class="lead">One cited card of what was said, on your desktop or glasses.</p>
+        <div class="actions"><a class="btn btn--primary" href="desktop.html#install">Download</a><a class="btn" href="room.html">Watch it work</a></div>
       </div>
 
       <div class="panels" data-card>
@@ -55,91 +55,105 @@
     </div>
   </section>
 
-  <section class="section" id="press" aria-labelledby="press-h">
-    <div class="container">
-      <div class="head">
-        <h2 id="press-h">How a press works</h2>
-      </div>
-      <ol class="panels steps">
-        <li><span class="n">1</span><h3>Speech becomes turns</h3><span class="measured detail">transcript, turn_update</span></li>
-        <li><span class="n">2</span><h3>The press freezes the moment</h3><span class="measured detail">as_of_seq</span></li>
-        <li><span class="n">3</span><h3>Agents search and check</h3><span class="measured detail">8 s deadline</span></li>
-        <li><span class="n">4</span><h3>The evidence guard drops what it cannot quote</h3><span class="measured detail">in code, not in the prompt</span></li>
-      </ol>
-      <p class="more"><a href="tour.html">Follow one meeting</a></p>
-    </div>
-  </section>
-
-  <section class="section section--band" id="test" aria-labelledby="test-h">
-    <div class="container">
-      <div class="head">
-        <h2 id="test-h">Did the agent team beat one agent?</h2>
-        <p>No. 136 held-out cases, run once.</p>
-      </div>
-      <div class="panels diff">
-        <table>
-          <thead><tr><th scope="col">Measure</th><th scope="col">One agent</th><th scope="col">Team</th><th scope="col">Difference, 95% interval</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Tokens per card</th><td class="plus">555</td><td class="minus">1349</td><td>−795 (−820 to −769)</td></tr>
-            <tr><th scope="row">Median latency</th><td class="plus">2832 ms</td><td class="minus">4814 ms</td><td>−1983 ms (−2229 to −1623)</td></tr>
-            <tr><th scope="row">Abstained when evidence was missing</th><td>0.750</td><td>0.812</td><td><span class="chip chip--cool">no clear difference</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note">Groundedness is not published: its judge failed calibration.</p>
-      <p class="more"><a href="specs.html#experiments">All eight experiments</a></p>
-    </div>
-  </section>
-
-  <section class="section" id="trail" aria-labelledby="trail-h">
-    <div class="container">
-      <div class="head"><h2 id="trail-h">What broke on the way</h2></div>
-      <ol class="trail">
-        <li><span class="measured id">E2</span><p>A citation-id bug dropped true findings.</p><span class="chip">fixed, rerun</span></li>
-        <li><span class="measured id">E3</span><p>The team counted “not said” as an answer.</p><span class="chip">found in the rows</span></li>
-        <li><span class="measured id">E5</span><p>Fine-tuning stopped abstaining: 0.438 against 0.938.</p><span class="chip chip--person">prompting kept</span></li>
-        <li><span class="measured id">E7</span><p>A fixed voice gate dropped quiet speech.</p><span class="chip">explained, logged</span></li>
-      </ol>
-    </div>
-  </section>
-
-  <section class="section section--band" id="stack" aria-labelledby="stack-h">
-    <div class="container">
-      <div class="head"><h2 id="stack-h">The stack</h2></div>
-      <dl class="stack">
-        <div><dt>Speech</dt><dd>whisper.cpp over gRPC, local speaker labels.</dd><dd class="measured path">speech/</dd></div>
-        <div><dt>Backend</dt><dd>FastAPI, PostgreSQL with pgvector.</dd><dd class="measured path">src/contextlens/</dd></div>
-        <div><dt>Retrieval</dt><dd>BM25 plus embeddings, one-turn chunks.</dd><dd class="measured path">src/contextlens/</dd></div>
-        <div><dt>Agents</dt><dd>LangGraph, three agents and a controller.</dd><dd class="measured path">src/contextlens/</dd></div>
-        <div><dt>Clients</dt><dd>React and TypeScript, and Unity <span class="chip">not yet tried on a headset</span></dd><dd class="measured path">clients/web/, clients/unity/</dd></div>
-        <div><dt>Observability</dt><dd>OpenTelemetry and Prometheus, no transcript text.</dd><dd class="measured path">docs/REPORT.md</dd></div>
-      </dl>
-    </div>
-  </section>
-
-  <section class="section" id="contact" aria-labelledby="contact-h">
-    <div class="container contact">
+  <section class="section" id="card" aria-labelledby="card-h">
+    <div class="container split">
+      <figure class="shot">
+        <img src="img/room-card.png" width="1289" height="725" alt="Two cards over a meeting, each answering with a quote from the turn it came from and the turn numbers it cites." loading="lazy">
+        <figcaption>A card over a real AMI meeting, captured from the meeting room.</figcaption>
+      </figure>
       <div>
-        <h2 id="contact-h">Built by Aakash Senthilnathan</h2>
-        <p class="who-line">Statistics and Data Science at UC Santa Barbara.</p>
+        <h2 id="card-h">One card. Every line cited.</h2>
+        <dl class="points">
+          <div><dt>Who said what</dt><dd>The quote and the speaker.</dd></div>
+          <div><dt>What changed</dt><dd>Friday became Monday, and who moved it.</dd></div>
+          <div><dt>What was decided</dt><dd>With the turn it was decided in.</dd></div>
+          <div><dt>Not sure</dt><dd>It says “not enough information.”</dd></div>
+        </dl>
       </div>
-      <ul class="links">
-        <li><a href="https://github.com/aakashksen/ContextLens-Neo">Repository<span class="measured">ContextLens-Neo</span></a></li>
-        <li><a href="https://github.com/aakashksen">GitHub<span class="measured">github.com/aakashksen</span></a></li>
-        <li><a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn<span class="measured">linkedin.com/in/aakashsenthilnathan</span></a></li>
-        <li><a href="mailto:aakash.senthilnathan@gmail.com">Email<span class="measured">aakash.senthilnathan@gmail.com</span></a></li>
+    </div>
+  </section>
+
+  <section class="section section--band" id="ways" aria-labelledby="ways-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="ways-h">Two ways to run it</h2>
+        <p>Built for people who find live conversation hard to track, including introverted and neurodivergent people.</p>
+      </div>
+      <div class="two">
+        <div class="panels way">
+          <div class="slotbox" data-slot="desktop-shot" data-alt="The heads-up card over a video call on the desktop"><strong>Desktop app</strong><span>Screenshot goes here</span></div>
+          <h3>Desktop</h3>
+          <p>Tray app, global hotkey, always-on-top card.</p>
+          <p class="more"><a href="desktop.html">See the desktop app</a></p>
+        </div>
+        <div class="panels way">
+          <div class="slotbox" data-slot="glasses-shot" data-alt="The card floating in the wearer’s field of view"><strong>Smart glasses</strong><span>Screenshot goes here</span></div>
+          <h3>Smart glasses</h3>
+          <p>The Unity client. Tap to press.</p>
+          <p class="more"><a href="glasses.html">See the glasses client</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="system" aria-labelledby="system-h">
+    <div class="container">
+      <div class="head"><h2 id="system-h">A system around a small model</h2></div>
+      <ul class="panels strip">
+        <li><h3>Streaming speech</h3><p>whisper.cpp, C++, gRPC.</p></li>
+        <li><h3>Speaker labels</h3><p>Who is talking.</p></li>
+        <li><h3>Memory</h3><p>Builds as the meeting goes.</p></li>
+        <li><h3>Contradiction check</h3><p>DeBERTa plus a prompted cascade, in code.</p><span class="measured">45 ms</span></li>
+        <li><h3>Agent team</h3><p>Routed by code, only when needed.</p></li>
+        <li><h3>Hybrid retrieval</h3><p>BM25, vectors, reranker.</p></li>
+        <li><h3>Evidence guard</h3><p>Drops claims no earlier turn backs.</p></li>
+        <li><h3>Local model</h3><p>4B, through Ollama, on your machine.</p></li>
+      </ul>
+      <p class="more"><a href="specs.html">See how it’s built</a></p>
+    </div>
+  </section>
+
+  <section class="section section--band" id="results" aria-labelledby="results-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="results-h">Tested on long real meetings</h2>
+        <p>161 held-out cases from QMSum and AMI, with conflicts 20 to 60 turns apart.</p>
+      </div>
+      <dl class="panels results">
+        <div><dt>Conflicts caught</dt><dd><span class="big" data-num="e10-conflict-catch-team"></span><span class="vs">Single agent <span data-num="e10-conflict-catch-single"></span></span></dd></div>
+        <div><dt>Right turn cited</dt><dd><span class="big" data-num="e10-cite-team"></span><span class="vs">Single agent <span data-num="e10-cite-single"></span></span></dd></div>
+        <div><dt>Abstained when it should</dt><dd><span class="big" data-num="e10-abstain-team"></span><span class="vs">Single agent <span data-num="e10-abstain-single"></span></span></dd></div>
+      </dl>
+      <dl class="panels runs">
+        <div><dt>Contradiction F1 on DECODE</dt><dd class="big">0.913</dd><dd class="vs">Baseline 0.753, on 1,000 pairs</dd></div>
+        <div><dt>False alerts</dt><dd class="big">Halved</dd><dd class="vs">Against that baseline</dd></div>
+        <div><dt>Time per check</dt><dd class="big">45 ms</dd><dd class="vs">On every press</dd></div>
+      </dl>
+      <p class="more"><a href="specs.html#evaluation">See the full evaluation</a></p>
+    </div>
+  </section>
+
+  <section class="section" id="start" aria-labelledby="start-h">
+    <div class="container">
+      <div class="head"><h2 id="start-h">Try it on a meeting</h2></div>
+      <ul class="panels strip strip--three">
+        <li><h3>Desktop</h3><p>Install the tray app.</p><p class="more"><a href="desktop.html#install">Download</a></p></li>
+        <li><h3>Glasses</h3><p>Run the Unity client.</p><p class="more"><a href="glasses.html#run">Run the client</a></p></li>
+        <li><h3>Browser</h3><p>Replay a real meeting.</p><p class="more"><a href="room.html">Watch it work</a></p></li>
       </ul>
     </div>
   </section>
 </main>
-
 <footer class="footer">
   <div class="container footer__grid">
     <p class="footer__mark">ContextLens Neo</p>
     <div class="footer__links">
-      <a href="tour.html">Walkthrough</a>
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
       <a href="specs.html">How it’s built</a>
-      <a href="live.html">Live demo</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>
     <div class="footer__links">
@@ -151,5 +165,10 @@
   </div>
 </footer>
 <script src="site.js"></script>
+<script>
+/* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */
+window.hallmarkSlots = (m) => { for (const [k, v] of Object.entries(m)) { const s = document.querySelector(`[data-slot="${k}"]`); if (!s) continue; const im = new Image(); im.src = typeof v === 'string' ? v : v.src; im.alt = (typeof v === 'object' && v.alt) || s.dataset.alt || ''; s.querySelectorAll(':scope > img').forEach((o) => o.remove()); s.prepend(im); } };
+document.querySelectorAll('[data-slot] img').forEach((i) => { if (i.complete && !i.naturalWidth) i.remove(); else i.addEventListener('error', () => i.remove(), { once: true }); });
+</script>
 </body>
 </html>

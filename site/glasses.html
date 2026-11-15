@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glasses, ContextLens Neo</title>
+<meta name="description" content="The Unity client puts the card in your field of view and talks to the same backend as the desktop app.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html" aria-current="page">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--screen">
+    <div class="container hero__grid">
+      <div>
+        <h1>The card, in your field of view</h1>
+        <p class="lead">Tap on your glasses and a short cited card floats ahead.</p>
+        <div class="actions"><a class="btn btn--primary" href="#connect">How it connects</a><a class="btn" href="room.html">Watch it work</a></div>
+        <span class="chip status">Headset capture to come</span>
+      </div>
+      <div class="slotbox" data-slot="glasses-shot-main" data-alt="The card floating in front of the wearer during a conversation"><strong>Through the glasses</strong><span>Screenshot goes here</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="view" aria-labelledby="view-h">
+    <div class="container">
+      <div class="head"><h2 id="view-h">Look up. Read one line.</h2></div>
+      <ul class="panels strip">
+        <li><h3>The card</h3><p>A panel in the world, in front of you.</p></li>
+        <li><h3>The press</h3><p>A tap, or the primary button on a controller.</p></li>
+        <li><h3>Recording</h3><p>A line that says whether it is listening.</p></li>
+        <li><h3>The answer</h3><p>Answered, partial, or not enough information.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--band" id="connect" aria-labelledby="connect-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="connect-h">Same backend as the desktop app</h2>
+        <p>The glasses show the card. Your computer does the work.</p>
+      </div>
+      <div class="diagram"><svg class="dg" viewBox="0 0 1040 290" role="img" aria-labelledby="dg-t dg-d" xmlns="http://www.w3.org/2000/svg">
+<title id="dg-t">Glasses and desktop share one backend</title><desc id="dg-d">The Unity client on the glasses sends press and audio over one WebSocket to the backend on your computer. The backend runs speech, memory, agents and the local model, and sends the card back over the same socket.</desc>
+<defs><marker id="dg-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="dg-head"/></marker></defs>
+<g><rect class="dg-box " x="0" y="95" width="220" height="100" rx="10"/>
+<text class="dg-t" x="16" y="123">Glasses client</text>
+<text class="dg-s" x="16" y="145">Unity, XR toolkit</text>
+<text class="dg-s" x="16" y="163">card in view</text>
+</g>
+<g><rect class="dg-box " x="400" y="95" width="240" height="100" rx="10"/>
+<text class="dg-t" x="416" y="123">Backend on your computer</text>
+<text class="dg-s" x="416" y="145">FastAPI, one socket</text>
+<text class="dg-s" x="416" y="163">per meeting</text>
+</g>
+<g><rect class="dg-box " x="820" y="10" width="220" height="80" rx="10"/>
+<text class="dg-t" x="836" y="38">Speech and memory</text>
+<text class="dg-s" x="836" y="60">whisper.cpp, PostgreSQL</text>
+</g>
+<g><rect class="dg-box " x="820" y="200" width="220" height="80" rx="10"/>
+<text class="dg-t" x="836" y="228">Agents and model</text>
+<text class="dg-s" x="836" y="250">Ollama, local 4B</text>
+</g>
+<path class="dg-line" d="M220 125 H398" marker-end="url(#dg-ah)"/>
+<text class="dg-l" x="309" y="115" text-anchor="middle">audio, press</text>
+<path class="dg-line" d="M398 170 H222" marker-end="url(#dg-ah)"/>
+<text class="dg-l" x="309" y="192" text-anchor="middle">transcript, card</text>
+<path class="dg-line" d="M640 125 H700 V50 H818" marker-end="url(#dg-ah)"/>
+<path class="dg-line" d="M640 165 H700 V240 H818" marker-end="url(#dg-ah)"/>
+</svg></div>
+    </div>
+  </section>
+
+  <section class="section" id="run" aria-labelledby="run-h">
+    <div class="container">
+      <div class="head"><h2 id="run-h">Run the client</h2></div>
+      <ol class="install">
+        <li><div><h3>Start a server</h3><p>The fake server answers with sample cards.</p><pre class="code">python tools/fake_server.py</pre></div></li>
+        <li><div><h3>Open the project</h3><p>In Unity Hub, open <span class="measured">clients/unity</span> with Unity 6000.3.3f1, then press Play.</p></div></li>
+        <li><div><h3>Press</h3><p>The client builds its own card in the world. A controller button or the Press button asks.</p></div></li>
+      </ol>
+      <div class="cta"><a class="btn btn--primary" href="desktop.html#install">Install the desktop app</a><a class="btn" href="room.html">Watch it work</a></div>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="live.html">Scripted demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script>
+/* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */
+window.hallmarkSlots = (m) => { for (const [k, v] of Object.entries(m)) { const s = document.querySelector(`[data-slot="${k}"]`); if (!s) continue; const im = new Image(); im.src = typeof v === 'string' ? v : v.src; im.alt = (typeof v === 'object' && v.alt) || s.dataset.alt || ''; s.querySelectorAll(':scope > img').forEach((o) => o.remove()); s.prepend(im); } };
+document.querySelectorAll('[data-slot] img').forEach((i) => { if (i.complete && !i.naturalWidth) i.remove(); else i.addEventListener('error', () => i.remove(), { once: true }); });
+</script>
+</body>
+</html>

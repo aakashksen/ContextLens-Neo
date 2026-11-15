@@ -15,8 +15,8 @@
 <header class="nav">
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
-    <nav class="nav__links" aria-label="Main"><a href="tour.html" aria-current="page">Walkthrough</a><a href="specs.html">How it’s built</a><a href="live.html">Live demo</a></nav>
-    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html" aria-current="page">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
   </div>
 </header>
 
@@ -87,7 +87,7 @@
           <div class="step__text">
             <span class="n">4</span>
             <h2>Retrieval finds the likely turns</h2>
-            <p>BM25 and embeddings run together over one-turn chunks.</p>
+            <p>BM25 and pgvector search together, then a reranker orders the turns.</p>
           </div>
           <div class="panels">
             <ul class="rows">
@@ -102,7 +102,7 @@
           <div class="step__text">
             <span class="n">5</span>
             <h2>Agents search and check</h2>
-            <p>Three agents work under an 8 s deadline.</p>
+            <p>Code picks the specialists the question needs.</p>
           </div>
           <div class="panels">
             <ul class="rows">
@@ -170,16 +170,15 @@
   <section class="section" aria-labelledby="unity-h">
     <div class="container built">
       <div>
-        <h2 id="unity-h">The Unity client</h2>
-        <p class="note"><span class="chip">built, not yet tried on a headset</span></p>
-        <div class="cta"><a class="btn btn--primary" href="live.html">Try a scripted replay</a><a class="btn" href="specs.html">How it’s built</a></div>
+        <h2 id="unity-h">The same card on your glasses</h2>
+        <p class="note">The Unity client shows the card in your field of view.</p>
+        <div class="cta"><a class="btn btn--primary" href="glasses.html">See the glasses client</a><a class="btn" href="room.html">Watch it work</a></div>
       </div>
       <div class="panels">
         <ul class="rows">
-          <li><span class="chip chip--ok tag">done</span><span class="what">Written against the client contract.</span></li>
-          <li><span class="chip chip--ok tag">done</span><span class="what">The schema check passes.</span></li>
-          <li><span class="chip tag">not yet</span><span class="what">Run in the Unity editor.</span></li>
-          <li><span class="chip tag">not yet</span><span class="what">Tried on a headset.</span></li>
+          <li><span class="chip chip--ok tag">press</span><span class="what">A tap, or a controller button.</span></li>
+          <li><span class="chip chip--ok tag">card</span><span class="what">A panel in front of you, with its sources.</span></li>
+          <li><span class="chip chip--ok tag">backend</span><span class="what">The same one the desktop app uses.</span></li>
         </ul>
       </div>
     </div>
@@ -189,9 +188,12 @@
   <div class="container footer__grid">
     <p class="footer__mark">ContextLens Neo</p>
     <div class="footer__links">
-      <a href="tour.html">Walkthrough</a>
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
       <a href="specs.html">How it’s built</a>
-      <a href="live.html">Live demo</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>
     <div class="footer__links">

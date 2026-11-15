@@ -11,7 +11,7 @@
 .room__bar { padding: 0; }
 .room__row { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; padding: var(--space-sm) var(--space-lg); }
 .room__label { color: var(--color-muted); font-size: var(--text-sm); }
-.field { min-height: 40px; padding: 0 var(--space-sm); border: var(--rule-hair) solid var(--color-rule-2); border-radius: 4px; background: var(--color-paper-3); color: var(--color-ink); min-width: 0; }
+.field { min-height: 40px; padding: 0 var(--space-sm); border: var(--rule-hair) solid var(--color-muted); border-radius: 4px; background: var(--color-paper-3); color: var(--color-ink); min-width: 0; }
 .field::placeholder { color: var(--color-muted); }
 .room__q { flex: 1 1 18rem; }
 .room__key { margin-inline-start: var(--space-xs); padding: 0 var(--space-xs); border: var(--rule-hair) solid currentColor; border-radius: 4px; font-family: var(--font-outlier); font-size: var(--text-xs); }
@@ -57,14 +57,14 @@
 .player__in { display: flex; gap: var(--space-md); align-items: center; padding: var(--space-sm) var(--space-lg); }
 .player__seek { flex: 1; min-width: 0; accent-color: var(--color-accent); }
 .player__time { color: var(--color-ink-2); white-space: nowrap; }
-.player__status { padding: 0 var(--space-lg) var(--space-sm); color: var(--color-muted); font-size: var(--text-sm); }
+.player__status { padding: var(--space-xs) var(--space-lg) var(--space-sm); color: var(--color-muted); font-size: var(--text-sm); }
 
 .room__turns { max-height: 22rem; overflow: auto; }
 .room__turns li { grid-template-columns: 3.25rem 6.5rem minmax(0, 1fr); padding-block: var(--space-xs); animation: none; }
 .room__turns li.is-cited { background: var(--color-paper-3); color: var(--color-ink); box-shadow: inset 3px 0 0 var(--color-accent); }
 .room__turns li.is-cited .id::before { content: "+ "; color: var(--color-ok); }
 
-.room__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--rule-hair); background: var(--color-rule); min-height: 3rem; }
+.room__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--rule-hair); background: var(--color-paper-2); min-height: 3rem; }
 .room__list > li { display: grid; gap: var(--space-2xs); padding: var(--space-sm) var(--space-lg); background: var(--color-paper-2); font-size: var(--text-sm); color: var(--color-ink-2); animation: rcard-in var(--dur-long) var(--ease-out); }
 .room__list > li.is-empty { color: var(--color-muted); animation: none; }
 .room__list s { color: var(--color-muted); }
@@ -85,3 +85,5 @@
 .stages .measured { text-align: end; }
 .trace__row { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: baseline; }
 .trace__quiet { color: var(--color-muted); }
+.room__row .field { width: auto; }
+.room__row select.field { flex: 1 1 14rem; }

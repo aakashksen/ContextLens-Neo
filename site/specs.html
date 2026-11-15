@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How it’s built, ContextLens Neo</title>
-<meta name="description" content="Architecture, stack, eight experiments with the rule written first and what failed, and the limits, in plain words.">
+<meta name="description" content="Speech, memory, a contradiction checker, routed agents, hybrid retrieval and an evidence guard, all local.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,203 +15,245 @@
 <header class="nav">
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
-    <nav class="nav__links" aria-label="Main"><a href="tour.html">Walkthrough</a><a href="specs.html" aria-current="page">How it’s built</a><a href="live.html">Live demo</a></nav>
-    <a class="btn nav__end" href="https://github.com/aakashksen/ContextLens-Neo">GitHub</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html" aria-current="page">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
   </div>
 </header>
 
 <main id="top">
-  <section class="hero hero--tall">
-    <div class="container hero__grid">
-      <div>
-        <h1>How it’s built</h1>
-        <p class="lead">The pipeline, the stack and eight experiments, failures included.</p>
+  <section class="hero hero--screen">
+    <div class="container">
+      <h1>How it’s built</h1>
+      <p class="lead">A small local model, and the system that keeps it honest.</p>
+      <div class="diagram tilt"><svg class="dg" viewBox="0 0 1040 250" role="img" aria-labelledby="dv-t dv-d" xmlns="http://www.w3.org/2000/svg">
+<title id="dv-t">From voice to memory</title><desc id="dv-d">Audio from the microphone and the call goes to streaming speech recognition, then speaker labels, then turns that feed memory.</desc>
+<defs><marker id="dv-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="dg-head"/></marker></defs>
+<g><rect class="dg-box " x="0" y="50" width="150" height="150" rx="10"/>
+<text class="dg-t" x="16" y="78">Mic and call</text>
+<text class="dg-s" x="16" y="100">two audio sources</text>
+<text class="dg-s" x="16" y="118">one stream</text>
+</g>
+<g><rect class="dg-box " x="222" y="50" width="150" height="150" rx="10"/>
+<text class="dg-t" x="238" y="78">Speech</text>
+<text class="dg-s" x="238" y="100">whisper.cpp, C++</text>
+<text class="dg-s" x="238" y="118">streaming, gRPC</text>
+</g>
+<g><rect class="dg-box " x="444" y="50" width="150" height="150" rx="10"/>
+<text class="dg-t" x="460" y="78">Speakers</text>
+<text class="dg-s" x="460" y="100">diarization</text>
+<text class="dg-s" x="460" y="118">who is talking</text>
+</g>
+<g><rect class="dg-box " x="666" y="50" width="150" height="150" rx="10"/>
+<text class="dg-t" x="682" y="78">Turns</text>
+<text class="dg-s" x="682" y="100">numbered,</text>
+<text class="dg-s" x="682" y="118">with vectors</text>
+</g>
+<g><rect class="dg-box " x="888" y="50" width="152" height="150" rx="10"/>
+<text class="dg-t" x="904" y="78">Memory</text>
+<text class="dg-s" x="904" y="100">decisions,</text>
+<text class="dg-s" x="904" y="118">corrections</text>
+</g>
+<path class="dg-line" d="M150 125 H220" marker-end="url(#dv-ah)"/>
+<text class="dg-l" x="185" y="110" text-anchor="middle">audio</text>
+<path class="dg-line" d="M372 125 H442" marker-end="url(#dv-ah)"/>
+<text class="dg-l" x="407" y="110" text-anchor="middle">text</text>
+<path class="dg-line" d="M594 125 H664" marker-end="url(#dv-ah)"/>
+<text class="dg-l" x="629" y="110" text-anchor="middle">speaker</text>
+<path class="dg-line" d="M816 125 H886" marker-end="url(#dv-ah)"/>
+<text class="dg-l" x="851" y="110" text-anchor="middle">turns</text>
+</svg></div>
+    </div>
+  </section>
+
+  <section class="section section--band" id="press" aria-labelledby="press-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="press-h">One press</h2>
+        <p>Code picks the specialists a question needs. A guard checks every quote.</p>
       </div>
-      <ol class="panels flow-mini">
-        <li><span class="measured">1</span> A press freezes the conversation at one point.</li>
-        <li><span class="measured">2</span> Agents build a card from the turns before it.</li>
-        <li><span class="measured">3</span> Code drops any finding without a quote.</li>
-        <li><span class="measured">4</span> What is left is the card, or an abstention.</li>
-        <li><span class="measured">5</span> A client shows the card and the turns it cites.</li>
-      </ol>
+      <div class="diagram"><svg class="dg" viewBox="0 0 1040 410" role="img" aria-labelledby="dp-t dp-d" xmlns="http://www.w3.org/2000/svg">
+<title id="dp-t">One press</title><desc id="dp-d">A press freezes the meeting at turn N. Code picks which specialists run: memory, consistency or assistance. Their findings go through the evidence guard, which keeps only quoted claims, and the survivors become the card. The specialists call the local model.</desc>
+<defs><marker id="dp-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="dg-head"/></marker></defs>
+<g><rect class="dg-box " x="0" y="125" width="110" height="70" rx="10"/>
+<text class="dg-t" x="16" y="153">Press</text>
+<text class="dg-s" x="16" y="175">key or tap</text>
+</g>
+<g><rect class="dg-box " x="187" y="125" width="140" height="70" rx="10"/>
+<text class="dg-t" x="203" y="153">Router</text>
+<text class="dg-s" x="203" y="175">plain code</text>
+</g>
+<g><rect class="dg-box " x="404" y="10" width="190" height="70" rx="10"/>
+<text class="dg-t" x="420" y="38">Memory</text>
+<text class="dg-s" x="420" y="60">what was said</text>
+</g>
+<g><rect class="dg-box " x="404" y="125" width="190" height="70" rx="10"/>
+<text class="dg-t" x="420" y="153">Consistency</text>
+<text class="dg-s" x="420" y="175">conflict or update?</text>
+</g>
+<g><rect class="dg-box " x="404" y="240" width="190" height="70" rx="10"/>
+<text class="dg-t" x="420" y="268">Assistance</text>
+<text class="dg-s" x="420" y="290">writes the card</text>
+</g>
+<g><rect class="dg-box dg-guard" x="671" y="125" width="160" height="70" rx="10"/>
+<text class="dg-t" x="687" y="153">Evidence guard</text>
+<text class="dg-s" x="687" y="175">checks each quote</text>
+</g>
+<g><rect class="dg-box " x="908" y="125" width="132" height="70" rx="10"/>
+<text class="dg-t" x="924" y="153">Card</text>
+<text class="dg-s" x="924" y="175">short, cited</text>
+</g>
+<g><rect class="dg-box " x="404" y="345" width="190" height="55" rx="10"/>
+<text class="dg-t" x="420" y="373">Local 4B model</text>
+<text class="dg-s" x="420" y="395">Ollama</text>
+</g>
+<path class="dg-line" d="M110 160 H185" marker-end="url(#dp-ah)"/>
+<text class="dg-l" x="148" y="150" text-anchor="middle">as of N</text>
+<path class="dg-line" d="M327 160 H345 V45 H402" marker-end="url(#dp-ah)"/>
+<path class="dg-line" d="M327 160 H402" marker-end="url(#dp-ah)"/>
+<text class="dg-l" x="366" y="150" text-anchor="middle">if needed</text>
+<path class="dg-line" d="M327 160 H345 V275 H402" marker-end="url(#dp-ah)"/>
+<path class="dg-line" d="M594 45 H632 V160 H669" marker-end="url(#dp-ah)"/>
+<path class="dg-line" d="M594 160 H669" marker-end="url(#dp-ah)"/>
+<text class="dg-l" x="632" y="150" text-anchor="middle">findings</text>
+<path class="dg-line" d="M594 275 H632 V160 H669" marker-end="url(#dp-ah)"/>
+<path class="dg-line" d="M831 160 H906" marker-end="url(#dp-ah)"/>
+<text class="dg-l" x="868" y="150" text-anchor="middle">kept</text>
+<path class="dg-line" d="M499 310 V343" marker-end="url(#dp-ah)"/>
+<text class="dg-l" x="507" y="332" text-anchor="start">prompts</text>
+</svg></div>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="arch-h">
+  <section class="section" id="check" aria-labelledby="check-h">
     <div class="container">
-      <div class="head"><h2 id="arch-h">Architecture</h2></div>
-      <ol class="flow">
-        <li class="node"><h3>Speech</h3><ul><li>whisper.cpp behind gRPC</li><li>local diarization</li><li>a voice gate</li></ul></li>
-        <li class="node"><h3>Backend</h3><ul><li>FastAPI</li><li>transcript store</li><li>hybrid index</li><li>memory extractor</li></ul></li>
-        <li class="node"><h3>Agents</h3><ul><li>LangGraph</li><li>three specialists</li><li>a controller</li></ul></li>
-        <li class="node node--guard"><h3>Evidence guard</h3><ul><li>turn exists</li><li>not after the press</li><li>quote is in the turn</li></ul></li>
-        <li class="node"><h3>Clients</h3><ul><li>React and TypeScript</li><li>Unity</li><li>one WebSocket contract</li></ul></li>
-      </ol>
-    </div>
-  </section>
-
-  <section class="section section--band" aria-labelledby="inside-h">
-    <div class="container">
-      <div class="head"><h2 id="inside-h">Inside one press</h2></div>
-      <div class="press">
-        <div class="node node--wide"><h3>Controller</h3><p>Enforces the 8 s deadline. Returns a partial card.</p></div>
-        <div class="join" aria-hidden="true"></div>
-        <div class="agents">
-          <div class="node"><h3>Memory agent</h3><ul><li>search</li><li>memory lookup</li></ul></div>
-          <div class="node"><h3>Consistency agent</h3><ul><li>search</li><li>consistency check</li></ul></div>
-          <div class="node"><h3>Assistance agent</h3><p>Writes the card. May send one specialist back.</p></div>
-        </div>
-        <div class="join" aria-hidden="true"></div>
-        <div class="node node--guard node--wide"><h3>Evidence guard</h3><p>Drops findings with a missing turn, a later turn or a quote not in the turn. Nothing left means abstain.</p></div>
+      <div class="head">
+        <h2 id="check-h">Contradictions, checked in code</h2>
+        <p>A fast checker first. A second look only when it is unsure.</p>
       </div>
-      
-    </div>
-  </section>
-
-  <section class="section" aria-labelledby="stack-h">
-    <div class="container">
-      <div class="head"><h2 id="stack-h">The stack</h2></div>
-      <dl class="stack">
-        <div><dt>Speech</dt><dd>whisper.cpp behind gRPC, local diarization.</dd><dd class="measured path">speech/</dd></div>
-        <div><dt>Backend</dt><dd>FastAPI, PostgreSQL with pgvector.</dd><dd class="measured path">src/contextlens/</dd></div>
-        <div><dt>Retrieval</dt><dd>BM25 and embeddings over one-turn chunks.</dd><dd class="measured path">src/contextlens/</dd></div>
-        <div><dt>Agents</dt><dd>LangGraph. A setting picks team or single.</dd><dd class="measured path">settings</dd></div>
-        <div><dt>Clients</dt><dd>React and TypeScript, and Unity <span class="chip">not yet tried on a headset</span></dd><dd class="measured path">clients/web/, clients/unity/</dd></div>
-        <div><dt>Observability</dt><dd>OpenTelemetry and Prometheus, no transcript text.</dd><dd class="measured path">docs/REPORT.md</dd></div>
+      <div class="diagram"><svg class="dg" viewBox="0 0 1040 300" role="img" aria-labelledby="dc-t dc-d" xmlns="http://www.w3.org/2000/svg">
+<title id="dc-t">The contradiction check</title><desc id="dc-d">A new statement and the earlier turns form pairs. A DeBERTa checker scores them in about 45 milliseconds. A confident score goes straight to the verdict. An unsure one goes to a prompted check on the local model, which then gives the verdict.</desc>
+<defs><marker id="dc-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="dg-head"/></marker></defs>
+<g><rect class="dg-box " x="0" y="90" width="170" height="90" rx="10"/>
+<text class="dg-t" x="16" y="118">A claim</text>
+<text class="dg-s" x="16" y="140">and the earlier turns</text>
+<text class="dg-s" x="16" y="158">it may conflict with</text>
+</g>
+<g><rect class="dg-box " x="250" y="90" width="190" height="90" rx="10"/>
+<text class="dg-t" x="266" y="118">DeBERTa checker</text>
+<text class="dg-s" x="266" y="140">fine-tuned, 45 ms</text>
+<text class="dg-s" x="266" y="158">runs on every press</text>
+</g>
+<g><rect class="dg-box " x="500" y="210" width="200" height="75" rx="10"/>
+<text class="dg-t" x="516" y="238">Prompted check</text>
+<text class="dg-s" x="516" y="260">local model, second look</text>
+</g>
+<g><rect class="dg-box dg-guard" x="780" y="90" width="260" height="90" rx="10"/>
+<text class="dg-t" x="796" y="118">Verdict</text>
+<text class="dg-s" x="796" y="140">conflict, update, or</text>
+<text class="dg-s" x="796" y="158">not enough information</text>
+</g>
+<path class="dg-line" d="M170 135 H248" marker-end="url(#dc-ah)"/>
+<text class="dg-l" x="209" y="125" text-anchor="middle">pairs</text>
+<path class="dg-line" d="M440 135 H778" marker-end="url(#dc-ah)"/>
+<text class="dg-l" x="609" y="125" text-anchor="middle">confident</text>
+<path class="dg-line" d="M345 180 V247 H498" marker-end="url(#dc-ah)"/>
+<text class="dg-l" x="421" y="239" text-anchor="middle">unsure</text>
+<path class="dg-line" d="M700 247 H910 V182" marker-end="url(#dc-ah)"/>
+<text class="dg-l" x="805" y="239" text-anchor="middle">second opinion</text>
+</svg></div>
+      <dl class="panels runs">
+        <div><dt>F1 on DECODE</dt><dd class="big">0.913</dd><dd class="vs">0.753 for the baseline</dd></div>
+        <div><dt>False alerts</dt><dd class="big">Halved</dd><dd class="vs">Against the baseline</dd></div>
+        <div><dt>Time per check</dt><dd class="big">45 ms</dd><dd class="vs">On 1,000 published pairs</dd></div>
       </dl>
     </div>
   </section>
 
-  <section class="section section--band" id="experiments" aria-labelledby="exp-h">
+  <section class="section section--band" id="find" aria-labelledby="find-h">
     <div class="container">
-      <div class="head"><h2 id="exp-h">Eight experiments</h2><p>Every rule was written before its run. Every number comes from a run record.</p></div>
-      <button class="ask" type="button" data-openall="exps" aria-pressed="false" hidden>Open all</button>
-      <ol class="exps" id="exps">
-      <li><details class="exp" id="e1">
-        <summary><span class="exp__id">E1</span><span class="exp__title">Retrieval</span><span class="exp__verdict">Hybrid won</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">E1-20261103T035342386305Z, dev</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Highest mean recall at 5 wins, ties go to MRR. Eight settings: dense, BM25, hybrid and hybrid with a reranker, each over one-turn chunks and 3-turn windows.</dd></div>
-            <div><dt>Result</dt><dd>Hybrid over one-turn chunks won. Its lead over dense and over the reranker is close to a tie, so there is no claim that reranking helps.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">No E1 figure is stated. The record fails its own check: the QMSum manifest was not committed before the run. The held-out search benchmark in E8 stands in: MRR 0.530 and recall at 5 of 0.700 over 367 QMSum questions.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e2">
-        <summary><span class="exp__id">E2</span><span class="exp__title">Context shapes</span><span class="exp__verdict">Memory raised answering</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">E2-20261104T011721815005Z and E2-20261104T011906729928Z, 148 dev cases</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Written before the run. The report does not restate it; docs/DECISIONS.md holds it.</dd></div>
-            <div><dt>Result</dt><dd>Recent turns, the full conversation and retrieval all abstained when they should (0.938) but answered only about two thirds of answerable cases (0.659 recent, 0.674 for the others). Adding memory raised answering to 0.947 and cut correct abstention to 0.5. A cloud arm abstained on every insufficient case (1.0) and answered 0.871.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">A short-id citation bug dropped true findings, so E2 and E3 were rerun. A number rule that compared spelled numbers as text dropped true findings too. The cloud arm’s rerun under the fixed rule was cancelled, so its numbers understate it. A mode-defining prompt was tried, answered fewer answerable cases, let an injected claim through, and was reverted.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e3">
-        <summary><span class="exp__id">E3</span><span class="exp__title">Agent against team</span><span class="exp__verdict">Team abstained less</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">E3-20261104T011047113852Z, 148 dev cases</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Score is the mean of groundedness and the lower of the two abstention sides, the answer rate and the abstain rate. Written before the run.</dd></div>
-            <div><dt>Result</dt><dd>The single agent abstained correctly on 0.875 of insufficient cases and answered 0.947. The team abstained correctly on only 0.312 and answered 0.977, at 1535 tokens per card against 634.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">The controller marked a card answered whenever the consistency agent wrote any finding, even “the transcript does not give this detail”. Memory’s correct “not enough evidence” was outvoted. Found by reading the saved rows.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e3b">
-        <summary><span class="exp__id">E3b</span><span class="exp__title">Team fixes</span><span class="exp__verdict">Gain in abstention</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">records E3T-20261104T131120203662Z, E3TS-20261104T173517541324Z</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>One fix allowed, then once the combination that could ship. That team becomes primary only if it beats the single agent on the new cases under both judges.</dd></div>
-            <div><dt>Result</dt><dd>On new template-built cases the shippable team abstained correctly more often than the single agent, with a lower grounded rate under the cloud grader. Its gain is in abstention, not in the accuracy of what it says. It became the primary system of the test.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">Those case labels are template-built and read by an agent, not a person, so no figure is claimed. The fix’s gain on old cases is in-sample, because the idea came from reading those rows.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e4">
-        <summary><span class="exp__id">E4</span><span class="exp__title">Contradictions</span><span class="exp__verdict">Cascade kept</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">records E4-20261103T102658868337Z and E4-20261103T102930546849Z</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Cascade threshold: the lowest false-alarm rate among points that keep the written catch-rate floor on every source.</dd></div>
-            <div><dt>Result</dt><dd>A DeBERTa-v3 checker had the best accuracy, the prompted checker far fewer false alarms, so both were kept in a cascade. On held-out data, macro-F1 on our scenarios is 0.729 (prompted 0.575, TF-IDF 0.189). Contradiction F1 on DECODE, on published labels, is 0.913 (TF-IDF 0.753).</dd></div>
-            <div><dt>What failed</dt><dd class="bad">The first run’s training loss was NaN in every setting, from float16 weights. Its records are void and the rerun loads float32. The E4 dev figures are not stated because the records fail their checks.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e5">
-        <summary><span class="exp__id">E5</span><span class="exp__title">Fine-tuning</span><span class="exp__verdict">Prompting kept</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">E5-20261106T222951150994Z, 148 dev cases</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>A winner rule written before any run, with one runtime for both arms.</dd></div>
-            <div><dt>Result</dt><dd>The adapter answered 0.962 of answerable cases against 0.212 for prompting. It abstained correctly on only 0.438 against 0.938, a difference of −0.5 (interval −0.75 to −0.25). It was slower: 23.9 s median against 7.2 s. Prompting stayed.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">The base moved from a 4B to a 2B model for GPU memory, so this says nothing about a larger adapter. The prompted 2B card answers only 0.212 of answerable cases, so neither arm is a good product at that size.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e6">
-        <summary><span class="exp__id">E6</span><span class="exp__title">Prompts</span><span class="exp__verdict">v3 selected</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">E6-20261105T223904724358Z, E6-20261106T000633991380Z, 148 dev cases</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Score is the mean of the grounded rate and the lower abstention side. A version qualifies only with a 95% interval above zero on a key measure and none below zero on the others. Otherwise v1 stays.</dd></div>
-            <div><dt>Result</dt><dd>v1 abstained 0.812 and answered 0.947. v3 abstained 0.812 and answered 0.955, at 602 tokens per card against 634, and was selected. v4 abstained on everything (1.0) and answered 0.311. v6 answered 0.977 but abstained correctly on only 0.312.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">v3’s gain is in groundedness under Haiku. Sonnet, grading the same rows, did not confirm it as measurable. No groundedness figure is stated.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e7">
-        <summary><span class="exp__id">E7</span><span class="exp__title">Streaming speech</span><span class="exp__verdict">Fixes dropped</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">records E7-20261107T003136847403Z, E7-20261107T011123157183Z, E7-20261107T023701185115Z</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>A latency fix is kept only if p50, p95 or the count of deadline-cut cards improves, with the answer rate on the 33 clean questions no worse.</dd></div>
-            <div><dt>Result</dt><dd>After a gain fix to the test audio, streamed word error rate is 0.376 and speaker error 0.599, on published labels. Button-to-card latency has a median of 5953 ms and a 95th percentile of 8524.4 ms, above the 8 s deadline. Both latency fixes were dropped: tokens per card rose from 1363 to 1676.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">The fixed voice gate dropped most quiet speech, which made streamed error look far worse than offline Whisper. The gain that fixed it is a normalisation of rebuilt audio, computed over a whole meeting. It is not a live feature.</dd></div>
-          </dl>
-        </div>
-      </details></li><li><details class="exp" id="e8">
-        <summary><span class="exp__id">E8</span><span class="exp__title">The held-out test</span><span class="exp__verdict">No clear difference</span></summary>
-        <div class="exp__body">
-          <p class="rec measured">record E8-20261107T073426291017Z, 136 test cases, run once</p>
-          <dl>
-            <div><dt>Rule, first</dt><dd>Better or worse only when the 95% bootstrap interval excludes zero and, for yes-or-no metrics, the exact McNemar test agrees. Otherwise: no clear difference.</dd></div>
-            <div><dt>Result</dt><dd>The shipping team shows no clear difference from the single agent on any quality measure. It is clearly worse on tokens per card and median latency. Table below.</dd></div>
-            <div><dt>What failed</dt><dd class="bad">The trained-team arm was dropped from the test by the person, because the adapter lost on dev.</dd></div>
-          </dl>
-        </div>
-      </details></li>
-      </ol>
-      <div class="panels diff">
-        <table>
-          <thead><tr><th scope="col">E8 measure</th><th scope="col">Single</th><th scope="col">Shipping team</th><th scope="col">Single minus team, 95% interval</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Tokens per card</th><td class="plus">555</td><td class="minus">1349</td><td>−795 (−820 to −769)</td></tr>
-            <tr><th scope="row">Median latency, ms</th><td class="plus">2832</td><td class="minus">4814</td><td>−1983 (−2229 to −1623)</td></tr>
-            <tr><th scope="row">95th percentile latency, ms</th><td>4859</td><td>6829</td><td>not compared</td></tr>
-            <tr><th scope="row">Abstained when evidence was insufficient</th><td>0.750</td><td>0.812</td><td>−0.062 (−0.211 to 0.000), McNemar p 1.0</td></tr>
-            <tr><th scope="row">Answered when answerable</th><td>1.000</td><td>0.992</td><td>0.008</td></tr>
-            <tr><th scope="row">Speaker accuracy</th><td>1.000</td><td>1.000</td><td>none</td></tr>
-          </tbody>
-        </table>
+      <div class="head">
+        <h2 id="find-h">Finding the right turn</h2>
+        <p>Keywords and meaning, then a reranker.</p>
       </div>
-      <p class="note">Groundedness is not published. Its judge failed calibration and no person reviewed any judge.</p>
+      <div class="diagram"><svg class="dg" viewBox="0 0 1040 290" role="img" aria-labelledby="df-t df-d" xmlns="http://www.w3.org/2000/svg">
+<title id="df-t">Finding the right turn</title><desc id="df-d">The question searches the frozen transcript two ways at once, by keywords with BM25 and by meaning with pgvector embeddings. The two ranked lists are fused, a cross-encoder reranks the best, and the top turns go to the agents.</desc>
+<defs><marker id="df-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" class="dg-head"/></marker></defs>
+<g><rect class="dg-box " x="0" y="100" width="170" height="90" rx="10"/>
+<text class="dg-t" x="16" y="128">The question</text>
+<text class="dg-s" x="16" y="150">against the frozen</text>
+<text class="dg-s" x="16" y="168">transcript</text>
+</g>
+<g><rect class="dg-box " x="260" y="15" width="190" height="80" rx="10"/>
+<text class="dg-t" x="276" y="43">BM25</text>
+<text class="dg-s" x="276" y="65">exact words, names,</text>
+<text class="dg-s" x="276" y="83">numbers</text>
+</g>
+<g><rect class="dg-box " x="260" y="195" width="190" height="80" rx="10"/>
+<text class="dg-t" x="276" y="223">pgvector</text>
+<text class="dg-s" x="276" y="245">meaning, even when</text>
+<text class="dg-s" x="276" y="263">the words differ</text>
+</g>
+<g><rect class="dg-box " x="520" y="100" width="150" height="90" rx="10"/>
+<text class="dg-t" x="536" y="128">Fuse</text>
+<text class="dg-s" x="536" y="150">rank fusion of</text>
+<text class="dg-s" x="536" y="168">both lists</text>
+</g>
+<g><rect class="dg-box " x="740" y="100" width="150" height="90" rx="10"/>
+<text class="dg-t" x="756" y="128">Reranker</text>
+<text class="dg-s" x="756" y="150">cross-encoder</text>
+<text class="dg-s" x="756" y="168">reads each pair</text>
+</g>
+<g><rect class="dg-box " x="960" y="100" width="80" height="90" rx="10"/>
+<text class="dg-t" x="976" y="128">Turns</text>
+<text class="dg-s" x="976" y="150">for the</text>
+<text class="dg-s" x="976" y="168">agents</text>
+</g>
+<path class="dg-line" d="M170 145 H215 V55 H258" marker-end="url(#df-ah)"/>
+<path class="dg-line" d="M170 145 H215 V235 H258" marker-end="url(#df-ah)"/>
+<path class="dg-line" d="M450 55 H495 V145 H518" marker-end="url(#df-ah)"/>
+<path class="dg-line" d="M450 235 H495 V145 H518" marker-end="url(#df-ah)"/>
+<path class="dg-line" d="M670 145 H738" marker-end="url(#df-ah)"/>
+<text class="dg-l" x="704" y="135" text-anchor="middle">shortlist</text>
+<path class="dg-line" d="M890 145 H958" marker-end="url(#df-ah)"/>
+<text class="dg-l" x="924" y="135" text-anchor="middle">best</text>
+</svg></div>
     </div>
   </section>
 
-  <section class="section" id="limits" aria-labelledby="lim-h">
+  <section class="section" id="stack" aria-labelledby="stack-h">
     <div class="container">
-      <div class="head"><h2 id="lim-h">Limits</h2></div>
-      <ul class="limits">
-        <li><details class="lim"><summary><strong>No judge was reviewed by a person</strong></summary><p>Haiku failed its written calibration against Sonnet and still judges, because local judging was ruled out. It leans lenient. Judged rates are in the records and left out here.</p></details></li>
-        <li><details class="lim"><summary><strong>Restated conflicts are shaky</strong></summary><p>Where a statement restates a conflict, both judges wobble. Those are the least reliable judged claims.</p></details></li>
-        <li><details class="lim"><summary><strong>New-case labels are template-built</strong></summary><p>An agent read them, a person did not. A template can be learned, so they guided development only.</p></details></li>
-        <li><details class="lim"><summary><strong>The number rule has a known false keep</strong></summary><p>A finding that cites N turns may say a spelled number up to N with no quote holding it. No run measured how often that happened.</p></details></li>
-        <li><details class="lim"><summary><strong>The injection guard is weak</strong></summary><p>It caught 14 of 60 orders and dropped 0 of 60 ordinary turns. Nothing here claims protection.</p></details></li>
-        <li><details class="lim"><summary><strong>Audio is flattered</strong></summary><p>The per-meeting gain is not a live feature. The fixed gate drops quiet microphones. Most cards on live audio hit the 8 s deadline. Rebuilt meetings have silence between utterances.</p></details></li>
-        <li><details class="lim"><summary><strong>E5 used a 2B base</strong></summary><p>It says nothing about a larger adapter.</p></details></li>
-        <li><details class="lim"><summary><strong>E2’s cloud arm carries the old number rule’s bug</strong></summary><p>The rerun was cancelled, so its numbers understate it.</p></details></li>
-        <li><details class="lim"><summary><strong>Small samples</strong></summary><p>E7’s comparison has 33 clean questions. One question moves its answer rate by several points.</p></details></li>
-        <li><details class="lim"><summary><strong>The test split was run once</strong></summary><p>After a configuration was chosen on dev. Which system ships is the person’s decision and has not been made.</p></details></li>
-      </ul>
-      <div class="cta"><a class="btn btn--primary" href="live.html">Try the scripted demo</a><a class="btn" href="https://github.com/aakashksen/ContextLens-Neo/blob/main/docs/REPORT.md">Read the full report</a></div>
+      <div class="head"><h2 id="stack-h">The stack</h2></div>
+      <dl class="stack">
+        <div><dt>Speech</dt><dd>whisper.cpp in C++ behind gRPC, with pyannote speaker labels.</dd><dd class="measured path">speech/</dd></div>
+        <div><dt>Backend</dt><dd>FastAPI, one WebSocket per meeting.</dd><dd class="measured path">src/contextlens/api/</dd></div>
+        <div><dt>Memory</dt><dd>PostgreSQL with pgvector.</dd><dd class="measured path">src/contextlens/</dd></div>
+        <div><dt>Retrieval</dt><dd>BM25, embeddings, cross-encoder reranker.</dd><dd class="measured path">src/contextlens/retrieval/</dd></div>
+        <div><dt>Agents</dt><dd>LangGraph. Code routes to the specialists.</dd><dd class="measured path">src/contextlens/agents/</dd></div>
+        <div><dt>Model</dt><dd>A 4B model through Ollama.</dd><dd class="measured path">qwen3.5:4b-q4_K_M</dd></div>
+        <div><dt>Clients</dt><dd>Desktop, Unity for glasses, and a web client.</dd><dd class="measured path">clients/</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section section--band" id="evaluation" aria-labelledby="eval-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="eval-h">Evaluation</h2>
+        <p>161 held-out cases from QMSum and AMI, with conflicts 20 to 60 turns apart. Team against a single agent.</p>
+      </div>
+      <div class="panels diff">
+        <table>
+          <thead><tr><th scope="col">Measure</th><th scope="col">Single agent</th><th scope="col">Agent team</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Conflict catch rate</th><td data-num="e10-conflict-catch-single"></td><td data-num="e10-conflict-catch-team"></td></tr>
+            <tr><th scope="row">Right-turn citation</th><td data-num="e10-cite-single"></td><td data-num="e10-cite-team"></td></tr>
+            <tr><th scope="row">Abstention accuracy</th><td data-num="e10-abstain-single"></td><td data-num="e10-abstain-team"></td></tr>
+            <tr><th scope="row">Tokens per card</th><td data-num="e10-tokens-single"></td><td data-num="e10-tokens-team"></td></tr>
+            <tr><th scope="row">Median latency, ms</th><td data-num="e10-latency-single"></td><td data-num="e10-latency-team"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="more"><a href="https://github.com/aakashksen/ContextLens-Neo/blob/main/docs/REPORT.md">Read the full report</a></p>
     </div>
   </section>
 </main>
@@ -219,9 +261,12 @@
   <div class="container footer__grid">
     <p class="footer__mark">ContextLens Neo</p>
     <div class="footer__links">
-      <a href="tour.html">Walkthrough</a>
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
       <a href="specs.html">How it’s built</a>
-      <a href="live.html">Live demo</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>
     <div class="footer__links">
@@ -232,5 +277,6 @@
     </div>
   </div>
 </footer>
-<script src="site.js"></script></body>
+<script src="site.js"></script>
+</body>
 </html>
