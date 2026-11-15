@@ -37,5 +37,10 @@
   "rubric": "docs/e10-grading-rubric.md",
   "blind": "arm identity hidden"
  },
- "claim_rule": "src/contextlens/eval/e10_metrics.py CLAIM_RULE"
+ "claim_rule": "src/contextlens/eval/e10_metrics.py CLAIM_RULE",
+ "checker_dir": "<local path>",
+ "card": {
+  "num_ctx": null,
+  "note": "Card calls use Ollama's default window (4096 tokens) for every arm, as in E8 and the product. Measured largest card prompt on the heaviest test cases (16384 window so nothing was cut): single 1019, team_shipping_changed 1560, team_routed 2376, single_plus 2118 tokens, all under 4096. A setting here would apply to every arm alike."
+ }
 }

@@ -243,6 +243,21 @@ def run_case(sc: Scenario, arm: str, writer: LLMClient, embedder: Any, items: li
             pool.shutdown(wait=False)
 
 
+def warm_up(cfg: dict[str, Any], arms: list[str], sc: Scenario, writer: LLMClient, embedder: Any, say: Callable[[str], None]) -> None:
+    """Before any timed press: point the cascade at the trained checker, then press every arm once on the first case and throw the
+    cards away, so the models and the checker are loaded. Refuses to run an arm that needs the checker if it fell back to the
+    prompted one (it costs an extra model call, so the timing would not be the product's)."""
+    directory = Path(cfg["checker_dir"])
+    os.environ.setdefault("CONTEXTLENS_CHECKER_DIR", str(directory))
+    for arm in arms:
+        t0 = time.perf_counter()
+        run_case(sc, arm, writer, embedder, [], cfg["deadline_s"])
+        say(f"warm-up {arm}: {time.perf_counter() - t0:.1f} s (card discarded)")
+    needs = [a for a in arms if a in ("team_routed", "single_plus")]
+    if needs and production._TRAINED.get("first") is None:
+        raise RuntimeError(f"{needs} need the trained checker and it did not load from {os.environ['CONTEXTLENS_CHECKER_DIR']}")
+
+
 def pick_smoke(scs: list[Scenario], meta: dict[str, dict[str, Any]]) -> list[Scenario]:
     """The first few of each type, in file order; conflict cases are taken as a whole triplet's three."""
     left, out = dict(SMOKE_PER_TYPE), []
@@ -276,12 +291,21 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
     from contextlens.llm.client import Embedder
 
     embedder = EmbedCache(Embedder(base_url=production.OLLAMA_URL, model=production.EMBED_MODEL, keep_alive=production.KEEP_ALIVE))
-    writer = OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE)
+    writer = OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE,
+                          num_ctx=(cfg.get("card") or {}).get("num_ctx"))  # one setting for every arm
     mem_llm, num_ctx = memory_client(cfg), cfg["memory"].get("num_ctx")
     chunk, timing = cfg["memory"]["chunk_turns"], {"memory_ms": 0.0, "memory_failed_chunks": 0, "memory_cases_built": 0, "cards_ms": 0.0}
     t_start = time.perf_counter()
     done = Counter()
+    log_path = root / LOCAL_DIR / f"run-{rsplit}.log"
+
+    def say(text: str) -> None:
+        _append(log_path, f"{datetime.now().strftime('%H:%M:%S')} {text}")
+        print(text)
+
     try:
+        warm_up(cfg, arms, scs[0], writer, embedder, say)
+        say(f"{rsplit}: {len(scs)} cases, arms {arms}, {sum(len(have.get(a, {})) for a in arms)} rows already saved")
         for i, sc in enumerate(scs, 1):
             todo = [a for a in arms if sc.id not in have.get(a, {})]
             if not todo:
@@ -299,8 +323,11 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
                 if not row.errored:
                     have.setdefault(arm, {})[sc.id] = row
                 done[arm] += 1
-            if i % 5 == 0 or i == len(scs):
-                say(f"  {i}/{len(scs)} cases, {sum(done.values())} cards run this session")
+            el = time.perf_counter() - t_start
+            todo_left = sum(1 for s in scs[i:] for a in arms if s.id not in have.get(a, {}))
+            run_n = max(1, sum(done.values()))
+            say(f"{i}/{len(scs)} cases | {sum(done.values())} cards this session, {el / run_n:.1f} s/card, "
+                f"eta {todo_left * el / run_n / 60:.0f} min | {sc.id} cut={sum(1 for a in arms if have.get(a, {}).get(sc.id) and M.deadline_cut(have[a][sc.id]))}")
     finally:
         if os.environ.get("E10_KEEP_LOADED") != "1":
             production.unload_local_models()
