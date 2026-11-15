@@ -29,6 +29,7 @@ class Prep:
     checker_ms: int = 0
     search_ms: int = 0
     hits: int = 0
+    earlier_ids: list[str] = field(default_factory=list)  # the earlier turns the checker was shown
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -72,6 +73,7 @@ def prepare(tools: Tools, req: ButtonRequest, turns: list[Turn], end: float) -> 
                 break
             keep.setdefault(t.id, t)
         earlier = sorted(keep.values(), key=lambda t: t.seq)
+        prep.earlier_ids = [t.id for t in earlier]
         t0 = time.perf_counter()
         try:
             label, conf = _bounded(functools.partial(tools.checker.check, statement, earlier),

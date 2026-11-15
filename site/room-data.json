@@ -1,0 +1,1959 @@
+{
+ "id": "launch",
+ "title": "Launch planning (invented)",
+ "duration_ms": 82000,
+ "turns": [
+  {
+   "id": "t1",
+   "seq": 1,
+   "speaker": "Maya",
+   "text": "Let’s ship the beta on Friday.",
+   "start_ms": 0,
+   "end_ms": 4000
+  },
+  {
+   "id": "t2",
+   "seq": 2,
+   "speaker": "Jordan",
+   "text": "Design still owes the onboarding screens.",
+   "start_ms": 4500,
+   "end_ms": 9000
+  },
+  {
+   "id": "t3",
+   "seq": 3,
+   "speaker": "Priya",
+   "text": "I can have the screens done by Wednesday.",
+   "start_ms": 9500,
+   "end_ms": 14000
+  },
+  {
+   "id": "t4",
+   "seq": 4,
+   "speaker": "Jordan",
+   "text": "Then QA needs two days, minimum.",
+   "start_ms": 14500,
+   "end_ms": 19000
+  },
+  {
+   "id": "t5",
+   "seq": 5,
+   "speaker": "Maya",
+   "text": "Okay, then make the beta ship Monday.",
+   "start_ms": 19500,
+   "end_ms": 23000
+  },
+  {
+   "id": "t6",
+   "seq": 6,
+   "speaker": "Sam",
+   "text": "The budget for the launch video is five thousand dollars.",
+   "start_ms": 24000,
+   "end_ms": 29000
+  },
+  {
+   "id": "t7",
+   "seq": 7,
+   "speaker": "Maya",
+   "text": "Fine, five thousand is approved.",
+   "start_ms": 29500,
+   "end_ms": 33000
+  },
+  {
+   "id": "t8",
+   "seq": 8,
+   "speaker": "Jordan",
+   "text": "I’ll send the QA plan tomorrow.",
+   "start_ms": 34000,
+   "end_ms": 38000
+  },
+  {
+   "id": "t9",
+   "seq": 9,
+   "speaker": "Priya",
+   "text": "Do we announce before or after the beta?",
+   "start_ms": 39000,
+   "end_ms": 44000
+  },
+  {
+   "id": "t10",
+   "seq": 10,
+   "speaker": "Maya",
+   "text": "After. Priya should see the QA plan before we announce.",
+   "start_ms": 44500,
+   "end_ms": 49000
+  },
+  {
+   "id": "t11",
+   "seq": 11,
+   "speaker": "Sam",
+   "text": "The video budget has to come down to three thousand.",
+   "start_ms": 50000,
+   "end_ms": 55000
+  },
+  {
+   "id": "t12",
+   "seq": 12,
+   "speaker": "Maya",
+   "text": "Then I withdraw the five thousand. Make it three.",
+   "start_ms": 55500,
+   "end_ms": 59000
+  },
+  {
+   "id": "t13",
+   "seq": 13,
+   "speaker": "Jordan",
+   "text": "Who owns the press list?",
+   "start_ms": 60000,
+   "end_ms": 65000
+  },
+  {
+   "id": "t14",
+   "seq": 14,
+   "speaker": "Sam",
+   "text": "Not me. I thought Priya had it.",
+   "start_ms": 65500,
+   "end_ms": 70000
+  },
+  {
+   "id": "t15",
+   "seq": 15,
+   "speaker": "Priya",
+   "text": "I don’t. Nobody has taken it.",
+   "start_ms": 70500,
+   "end_ms": 75000
+  },
+  {
+   "id": "t16",
+   "seq": 16,
+   "speaker": "Maya",
+   "text": "Okay, Sam, take the press list.",
+   "start_ms": 75500,
+   "end_ms": 80000
+  }
+ ],
+ "memory": [
+  {
+   "id": "m1",
+   "kind": "decision",
+   "subject": "Beta date",
+   "statement": "The beta ships Monday, not Friday.",
+   "speaker": "Maya",
+   "source_turn_ids": [
+    "t1",
+    "t5"
+   ],
+   "supersedes": null,
+   "at_ms": 23000
+  },
+  {
+   "id": "m2",
+   "kind": "decision",
+   "subject": "Video budget",
+   "statement": "The launch video budget is $5,000.",
+   "speaker": "Maya",
+   "source_turn_ids": [
+    "t6",
+    "t7"
+   ],
+   "supersedes": null,
+   "at_ms": 33000
+  },
+  {
+   "id": "m3",
+   "kind": "commitment",
+   "subject": "QA plan",
+   "statement": "Jordan sends the QA plan tomorrow.",
+   "speaker": "Jordan",
+   "source_turn_ids": [
+    "t8"
+   ],
+   "supersedes": null,
+   "at_ms": 38000
+  },
+  {
+   "id": "m4",
+   "kind": "correction",
+   "subject": "Video budget",
+   "statement": "The launch video budget is $3,000, replacing $5,000.",
+   "speaker": "Maya",
+   "source_turn_ids": [
+    "t11",
+    "t12"
+   ],
+   "supersedes": "m2",
+   "at_ms": 59000
+  },
+  {
+   "id": "m5",
+   "kind": "commitment",
+   "subject": "Press list",
+   "statement": "Sam owns the press list.",
+   "speaker": "Maya",
+   "source_turn_ids": [
+    "t16"
+   ],
+   "supersedes": null,
+   "at_ms": 80000
+  }
+ ],
+ "flags": [
+  {
+   "turn_id": "t5",
+   "label": "update",
+   "confidence": 0.86,
+   "earlier_ids": [
+    "t1"
+   ],
+   "at_ms": 23000
+  },
+  {
+   "turn_id": "t11",
+   "label": "contradiction",
+   "confidence": 0.81,
+   "earlier_ids": [
+    "t7"
+   ],
+   "at_ms": 55000
+  },
+  {
+   "turn_id": "t12",
+   "label": "update",
+   "confidence": 0.9,
+   "earlier_ids": [
+    "t7",
+    "t11"
+   ],
+   "at_ms": 59000
+  }
+ ],
+ "presses": [
+  {
+   "key": "ship",
+   "label": "When does the beta ship?",
+   "after_ms": 4000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Maya proposed shipping the beta on Friday.",
+        "evidence": [
+         {
+          "turn_id": "t1",
+          "quote": "Let’s ship the beta on Friday.",
+          "speaker": "Maya",
+          "start_ms": 0
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Maya proposed shipping the beta on Friday.",
+        "label": null,
+        "turn_ids": [
+         "t1"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "Maya proposed shipping the beta on Friday.",
+        "evidence": [
+         {
+          "turn_id": "t1",
+          "quote": "Let’s ship the beta on Friday.",
+          "speaker": "Maya",
+          "start_ms": 0
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 2365,
+      "tokens": 591,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 2365,
+      "tokens": 591,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 1900,
+        "note": "memory"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "Maya proposed shipping the beta on Friday.",
+        "label": null,
+        "turn_ids": [
+         "t1"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "key": "ship",
+   "label": "When does the beta ship?",
+   "after_ms": 23000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Maya moved the beta from Friday to Monday after QA needed two days.",
+        "evidence": [
+         {
+          "turn_id": "t1",
+          "quote": "Let’s ship the beta on Friday.",
+          "speaker": "Maya",
+          "start_ms": 0
+         },
+         {
+          "turn_id": "t4",
+          "quote": "Then QA needs two days, minimum.",
+          "speaker": "Jordan",
+          "start_ms": 14500
+         },
+         {
+          "turn_id": "t5",
+          "quote": "Okay, then make the beta ship Monday.",
+          "speaker": "Maya",
+          "start_ms": 19500
+         }
+        ],
+        "label": "update",
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": "Confirm Monday with design before announcing.",
+      "missing": [],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "update"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "update",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Maya moved the beta from Friday to Monday after QA needed two days.",
+        "label": "update",
+        "turn_ids": [
+         "t1",
+         "t4",
+         "t5"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "The beta now ships Monday.",
+        "evidence": [
+         {
+          "turn_id": "t5",
+          "quote": "Okay, then make the beta ship Monday.",
+          "speaker": "Maya",
+          "start_ms": 19500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       },
+       {
+        "agent": "consistency",
+        "kind": "recall",
+        "statement": "Monday replaces the Friday date Maya gave first.",
+        "evidence": [
+         {
+          "turn_id": "t1",
+          "quote": "Let’s ship the beta on Friday.",
+          "speaker": "Maya",
+          "start_ms": 0
+         },
+         {
+          "turn_id": "t5",
+          "quote": "Okay, then make the beta ship Monday.",
+          "speaker": "Maya",
+          "start_ms": 19500
+         }
+        ],
+        "label": "update",
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": "Confirm Monday with design before announcing.",
+      "missing": [],
+      "latency_ms": 4065,
+      "tokens": 1016,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 4065,
+      "tokens": 1016,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "update"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3600,
+        "note": "memory, consistency"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": true,
+        "ms": 1700,
+        "tokens": 380,
+        "findings": [
+         1
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "update",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "The beta now ships Monday.",
+        "label": null,
+        "turn_ids": [
+         "t5"
+        ]
+       },
+       {
+        "agent": "consistency",
+        "statement": "Monday replaces the Friday date Maya gave first.",
+        "label": "update",
+        "turn_ids": [
+         "t1",
+         "t5"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "key": "budget",
+   "label": "What is the video budget?",
+   "after_ms": 33000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Sam gave five thousand dollars and Maya approved it.",
+        "evidence": [
+         {
+          "turn_id": "t6",
+          "quote": "The budget for the launch video is five thousand dollars.",
+          "speaker": "Sam",
+          "start_ms": 24000
+         },
+         {
+          "turn_id": "t7",
+          "quote": "Fine, five thousand is approved.",
+          "speaker": "Maya",
+          "start_ms": 29500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Sam gave five thousand dollars and Maya approved it.",
+        "label": null,
+        "turn_ids": [
+         "t6",
+         "t7"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "The launch video budget is $5,000, approved by Maya.",
+        "evidence": [
+         {
+          "turn_id": "t6",
+          "quote": "The budget for the launch video is five thousand dollars.",
+          "speaker": "Sam",
+          "start_ms": 24000
+         },
+         {
+          "turn_id": "t7",
+          "quote": "Fine, five thousand is approved.",
+          "speaker": "Maya",
+          "start_ms": 29500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 2365,
+      "tokens": 591,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 2365,
+      "tokens": 591,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 1900,
+        "note": "memory"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "The launch video budget is $5,000, approved by Maya.",
+        "label": null,
+        "turn_ids": [
+         "t6",
+         "t7"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "key": "budget",
+   "label": "What is the video budget?",
+   "after_ms": 59000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Sam asked for three thousand and Maya withdrew the five thousand.",
+        "evidence": [
+         {
+          "turn_id": "t7",
+          "quote": "Fine, five thousand is approved.",
+          "speaker": "Maya",
+          "start_ms": 29500
+         },
+         {
+          "turn_id": "t11",
+          "quote": "The video budget has to come down to three thousand.",
+          "speaker": "Sam",
+          "start_ms": 50000
+         },
+         {
+          "turn_id": "t12",
+          "quote": "Then I withdraw the five thousand. Make it three.",
+          "speaker": "Maya",
+          "start_ms": 55500
+         }
+        ],
+        "label": "update",
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "update"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "1 finding(s) dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "update",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Sam asked for three thousand and Maya withdrew the five thousand.",
+        "label": "update",
+        "turn_ids": [
+         "t7",
+         "t11",
+         "t12"
+        ]
+       }
+      ],
+      "drops": [
+       {
+        "reason": "number",
+        "why": "a number in it does not appear in the quotes it cites",
+        "statement": "The budget is $4,000.",
+        "turn_ids": [
+         "t11"
+        ]
+       }
+      ],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "The launch video budget is now $3,000.",
+        "evidence": [
+         {
+          "turn_id": "t11",
+          "quote": "The video budget has to come down to three thousand.",
+          "speaker": "Sam",
+          "start_ms": 50000
+         },
+         {
+          "turn_id": "t12",
+          "quote": "Then I withdraw the five thousand. Make it three.",
+          "speaker": "Maya",
+          "start_ms": 55500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       },
+       {
+        "agent": "consistency",
+        "kind": "recall",
+        "statement": "Sam’s three thousand contradicted the approved five thousand; Maya then withdrew it.",
+        "evidence": [
+         {
+          "turn_id": "t7",
+          "quote": "Fine, five thousand is approved.",
+          "speaker": "Maya",
+          "start_ms": 29500
+         },
+         {
+          "turn_id": "t11",
+          "quote": "The video budget has to come down to three thousand.",
+          "speaker": "Sam",
+          "start_ms": 50000
+         },
+         {
+          "turn_id": "t12",
+          "quote": "Then I withdraw the five thousand. Make it three.",
+          "speaker": "Maya",
+          "start_ms": 55500
+         }
+        ],
+        "label": "update",
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 4065,
+      "tokens": 1016,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 4065,
+      "tokens": 1016,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "update"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3600,
+        "note": "memory, consistency"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "1 finding(s) dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": true,
+        "ms": 1700,
+        "tokens": 380,
+        "findings": [
+         1
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "update",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "The launch video budget is now $3,000.",
+        "label": null,
+        "turn_ids": [
+         "t11",
+         "t12"
+        ]
+       },
+       {
+        "agent": "consistency",
+        "statement": "Sam’s three thousand contradicted the approved five thousand; Maya then withdrew it.",
+        "label": "update",
+        "turn_ids": [
+         "t7",
+         "t11",
+         "t12"
+        ]
+       }
+      ],
+      "drops": [
+       {
+        "reason": "citation",
+        "why": "it cited a turn that is not in the transcript, or quoted words that turn does not contain",
+        "statement": "Maya approved four thousand.",
+        "turn_ids": [
+         "t7"
+        ]
+       }
+      ],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    }
+   ]
+  },
+  {
+   "key": "qa",
+   "label": "Who owns the QA plan?",
+   "after_ms": 38000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "partial",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Jordan will send the QA plan tomorrow.",
+        "evidence": [
+         {
+          "turn_id": "t8",
+          "quote": "I’ll send the QA plan tomorrow.",
+          "speaker": "Jordan",
+          "start_ms": 34000
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [
+       "which day “tomorrow” is"
+      ],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Jordan will send the QA plan tomorrow.",
+        "label": null,
+        "turn_ids": [
+         "t8"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": [
+       "which day “tomorrow” is"
+      ]
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "partial",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "Jordan owns the QA plan and said he would send it tomorrow.",
+        "evidence": [
+         {
+          "turn_id": "t8",
+          "quote": "I’ll send the QA plan tomorrow.",
+          "speaker": "Jordan",
+          "start_ms": 34000
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [
+       "which day “tomorrow” is"
+      ],
+      "latency_ms": 2365,
+      "tokens": 591,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 2365,
+      "tokens": 591,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 1900,
+        "note": "memory"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "Jordan owns the QA plan and said he would send it tomorrow.",
+        "label": null,
+        "turn_ids": [
+         "t8"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": [
+       "which day “tomorrow” is"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "key": "press",
+   "label": "Who owns the press list?",
+   "after_ms": 80000,
+   "results": [
+    {
+     "assistant": "single_plus",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "single",
+        "kind": "recall",
+        "statement": "Maya assigned the press list to Sam after nobody had taken it.",
+        "evidence": [
+         {
+          "turn_id": "t14",
+          "quote": "Not me. I thought Priya had it.",
+          "speaker": "Sam",
+          "start_ms": 65500
+         },
+         {
+          "turn_id": "t15",
+          "quote": "I don’t. Nobody has taken it.",
+          "speaker": "Priya",
+          "start_ms": 70500
+         },
+         {
+          "turn_id": "t16",
+          "quote": "Okay, Sam, take the press list.",
+          "speaker": "Maya",
+          "start_ms": 75500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 4025,
+      "tokens": 1006,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "single_plus",
+      "total_ms": 4025,
+      "tokens": 1006,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": null,
+        "note": "not timed separately"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 3560,
+        "note": "single"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "single",
+        "ran": true,
+        "ms": 3560,
+        "llm_ms": 3300,
+        "tools_ms": 260,
+        "tokens": null,
+        "findings": [
+         0
+        ]
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "single",
+        "statement": "Maya assigned the press list to Sam after nobody had taken it.",
+        "label": null,
+        "turn_ids": [
+         "t14",
+         "t15",
+         "t16"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    },
+    {
+     "assistant": "team_routed",
+     "card": {
+      "mode": "recall",
+      "status": "answered",
+      "findings": [
+       {
+        "agent": "memory",
+        "kind": "recall",
+        "statement": "Sam owns the press list.",
+        "evidence": [
+         {
+          "turn_id": "t16",
+          "quote": "Okay, Sam, take the press list.",
+          "speaker": "Maya",
+          "start_ms": 75500
+         }
+        ],
+        "label": null,
+        "confidence": 0.9
+       }
+      ],
+      "suggestion": null,
+      "missing": [],
+      "latency_ms": 2365,
+      "tokens": 591,
+      "cost_usd": 0.0
+     },
+     "trace": {
+      "assistant": "team_routed",
+      "total_ms": 2365,
+      "tokens": 591,
+      "stages": [
+       {
+        "id": "speech",
+        "label": "Speech",
+        "ms": 640,
+        "note": "scripted, illustrative"
+       },
+       {
+        "id": "memory",
+        "label": "Memory",
+        "ms": 1900,
+        "note": "memory specialist"
+       },
+       {
+        "id": "search",
+        "label": "Search",
+        "ms": 85,
+        "note": "6 earlier turns"
+       },
+       {
+        "id": "checker",
+        "label": "Checker",
+        "ms": 380,
+        "note": "consistent"
+       },
+       {
+        "id": "specialists",
+        "label": "Specialists",
+        "ms": 1900,
+        "note": "memory"
+       },
+       {
+        "id": "guard",
+        "label": "Evidence guard",
+        "ms": null,
+        "note": "nothing dropped"
+       }
+      ],
+      "specialists": [
+       {
+        "name": "memory",
+        "ran": true,
+        "ms": 1900,
+        "tokens": 420,
+        "findings": [
+         0
+        ]
+       },
+       {
+        "name": "assistance",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       },
+       {
+        "name": "consistency",
+        "ran": false,
+        "ms": null,
+        "tokens": null,
+        "findings": []
+       }
+      ],
+      "checker": {
+       "ran": true,
+       "label": "consistent",
+       "failed": false
+      },
+      "findings": [
+       {
+        "agent": "memory",
+        "statement": "Sam owns the press list.",
+        "label": null,
+        "turn_ids": [
+         "t16"
+        ]
+       }
+      ],
+      "drops": [],
+      "abstained": {
+       "yes": false,
+       "why": []
+      },
+      "notes": []
+     }
+    }
+   ]
+  }
+ ],
+ "abstain": {
+  "single_plus": {
+   "assistant": "single_plus",
+   "card": {
+    "mode": "recall",
+    "status": "abstained",
+    "findings": [],
+    "suggestion": null,
+    "missing": [
+     "no turn so far answers that"
+    ],
+    "latency_ms": 4025,
+    "tokens": 1006,
+    "cost_usd": 0.0
+   },
+   "trace": {
+    "assistant": "single_plus",
+    "total_ms": 4025,
+    "tokens": 1006,
+    "stages": [
+     {
+      "id": "speech",
+      "label": "Speech",
+      "ms": 640,
+      "note": "scripted, illustrative"
+     },
+     {
+      "id": "memory",
+      "label": "Memory",
+      "ms": null,
+      "note": "not timed separately"
+     },
+     {
+      "id": "search",
+      "label": "Search",
+      "ms": 85,
+      "note": "6 earlier turns"
+     },
+     {
+      "id": "checker",
+      "label": "Checker",
+      "ms": 380,
+      "note": "consistent"
+     },
+     {
+      "id": "specialists",
+      "label": "Specialists",
+      "ms": 3560,
+      "note": "single"
+     },
+     {
+      "id": "guard",
+      "label": "Evidence guard",
+      "ms": null,
+      "note": "nothing dropped"
+     }
+    ],
+    "specialists": [
+     {
+      "name": "single",
+      "ran": true,
+      "ms": 3560,
+      "llm_ms": 3300,
+      "tools_ms": 260,
+      "tokens": null,
+      "findings": []
+     }
+    ],
+    "checker": {
+     "ran": true,
+     "label": "consistent",
+     "failed": false
+    },
+    "findings": [],
+    "drops": [],
+    "abstained": {
+     "yes": true,
+     "why": [
+      "no turn so far answers that"
+     ]
+    },
+    "notes": []
+   }
+  },
+  "team_routed": {
+   "assistant": "team_routed",
+   "card": {
+    "mode": "recall",
+    "status": "abstained",
+    "findings": [],
+    "suggestion": null,
+    "missing": [
+     "memory found nothing relevant"
+    ],
+    "latency_ms": 2365,
+    "tokens": 591,
+    "cost_usd": 0.0
+   },
+   "trace": {
+    "assistant": "team_routed",
+    "total_ms": 2365,
+    "tokens": 591,
+    "stages": [
+     {
+      "id": "speech",
+      "label": "Speech",
+      "ms": 640,
+      "note": "scripted, illustrative"
+     },
+     {
+      "id": "memory",
+      "label": "Memory",
+      "ms": 1900,
+      "note": "memory specialist"
+     },
+     {
+      "id": "search",
+      "label": "Search",
+      "ms": 85,
+      "note": "6 earlier turns"
+     },
+     {
+      "id": "checker",
+      "label": "Checker",
+      "ms": 380,
+      "note": "consistent"
+     },
+     {
+      "id": "specialists",
+      "label": "Specialists",
+      "ms": 1900,
+      "note": "memory"
+     },
+     {
+      "id": "guard",
+      "label": "Evidence guard",
+      "ms": null,
+      "note": "nothing dropped"
+     }
+    ],
+    "specialists": [
+     {
+      "name": "memory",
+      "ran": true,
+      "ms": 1900,
+      "tokens": 420,
+      "findings": []
+     },
+     {
+      "name": "assistance",
+      "ran": false,
+      "ms": null,
+      "tokens": null,
+      "findings": []
+     },
+     {
+      "name": "consistency",
+      "ran": false,
+      "ms": null,
+      "tokens": null,
+      "findings": []
+     }
+    ],
+    "checker": {
+     "ran": true,
+     "label": "consistent",
+     "failed": false
+    },
+    "findings": [],
+    "drops": [],
+    "abstained": {
+     "yes": true,
+     "why": [
+      "memory found nothing relevant"
+     ]
+    },
+    "notes": []
+   }
+  }
+ },
+ "note": "Invented meeting, scripted cards, illustrative timings. No model ran."
+}

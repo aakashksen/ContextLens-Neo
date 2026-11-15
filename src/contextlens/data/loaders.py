@@ -63,11 +63,14 @@ def _gold_longmemeval(root: Path) -> list[Scenario]:
     return out
 
 
-def _load_ami(root: Path) -> list[Conversation]:
+def _load_ami(root: Path, only: set[str] | None = None) -> list[Conversation]:
+    """`only` limits the read to those meetings (the meeting room loads one at a time)."""
     base = root / "ami"
     meetings: dict[str, list[tuple[int, int, str, str]]] = {}
     for seg_path in sorted((base / "segments").glob("*.segments.xml")):
         meeting, speaker = seg_path.name.split(".")[:2]
+        if only is not None and meeting not in only:
+            continue
         # Segments may start or end on non-word elements (disfmarker, gap, vocalsound), so index every element.
         items = list(ET.parse(base / "words" / f"{meeting}.{speaker}.words.xml").getroot())
         index = {el.get(_NITE + "id"): i for i, el in enumerate(items)}
