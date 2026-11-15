@@ -274,3 +274,35 @@ def test_graded_files_are_checked_and_summarised(tmp_path):
         path.write_text(json.dumps(bad), encoding="utf-8")
         with pytest.raises(ValueError, match=msg):
             G.read_graded(tmp_path, key)
+
+
+# ---------------------------------------------------------------- memory cache and prebuild
+
+def test_memory_key_ignores_commit_and_case_id_but_not_memory_settings():
+    a = _sc("qmsum_long", [1], q="q?")
+    b = a.model_copy(update={"id": "other", "conversation": a.conversation.model_copy(update={"id": "other"})})
+    k = L.memory_key(a, 40, "m", 16384)
+    assert k == L.memory_key(b, 40, "m", 16384)  # another question on the same meeting shares it
+    assert k != L.memory_key(a, 20, "m", 16384) and k != L.memory_key(a, 40, "m", 4096) and k != L.memory_key(a, 40, "x", 16384)
+    assert k != L.memory_key(a.model_copy(update={"request": a.request.model_copy(update={"as_of_seq": 5})}), 40, "m", 16384)
+
+
+def test_build_memory_is_cached_by_content_and_logs_chunks(tmp_path):
+    from contextlens.llm.client import FakeLLM
+
+    class Boom:
+        def complete(self, *a, **k):
+            raise RuntimeError("no model")
+
+    sc = _sc("qmsum_long", [1], q="q?", n=90)
+    seen = []
+    items, info = L.build_memory(sc, Boom(), 40, tmp_path, 16384, lambda n, of, s: seen.append((n, of)))
+    assert seen == [(1, 3), (2, 3), (3, 3)] and info["failed_chunks"] == 3 and info["cached"] is False
+    again, info2 = L.build_memory(sc, FakeLLM([]), 40, tmp_path, 16384)  # a later commit or case id: found by content
+    assert info2["cached"] is True and again == items
+    assert L._cached(tmp_path, L.memory_key(sc, 40, L.production.MODEL, 16384))
+
+
+def test_config_sets_memory_context():
+    m = L.load_config(ROOT)["memory"]
+    assert m["chunk_turns"] == 40 and m["num_ctx"] >= 12288

@@ -174,8 +174,9 @@ def unload_ollama(model: str, base_url: str = "http://127.0.0.1:11434") -> bool:
 
 
 class OllamaClient(_Base):
-    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434", keep_alive: str | None = None):
-        self.model, self.base_url, self.keep_alive = model, base_url.rstrip("/"), keep_alive
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434", keep_alive: str | None = None,
+                 num_ctx: int | None = None):
+        self.model, self.base_url, self.keep_alive, self.num_ctx = model, base_url.rstrip("/"), keep_alive, num_ctx
 
     def load(self, timeout_s: float = 300.0) -> None:
         """Loads the model into memory without a prompt (an empty message list does that)."""
@@ -194,6 +195,8 @@ class OllamaClient(_Base):
         }
         if self.keep_alive:
             payload["keep_alive"] = self.keep_alive
+        if self.num_ctx:
+            payload["options"]["num_ctx"] = self.num_ctx
         if schema is not None:
             payload["format"] = schema.model_json_schema()
         t0 = time.perf_counter()

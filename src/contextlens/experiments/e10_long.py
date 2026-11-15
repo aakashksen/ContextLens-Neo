@@ -21,6 +21,7 @@ import os
 import sys
 import time
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -125,18 +126,24 @@ def _store(sc: Scenario) -> InMemoryTranscriptStore:
     return store
 
 
-def memory_key(sc: Scenario, chunk: int, model: str) -> str:
-    h = hashlib.sha256(f"{model}|{chunk}|{sc.request.as_of_seq}".encode())
+def memory_key(sc: Scenario, chunk: int, model: str, num_ctx: int | None = None) -> str:
+    """Meeting words plus everything that shapes the notes (model, chunking, context size, extraction prompt and token cap).
+    Not the commit and not the case id, so memory built now survives later commits and is shared by questions on one meeting."""
+    from contextlens.memory import extract as X
+
+    prompt = hashlib.sha256(f"{X.SYSTEM}|{X.EXTRACT_MAX_TOKENS}".encode()).hexdigest()[:16]
+    h = hashlib.sha256(f"{model}|{chunk}|{num_ctx}|{prompt}|{sc.request.as_of_seq}".encode())
     for t in sc.conversation.turns:
         h.update(f"\x1f{t.speaker}\x1e{t.text}".encode())
     return h.hexdigest()
 
 
-def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path) -> tuple[list[MemoryItem], dict[str, Any]]:
+def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path, num_ctx: int | None = None,
+                 on_chunk: Callable[[int, int, float], None] | None = None) -> tuple[list[MemoryItem], dict[str, Any]]:
     """Memory built the way the live stream builds it: the extractor reads the turns in chunks, each chunk seeing what is already
     known. Cached on disk by the transcript's words (QMSum questions on one meeting share it); a failed chunk is skipped and counted.
     Building is outside every card's timing, as in the product, where it runs in the background."""
-    key = memory_key(sc, chunk, production.MODEL)
+    key = memory_key(sc, chunk, production.MODEL, num_ctx)
     path, cid = root / MEMORY_REL, sc.conversation.id
     if path.is_file():
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -150,17 +157,69 @@ def build_memory(sc: Scenario, llm: LLMClient, chunk: int, root: Path) -> tuple[
     turns = _store(sc).turns(cid, sc.request.as_of_seq)
     extractor, items, failed, t0 = MemoryExtractor(llm), [], 0, time.perf_counter()
     chunks = [turns[i:i + chunk] for i in range(0, len(turns), chunk)]
-    for part in chunks:
+    for n, part in enumerate(chunks, 1):
+        t1 = time.perf_counter()
         try:
-            new = extractor.update(part, items)
+            items.extend(extractor.update(part, items))
         except Exception as exc:
             failed += 1
             print(f"memory chunk failed for {sc.id}: {type(exc).__name__}", file=sys.stderr)
-            continue
-        items.extend(new)
+        if on_chunk:
+            on_chunk(n, len(chunks), time.perf_counter() - t1)
     blob = json.dumps([i.model_dump(mode="json") for i in items]).replace(cid, "\x00CID\x00")
     _append(path, json.dumps({"key": key, "items": blob, "failed_chunks": failed, "chunks": len(chunks)}))
     return items, {"cached": False, "ms": (time.perf_counter() - t0) * 1000, "failed_chunks": failed, "chunks": len(chunks)}
+
+
+def memory_client(cfg: dict[str, Any]) -> OllamaClient:
+    """The writer with the context size the memory prompts need (the default of 4096 tokens cuts the biggest QMSum chunks)."""
+    return OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE, num_ctx=cfg["memory"].get("num_ctx"))
+
+
+def _cached(root: Path, key: str) -> bool:
+    path = root / MEMORY_REL
+    return path.is_file() and f'"key": "{key}"' in path.read_text(encoding="utf-8")
+
+
+def prebuild(root: Path, splits: list[str], say: Callable[[str], None] = print) -> dict[str, Any]:
+    """Memory only, no cards: build and cache the notes of every case of the splits, in order. Progress goes to
+    results/local/e10/prebuild-<splits>.log (chunks done of total, seconds per chunk)."""
+    cfg = load_config(root)
+    check_pins(cfg, root)
+    chunk, num_ctx, llm = cfg["memory"]["chunk_turns"], cfg["memory"].get("num_ctx"), memory_client(cfg)
+    log_path = root / LOCAL_DIR / f"prebuild-{'-'.join(splits)}.log"
+
+    def log(text: str) -> None:
+        _append(log_path, f"{datetime.now().strftime('%H:%M:%S')} {text}")
+        say(text)
+
+    work, seen = [], set()
+    for sp in splits:
+        scs, _, _ = e10_cases.load_cases(sp, root)
+        for sc in scs:
+            k = memory_key(sc, chunk, production.MODEL, num_ctx)
+            if k not in seen:
+                seen.add(k)
+                work.append((sp, sc, k))
+    todo = [(sp, sc) for sp, sc, k in work if not _cached(root, k)]
+    total = sum(-(-len(_store(sc).turns(sc.conversation.id, sc.request.as_of_seq)) // chunk) for _, sc in todo)
+    log(f"prebuild {splits}: {len(work)} distinct transcripts, {len(work) - len(todo)} cached, {len(todo)} to build, "
+        f"{total} chunks, chunk_turns={chunk}, num_ctx={num_ctx}")
+    done, secs, t0 = 0, 0.0, time.perf_counter()
+    try:
+        for i, (sp, sc) in enumerate(todo, 1):
+            def on_chunk(n: int, of: int, s: float, sc=sc, sp=sp, i=i) -> None:
+                nonlocal done, secs
+                done, secs = done + 1, secs + s
+                log(f"{sp} {sc.id} ({i}/{len(todo)}) chunk {n}/{of} {s:.1f}s | total {done}/{total} chunks, "
+                    f"{secs / done:.1f} s/chunk, eta {(total - done) * secs / done / 60:.0f} min")
+
+            build_memory(sc, llm, chunk, root, num_ctx, on_chunk)
+    finally:
+        if os.environ.get("E10_KEEP_LOADED") != "1":
+            production.unload_local_models()
+    log(f"prebuild done: {done} chunks in {(time.perf_counter() - t0) / 60:.1f} min")
+    return {"chunks": done, "seconds": time.perf_counter() - t0}
 
 
 # ------------------------------------------------------------------ one card
@@ -218,6 +277,7 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
 
     embedder = EmbedCache(Embedder(base_url=production.OLLAMA_URL, model=production.EMBED_MODEL, keep_alive=production.KEEP_ALIVE))
     writer = OllamaClient(production.MODEL, production.OLLAMA_URL, keep_alive=production.KEEP_ALIVE)
+    mem_llm, num_ctx = memory_client(cfg), cfg["memory"].get("num_ctx")
     chunk, timing = cfg["memory"]["chunk_turns"], {"memory_ms": 0.0, "memory_failed_chunks": 0, "memory_cases_built": 0, "cards_ms": 0.0}
     t_start = time.perf_counter()
     done = Counter()
@@ -226,7 +286,7 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
             todo = [a for a in arms if sc.id not in have.get(a, {})]
             if not todo:
                 continue
-            items, info = build_memory(sc, writer, chunk, root)
+            items, info = build_memory(sc, mem_llm, chunk, root, num_ctx)
             timing["memory_ms"] += info["ms"]
             timing["memory_failed_chunks"] += info["failed_chunks"]
             timing["memory_cases_built"] += not info["cached"]
@@ -304,8 +364,8 @@ def write_report(root: Path, split: str, arms: list[str], scs: list[Scenario], m
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["run", "report"])
-    ap.add_argument("--split", choices=["dev", "test"], required=True)
+    ap.add_argument("command", choices=["run", "report", "prebuild"])
+    ap.add_argument("--split", required=True, help="dev or test; prebuild also takes a list in order, e.g. test,dev")
     ap.add_argument("--arms", help="comma list; default: the arms of configs/e10.json")
     ap.add_argument("--smoke", action="store_true", help="a few cases of each type; the record goes to git-ignored results/local")
     ap.add_argument("--limit", type=int)
@@ -316,6 +376,11 @@ def main(argv: list[str] | None = None) -> int:
     arms = args.arms.split(",") if args.arms else cfg["arms"]
     if not set(arms) <= set(cfg["arms"]):
         ap.error(f"arms must come from configs/e10.json: {cfg['arms']}")
+    if args.command == "prebuild":
+        prebuild(ROOT, args.split.split(","))
+        return 0
+    if args.split not in ("dev", "test"):
+        ap.error("--split must be dev or test here")
     if args.command == "run":
         if not args.run_conditions.strip() and not args.smoke:
             ap.error("--run-conditions is required: say what else was running while latency was measured")
