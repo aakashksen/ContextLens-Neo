@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop app, ContextLens Neo</title>
+<meta name="description" content="A tray app with a global hotkey and an always-on-top card. Everything runs on your machine.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html" aria-current="page">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--screen">
+    <div class="container hero__grid">
+      <div>
+        <h1>A copilot in your tray</h1>
+        <p class="lead">Press a hotkey in any call. The card appears on top.</p>
+        <div class="actions"><a class="btn btn--primary" href="#install">Install it</a><a class="btn" href="room.html">Watch it work</a></div>
+        <span class="chip status">In development on feat/desktop</span>
+      </div>
+      <div class="slotbox" data-slot="desktop-shot-main" data-alt="The heads-up card on top of a video call"><strong>Desktop app</strong><span>Screenshot goes here</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="what" aria-labelledby="what-h">
+    <div class="container">
+      <div class="head"><h2 id="what-h">Always there. Never in the way.</h2></div>
+      <ul class="panels strip">
+        <li><h3>Tray</h3><p>Sits quietly until you need it.</p></li>
+        <li><h3>Hotkey</h3><p>One global key, over any app.</p></li>
+        <li><h3>Heads-up card</h3><p>Always on top, short, with its sources.</p></li>
+        <li><h3>Both sides</h3><p>Hears your mic and the call.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--band" id="privacy" aria-labelledby="privacy-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="privacy-h">Nothing leaves your machine</h2>
+        <p>Every part of the pipeline runs on this computer.</p>
+      </div>
+      <ul class="panels strip">
+        <li><h3>Speech</h3><p>whisper.cpp in a local container.</p></li>
+        <li><h3>Model</h3><p>A 4B model, served by Ollama on your GPU.</p></li>
+        <li><h3>Memory</h3><p>PostgreSQL on this computer.</p></li>
+        <li><h3>Network</h3><p>No transcript is sent anywhere.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="install" aria-labelledby="install-h">
+    <div class="container">
+      <div class="head"><h2 id="install-h">Install</h2></div>
+      <ol class="install">
+        <li><div><h3>Get the code</h3><pre class="code">git clone https://github.com/aakashksen/ContextLens-Neo</pre></div></li>
+        <li><div><h3>Pull the models</h3><pre class="code">ollama pull qwen3.5:4b-q4_K_M
+ollama pull nomic-embed-text</pre></div></li>
+        <li><div><h3>Start speech, memory and the backend</h3><pre class="code">py -3.12 tools/run_everything.py</pre></div></li>
+        <li><div><h3>Build the app</h3><pre class="code">cd clients/desktop
+npm install
+npm run dist</pre></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--band" id="requirements" aria-labelledby="req-h">
+    <div class="container">
+      <div class="head"><h2 id="req-h">Requirements</h2></div>
+      <dl class="stack">
+        <div><dt>Ollama</dt><dd>Serves the language model and the embeddings.</dd><dd class="measured path">qwen3.5:4b-q4_K_M</dd></div>
+        <div><dt>Docker</dt><dd>Runs the speech service and PostgreSQL.</dd><dd class="measured path">docker compose</dd></div>
+        <div><dt>A GPU</dt><dd>8 GB of video memory for the local model.</dd><dd class="measured path">8 GB</dd></div>
+        <div><dt>Node.js</dt><dd>Builds the desktop app.</dd><dd class="measured path">npm run dist</dd></div>
+      </dl>
+      <div class="cta"><a class="btn btn--primary" href="room.html">Watch it work</a><a class="btn" href="specs.html">How it’s built</a></div>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="live.html">Scripted demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script>
+/* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */
+window.hallmarkSlots = (m) => { for (const [k, v] of Object.entries(m)) { const s = document.querySelector(`[data-slot="${k}"]`); if (!s) continue; const im = new Image(); im.src = typeof v === 'string' ? v : v.src; im.alt = (typeof v === 'object' && v.alt) || s.dataset.alt || ''; s.querySelectorAll(':scope > img').forEach((o) => o.remove()); s.prepend(im); } };
+document.querySelectorAll('[data-slot] img').forEach((i) => { if (i.complete && !i.naturalWidth) i.remove(); else i.addEventListener('error', () => i.remove(), { once: true }); });
+</script>
+</body>
+</html>
