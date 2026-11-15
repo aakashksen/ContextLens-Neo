@@ -16,6 +16,7 @@ from contextlens.agents.consistency_check import PromptedChecker
 from contextlens.agents.cascade import CascadeChecker
 from contextlens.agents.graph import TeamAssistant
 from contextlens.agents.precheck import prepare
+from contextlens.agents.rag import RagTeam
 from contextlens.agents.routed import RoutedTeam
 from contextlens.agents.single import SingleAgent
 from contextlens.agents.tools import Tools
@@ -45,7 +46,7 @@ SPECIALIST_DEADLINE_S = 5.5  # the value the dropped sub-deadline fix was measur
 TEAM_SETTINGS = {"prefetch_memory": False, "specialist_deadline_s": None}
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
-ASSISTANTS = ("team", "single", "team_shipping_changed", "team_routed", "single_plus")
+ASSISTANTS = ("team", "single", "team_shipping_changed", "team_routed", "single_plus", "team_rag", "team_rag_nomem")
 DEFAULT_ASSISTANT = "team_routed"  # E10: best long-meeting results, the only arm that catches conflicts
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
@@ -153,9 +154,38 @@ class _RoutedPerPress(TeamPerPress):
         return RoutedTeam(self.llms["assistance"], tools, PROMPT_VERSION, self.deadline_s).answer(req, ctx)
 
 
+_SCORER: dict[str, Any] = {}
+
+
+def rag_scorer():
+    """One cross-encoder for every press (it loads on first use)."""
+    if "scorer" not in _SCORER:
+        from contextlens.retrieval.rag_rerank import CrossScorer
+
+        _SCORER["scorer"] = CrossScorer()
+    return _SCORER["scorer"]
+
+
+class _RagPerPress(TeamPerPress):
+    """`team_rag`: see agents/rag.py. Topic questions also use the prebuilt memory notes."""
+
+    use_memory = True
+
+    def answer(self, req: ButtonRequest, ctx: Context) -> Card:
+        tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id,
+                      cascade_checker(self.llms["consistency"]))
+        return RagTeam(self.llms["assistance"], tools, rag_scorer(), self.deadline_s, self.use_memory).answer(req, ctx)
+
+
+class _RagNoMemPerPress(_RagPerPress):
+    """`team_rag_nomem`: the same without memory notes (the ablation)."""
+
+    use_memory = False
+
+
 PER_PRESS: dict[str, type[TeamPerPress]] = {
     "team": TeamPerPress, "single": _SinglePerPress, "team_shipping_changed": _TeamChangedPerPress,
-    "team_routed": _RoutedPerPress, "single_plus": _SinglePlusPerPress,
+    "team_routed": _RoutedPerPress, "single_plus": _SinglePlusPerPress, "team_rag": _RagPerPress, "team_rag_nomem": _RagNoMemPerPress,
 }
 
 
