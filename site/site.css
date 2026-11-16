@@ -6,8 +6,8 @@
 /* Hallmark · waive 28b · video[data-video] hidden in the meeting room · it shows only when a meeting has video, so there is no frame to use as a poster */
 /* Hallmark · waive 26b · no :disabled styling · the pages have no control that can be disabled, a press before any turn answers in the card */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: S, the pages are text-led, so each block carries its real artifact: a turn, a card, a record id */
-@import url("./tokens.css?v=4");
-@import url("./base.css?v=4");
+@import url("./tokens.css?v=5");
+@import url("./base.css?v=5");
 
 .nav { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: var(--color-paper); border-bottom: var(--rule-hair) solid var(--color-rule); }
 .nav__in { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-lg); min-height: 64px; }
@@ -457,3 +457,10 @@ ul.facts { margin: 0; padding: 0; }
 kbd { display: inline-block; padding: 0 6px; border: var(--rule-hair) solid var(--color-rule-2); border-bottom-width: 2px; border-radius: 4px; background: var(--color-paper-2); color: var(--color-ink); font-family: var(--font-outlier); font-size: 0.8em; line-height: 1.5; }
 [data-card] .turns li { grid-template-columns: 2.5rem 6.5rem minmax(0, 1fr); }
 @media (max-width: 40rem) { .themes { right: var(--space-xs); bottom: var(--space-xs); } .themes button { width: 22px; height: 22px; } }
+
+/* the glasses mark next to the name */
+.wordmark { display: inline-flex; gap: var(--space-xs); align-items: center; }
+.wordmark__mark { width: 36px; height: 36px; flex: none; }
+.wm-line { fill: none; stroke: var(--color-ink); stroke-width: 4.5; stroke-linecap: round; }
+.wm-acc { fill: var(--color-accent); }
+.wm-dim { fill: var(--color-ink); opacity: 0.55; }
