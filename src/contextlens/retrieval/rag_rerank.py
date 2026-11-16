@@ -17,6 +17,7 @@ DEFAULT_MODEL = "BAAI/bge-reranker-v2-m3"
 NEEDS_MB = 1500  # a budget, not a measurement
 MAX_CHARS = 2400  # of a cleaned turn handed to the model, clipped around the sentences that match the query
 MAX_TOKENS = 512  # what the model reads of each (query, turn) pair
+CPU_MAX = 12  # candidates scored when the model runs on CPU (no GPU, or not enough memory on it)
 
 
 class CrossScorer:
@@ -37,13 +38,31 @@ class CrossScorer:
             model.model.half()
         return model
 
+    def warm(self) -> None:
+        """Load the model now (the backend's warm-up), so no press pays for it."""
+        with self._lock:
+            self._ensure()
+
+    def _ensure(self) -> None:
+        if self._model is None:
+            self._model = self._loader()
+            self.device = loaded_device(self._model)
+
     def score(self, query: str, turns: list[Turn]) -> list[float]:
+        """Scores in `turns` order. One call at a time: a call that finds another running (a concurrent press, or one
+        abandoned at its deadline) raises at once, and the caller keeps the hybrid order, so scorer threads never pile
+        up. On CPU only the first CPU_MAX turns are scored (the rest score below them), to stay near the deadline."""
         if not turns:
             return []
-        with self._lock:
-            if self._model is None:
-                self._model = self._loader()
-                self.device = loaded_device(self._model)
-        focus = words(query)
-        pairs = [(query, clip_for_prompt(t.text, focus, self.max_chars)) for t in turns]
-        return [float(s) for s in self._model.predict(pairs, batch_size=25, show_progress_bar=False)]
+        if not self._lock.acquire(blocking=False):
+            raise RuntimeError("the reranker is busy")
+        try:
+            self._ensure()
+            focus = words(query)
+            n = len(turns) if self.device.startswith("cuda") else min(len(turns), CPU_MAX)
+            pairs = [(query, clip_for_prompt(t.text, focus, self.max_chars)) for t in turns[:n]]
+            scores = [float(s) for s in self._model.predict(pairs, batch_size=25, show_progress_bar=False)]
+        finally:
+            self._lock.release()
+        floor = min(scores, default=0.0) - 1.0
+        return scores + [floor] * (len(turns) - n)

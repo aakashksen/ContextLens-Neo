@@ -11,6 +11,8 @@ Today's path is approximated by its first stage alone: P(contradiction) >= the c
 confirmed contradiction (the prompted second stage is not called, so this is the best the cascade could do), otherwise the
 trained model's best non-contradiction label.
 """
+import json
+import os
 import statistics
 import sys
 import time
@@ -24,7 +26,10 @@ from contextlens.memory.store import InMemoryTranscriptStore
 from contextlens.retrieval.hybrid import Retriever
 from contextlens.schemas import Scenario, Turn
 
-CHECKER = "<local path>"
+ROOT = Path(__file__).resolve().parents[3]
+# the shipped checkpoint (configs/cascade.json), or CONTEXTLENS_CHECKER_DIR, as production uses
+CHECKER = os.environ.get("CONTEXTLENS_CHECKER_DIR") or str(
+    ROOT / json.loads((ROOT / "configs" / "cascade.json").read_text(encoding="utf-8"))["trained_checkpoint"])
 MODERN = "tasksource/ModernBERT-base-nli"
 XSMALL = "cross-encoder/nli-deberta-v3-xsmall"
 FLAG_THRESHOLD = 0.95  # configs/cascade.json

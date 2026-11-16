@@ -5,6 +5,7 @@ can swap in fakes; `create_production_app` passes the real ones. Live paths use 
 import json
 import logging
 import os
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,9 +79,13 @@ def unload_local_models() -> None:
         unload_ollama(model, OLLAMA_URL)
 
 
-def local_warmup(llm: OllamaClient, embedder: Embedder, telemetry: Telemetry | None = None) -> Warmup:
+def local_warmup(llm: OllamaClient, embedder: Embedder, telemetry: Telemetry | None = None,
+                 assistant: str | None = None) -> Warmup:
+    loaders = {"chat": llm.load, "embed": lambda: embedder.embed(["warm up"])}
+    if (assistant or "").startswith("team_rag"):  # the reranker and the conflict finder load here, not in a press
+        loaders["rag"] = preload_rag
     return Warmup(
-        {"chat": llm.load, "embed": lambda: embedder.embed(["warm up"])},
+        loaders,
         on_loaded=telemetry.record_warmup if telemetry else None,
     )
 
@@ -171,12 +176,16 @@ PAIRING_DEVICE = os.environ.get("CONTEXTLENS_PAIRING_DEVICE", "cpu")
 NLI_THRESHOLD = 0.7  # chosen on E10 dev (consistency/pairing_eval.py): recall 36/36, false alerts 0/23
 
 
-def conflict_finder(tools: Tools):
-    """The pairwise conflict finder (consistency/pairing.py) for one press: the trained checker and the NLI model score
-    the latest turn against each likely earlier turn. None if the models do not load; precheck's checker is used then."""
+def load_pairing() -> None:
+    """Load the conflict finder's models once (the backend's warm-up and the eval's warm-up call this; a press never
+    does). A failure is remembered, and presses use the cascade checker instead."""
     from contextlens.consistency import pairing
 
-    if "pairing" not in _TRAINED:
+    if "pairing" in _TRAINED:
+        return
+    with _PAIRING_LOAD:
+        if "pairing" in _TRAINED:
+            return
         try:
             root = Path(__file__).resolve().parents[3]
             cfg = json.loads((root / "configs" / "cascade.json").read_text(encoding="utf-8"))
@@ -188,7 +197,21 @@ def conflict_finder(tools: Tools):
         except Exception as exc:
             logging.getLogger(__name__).warning("conflict finder unavailable, using the cascade checker: %s", exc)
             _TRAINED["pairing"] = None
-    models = _TRAINED["pairing"]
+
+
+def preload_rag() -> None:
+    """Everything `team_rag` loads besides Ollama's models: the reranker and the conflict finder."""
+    rag_scorer().warm()
+    load_pairing()
+
+
+def conflict_finder(tools: Tools):
+    """The pairwise conflict finder (consistency/pairing.py) for one press: the trained checker and the NLI model score
+    the latest turn against each likely earlier turn. None until its models are loaded (or if they failed to load);
+    precheck's checker is used then. It never loads models inside a press."""
+    from contextlens.consistency import pairing
+
+    models = _TRAINED.get("pairing")
     if models is None:
         return None
     trained, nlis = models
@@ -202,10 +225,11 @@ class _RagPerPress(TeamPerPress):
     use_memory = True
 
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
-        tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id,
-                      cascade_checker(self.llms["consistency"]))
-        return RagTeam(self.llms["assistance"], tools, rag_scorer(), self.deadline_s, self.use_memory,
-                       conflict_finder(tools)).answer(req, ctx)
+        tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id)
+        finder = conflict_finder(tools)
+        if finder is None:  # the cascade checker only when the finder is not there (no second checker copy on the GPU)
+            tools.checker = cascade_checker(self.llms["consistency"])
+        return RagTeam(self.llms["assistance"], tools, rag_scorer(), self.deadline_s, self.use_memory, finder).answer(req, ctx)
 
 
 class _RagNoMemPerPress(_RagPerPress):
@@ -229,6 +253,7 @@ def build_assistant(name: str, store: TranscriptStore, retriever: Retriever, mem
 
 
 _TRAINED: dict[str, Any] = {}
+_PAIRING_LOAD = threading.Lock()
 
 
 def cascade_checker(llm: LLMClient):
@@ -295,7 +320,7 @@ def create_production_app() -> FastAPI:
     serve_metrics_if_asked(telemetry)
     prod = build_services(
         store=PostgresTranscriptStore(database_url(), embedder), embedder=embedder, llms=llms,
-        telemetry=telemetry, assistant=assistant_kind(), warmup=local_warmup(llms["memory"], embedder, telemetry),
+        telemetry=telemetry, assistant=assistant_kind(), warmup=local_warmup(llms["memory"], embedder, telemetry, assistant_kind()),
         background_llm=llms["memory"], speech=GrpcSpeech(os.environ.get("SPEECH_ADDR", "localhost:50051")),
         make_backend=SharedSpeakerModel(PyannoteBackend), unload=unload_local_models,
     )  # fmt: skip

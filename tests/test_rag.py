@@ -268,3 +268,46 @@ def test_a_topic_question_gets_more_room_and_asks_for_each_point():
     team, llm, ctx = build(["Five thousand [1]."])
     team.answer(req(Q), ctx)
     assert rag.TOPIC_HINT.strip() not in llm.calls[0][0]["content"]
+
+
+def test_no_earlier_turn_abstains_instead_of_raising():
+    team, llm, ctx = build([], turns=[turn(1, "Hello everyone, let's start", "Ravi")])
+    card = team.answer(req(None, as_of=1), ctx)
+    assert card.status == "abstained" and llm.calls == []
+
+
+def test_the_reranker_runs_one_call_at_a_time_and_caps_cpu_work():
+    from contextlens.retrieval.rag_rerank import CPU_MAX, CrossScorer
+
+    class Model:
+        def predict(self, pairs, **kw):
+            return [float(len(pairs) - i) for i in range(len(pairs))]
+
+    s = CrossScorer(loader=Model)
+    s._lock.acquire()
+    try:
+        with pytest.raises(RuntimeError, match="busy"):
+            s.score("q", TURNS)
+    finally:
+        s._lock.release()
+    s.device = "cpu"
+    many = TURNS * 3
+    scores = s.score("q", many)
+    assert len(scores) == len(many) and max(scores[CPU_MAX:]) < min(scores[:CPU_MAX])
+
+
+def test_a_press_never_loads_the_conflict_models_and_warm_up_does(monkeypatch):
+    from contextlens.api import production
+
+    monkeypatch.delitem(production._TRAINED, "pairing", raising=False)
+    assert production.conflict_finder(None) is None  # not loaded yet: the cascade checker is used
+    calls = []
+    monkeypatch.setattr(production, "preload_rag", lambda: calls.append(1))
+    w = production.local_warmup(type("L", (), {"load": lambda self: None})(), type("E", (), {"embed": lambda self, t: []})(),
+                                assistant="team_rag")
+    assert set(w.loaders) == {"chat", "embed", "rag"}
+    w.loaders["rag"]()
+    assert calls == [1]
+    w2 = production.local_warmup(type("L", (), {"load": lambda self: None})(), type("E", (), {"embed": lambda self, t: []})(),
+                                 assistant="team_routed")
+    assert "rag" not in w2.loaders

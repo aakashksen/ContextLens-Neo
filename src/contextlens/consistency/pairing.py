@@ -8,6 +8,7 @@ and search-rank boosts, and every top candidate gets its own pairwise call (one 
 `find_conflict(...)` is the entry point. It returns what `precheck.prepare` stores: `(label, confidence, earlier_ids)`.
 """
 import math
+import threading
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -213,10 +214,17 @@ def decide(pairs: list[PairScore], rule: Rule, statement: Turn | None = None) ->
 # ------------------------------------------------------------------ entry point
 
 _MODELS: dict[Any, Any] = {}
+_SCORING = threading.Lock()  # one find_conflict at a time: the models and their tokenizers are shared
+_LOADING = threading.Lock()
 
 
 def load_models(checker_dir: str, nli_names: tuple[str, ...] = (), device: str | None = None) -> tuple[Any, list[NLIModel]]:
     """The trained checker and the named NLI models, loaded once per process (on `device`, default: the GPU if it fits)."""
+    with _LOADING:
+        return _load_models(checker_dir, nli_names, device)
+
+
+def _load_models(checker_dir: str, nli_names: tuple[str, ...], device: str | None) -> tuple[Any, list[NLIModel]]:
     from pathlib import Path
 
     from contextlens.consistency.model import TrainedChecker
@@ -230,6 +238,24 @@ def load_models(checker_dir: str, nli_names: tuple[str, ...] = (), device: str |
 
 
 def find_conflict(tools: Any, statement_turn: Turn, earlier_turns: list[Turn], *, trained: Any,
+                  nlis: list[NLIModel] | None = None, rule: Rule = Rule(), top_n: int = 3,
+                  search_k: int = 8) -> tuple[Label, float, list[str]]:
+    """(label, confidence, earlier_turn_ids) for `statement_turn` against `earlier_turns`.
+
+    `tools` is anything with `search_transcript(query, k)` returning scored turns (agents.tools.Tools), or None: turns
+    the search finds for the statement's key content are added to the pool and boosted. `earlier_turn_ids` holds the one
+    turn the verdict rests on when a conflict is reported (the pair to cite), otherwise it is empty. A failed search is
+    skipped; model failures propagate (the caller, like precheck, records them and flags nothing)."""
+    if not _SCORING.acquire(blocking=False):
+        raise RuntimeError("the conflict finder is busy")  # precheck records it and flags nothing
+    try:
+        return _find_conflict(tools, statement_turn, earlier_turns, trained=trained, nlis=nlis, rule=rule, top_n=top_n,
+                              search_k=search_k)
+    finally:
+        _SCORING.release()
+
+
+def _find_conflict(tools: Any, statement_turn: Turn, earlier_turns: list[Turn], *, trained: Any,
                   nlis: list[NLIModel] | None = None, rule: Rule = Rule(), top_n: int = 3,
                   search_k: int = 8) -> tuple[Label, float, list[str]]:
     """(label, confidence, earlier_turn_ids) for `statement_turn` against `earlier_turns`.

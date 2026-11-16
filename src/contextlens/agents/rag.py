@@ -268,6 +268,9 @@ class RagTeam:
                 notes.append(f"memory failed: {type(exc).__name__}")
         if flagged and not any(e.turn.id == latest.id for e in evid):
             evid.append(Evidence(len(evid) + 1, latest, 1.0, hit=False))
+        if not evid:  # no earlier turn to stand on (a first press, or the search found nothing): say so, never raise
+            ctx.stage_ms["rag_no_evidence"] = 1
+            return self._done(abstained_card([], "nothing relevant in the transcript"), ctx, req, start, run, end, notes)
         pinned = [t for t in by_seq.values() if prep.pinned and t.id in prep.earlier_ids] if flagged else []
         for t in pinned:  # the earlier turn the conflict rests on is shown and cited
             if not any(e.turn.id == t.id for e in evid):

@@ -373,6 +373,8 @@ def warm_up(cfg: dict[str, Any], arms: list[str], sc: Scenario | list[Scenario],
     directory = Path(cfg["checker_dir"])
     os.environ.setdefault("CONTEXTLENS_CHECKER_DIR", str(directory))
     cases = sc if isinstance(sc, list) else [sc]
+    if any(a.startswith("team_rag") for a in arms):
+        production.preload_rag()
     for arm in arms:
         for one in cases:  # two presses: a first press on a fresh model can still run past the deadline (E11 smoke, 2026-11-16)
             t0 = time.perf_counter()

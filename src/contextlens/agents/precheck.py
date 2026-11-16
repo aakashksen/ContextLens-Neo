@@ -15,6 +15,7 @@ from contextlens.schemas import ButtonRequest, ConsistencyLabel, Turn
 Finder = Callable[[Turn, list[Turn]], tuple[ConsistencyLabel, float, list[str]]]
 
 HITS_K = 8
+FINDER_CAP_S = 2.0  # the pairwise finder takes 0.2-0.5 s on CPU (E11); past this the press goes on without a verdict
 EARLIER_CAP = 12  # earlier turns the checker sees: every search hit first, then the newest window turns
 
 CONFLICT = (
@@ -74,7 +75,8 @@ def prepare(tools: Tools, req: ButtonRequest, turns: list[Turn], end: float, fin
     if finder is not None:
         t0 = time.perf_counter()
         try:
-            label, conf, ids = _bounded(functools.partial(finder, statement, window), max(end - t0, 0.1) + MARGIN_S)
+            budget = min(max(end - t0, 0.1), FINDER_CAP_S)  # leave the writer its time
+            label, conf, ids = _bounded(functools.partial(finder, statement, window), budget + MARGIN_S)
             prep.label, prep.confidence, prep.earlier_ids, prep.pinned = label, conf, list(ids), True
         except Exception as exc:  # fail safe: no verdict, so nothing is flagged
             prep.notes.append(f"checker failed: {type(exc).__name__}")
