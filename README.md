@@ -8,7 +8,7 @@ Press a button in the middle of a conversation and get one short card built from
 
 ![Python](https://img.shields.io/badge/python-%3E%3D3.12-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-WebSocket-05998B?logo=fastapi&logoColor=white) ![LangGraph](https://img.shields.io/badge/LangGraph-agents-1C3C3C) ![C++](https://img.shields.io/badge/C%2B%2B-whisper.cpp-00599C?logo=cplusplus&logoColor=white) ![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-[Website](site/index.html) · [Walkthrough](site/tour.html) · [How it's built](site/specs.html) · [Live demo](site/live.html) · [Report](docs/REPORT.md)
+[Website](site/index.html) · [Watch it work](site/room.html) · [Desktop](site/desktop.html) · [Glasses](site/glasses.html) · [How it's built](site/specs.html) · [Download](site/download.html) · [Report](docs/REPORT.md)
 
 </div>
 
@@ -213,15 +213,18 @@ flowchart LR
 
 ## Website
 
-`site/` is a small static website: a home page, a walkthrough of one invented meeting in seven steps, an architecture page with the experiments and their failures, and a live demo that runs entirely in the browser. The demo is a scripted replay of two invented meetings; press a question and a card appears with the turns it cites. It needs no server and no network. The domain is not set yet, so there is no public address.
+`site/` is a small static website: a home page, pages for the desktop app and the smart-glasses client, an 80-second demo meeting that runs in the browser (cards appear on their own at marked moments, or press Space), a download page with both setups, a step-by-step walkthrough of one press, and an architecture page with the experiments. It needs no server and no build step.
 
 ```mermaid
 flowchart LR
-    H["index.html"] --> T["tour.html"]
+    H["index.html"] --> R["room.html<br/>the demo"]
+    H --> D["desktop.html"]
+    H --> G["glasses.html"]
     H --> S["specs.html"]
-    H --> L["live.html"]
-    T --> L
-    S --> L
+    D --> DL["download.html"]
+    G --> DL
+    R --> T["tour.html<br/>one press, step by step"]
+    S --> T
 ```
 
 [**Pages, design tokens and the demo**](docs/architecture/website.md)
