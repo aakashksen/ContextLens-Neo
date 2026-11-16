@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Desktop app, ContextLens Neo</title>
-<meta name="description" content="A tray app with a global hotkey and an always-on-top card. Everything runs on your machine.">
+<meta name="description" content="A tray app for any call: press a hotkey and a cited card floats on top. Everything runs on your machine.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,48 +21,48 @@
 </header>
 
 <main id="top">
-  <section class="hero hero--screen">
-    <div class="container hero__grid">
-      <div>
-        <h1>A copilot in your tray</h1>
-        <p class="lead">Press a hotkey in any call. The card appears on top.</p>
-        <div class="actions"><a class="btn btn--primary" href="download.html#desktop">Download</a><a class="btn" href="room.html">Watch it work</a></div>
-      </div>
-      <div class="slotbox" data-slot="desktop-shot-main"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call: the beta moved from Friday to Monday, with the quotes and who said them."></div>
+  <section class="hero hero--stack">
+    <div class="container">
+      <p class="kicker">Desktop app · Windows</p>
+      <h1>A copilot in your tray</h1>
+      <p class="lead">Keep any call open. Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> and a card floats on top with what was said and who said it.</p>
+      <div class="actions"><a class="btn btn--primary" href="download.html#desktop">Download for Windows</a><a class="btn" href="room.html">Watch the demo</a></div>
+      <figure class="shot-wide"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call with four avatar tiles: the beta moved from Friday to Monday, with the quotes and who said them."></figure>
     </div>
   </section>
 
-  <section class="section" id="what" aria-labelledby="what-h">
+  <section class="section section--tight" id="how" aria-labelledby="how-h">
     <div class="container">
-      <div class="head"><h2 id="what-h">Always there. Never in the way.</h2></div>
-      <ul class="panels strip">
-        <li><h3>Tray</h3><p>Sits quietly until you need it.</p></li>
-        <li><h3>Hotkey</h3><p>One global key, over any app.</p></li>
-        <li><h3>Heads-up card</h3><p>Always on top, short, with its sources.</p></li>
-        <li><h3>Both sides</h3><p>Hears your mic and the call.</p></li>
-      </ul>
+      <h2 id="how-h" class="h-section">In a call</h2>
+      <ol class="howto">
+        <li><span class="howto__n">1</span><div><h3>Join any call</h3><p>Zoom, Meet, Teams, anything. It hears your mic and the call audio.</p></div></li>
+        <li><span class="howto__n">2</span><div><h3>Press the hotkey</h3><p><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> works over any app. It also speaks up on its own when something changes.</p></div></li>
+        <li><span class="howto__n">3</span><div><h3>Read, then close</h3><p>The card stays on top until you close it. Pin it if you want it to stay.</p></div></li>
+      </ol>
     </div>
   </section>
 
   <section class="section section--band" id="privacy" aria-labelledby="privacy-h">
-    <div class="container">
-      <div class="head">
+    <div class="container split split--media">
+      <div>
         <h2 id="privacy-h">Nothing leaves your machine</h2>
-        <p>Every part of the pipeline runs on this computer.</p>
+        <p class="sub">Every part of the pipeline runs on this computer. No account, no cloud, no telemetry.</p>
+        <dl class="points">
+          <div><dt>Speech</dt><dd>whisper.cpp in a local container.</dd></div>
+          <div><dt>Model</dt><dd>A 4B model on your GPU, through Ollama.</dd></div>
+          <div><dt>Memory</dt><dd>PostgreSQL on this computer.</dd></div>
+          <div><dt>Forget</dt><dd>One button deletes the conversation.</dd></div>
+        </dl>
       </div>
-      <ul class="panels strip">
-        <li><h3>Speech</h3><p>whisper.cpp in a local container.</p></li>
-        <li><h3>Model</h3><p>A 4B model, served by Ollama on your GPU.</p></li>
-        <li><h3>Memory</h3><p>PostgreSQL on this computer.</p></li>
-        <li><h3>Network</h3><p>No transcript is sent anywhere.</p></li>
-      </ul>
+      <figure class="shot"><img src="img/desktop-main.webp" width="1560" height="760" alt="The ContextLens window: listening, a note that everything stays on this machine, all four local services ready, and the live transcript." loading="lazy"></figure>
     </div>
   </section>
 
-  <section class="section section--band" id="get" aria-labelledby="get-h">
-    <div class="container">
-      <div class="head"><h2 id="get-h">Ready to try it?</h2><p>Setup takes about 15 minutes, most of it downloading models.</p></div>
-      <div class="cta"><a class="btn btn--primary" href="download.html#desktop">Desktop setup</a><a class="btn" href="room.html">Watch it work</a></div>
+  <section class="section" id="get" aria-labelledby="get-h">
+    <div class="container endcta">
+      <h2 id="get-h">Set it up in about 15 minutes</h2>
+      <p>Most of that is downloading the models.</p>
+      <div class="cta"><a class="btn btn--primary" href="download.html#desktop">Desktop setup</a><a class="btn" href="glasses.html">See the glasses version</a></div>
     </div>
   </section>
 </main>

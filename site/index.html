@@ -21,14 +21,66 @@
 </header>
 
 <main id="top">
-  <section class="hero">
+  <section class="hero hero--home">
     <div class="container hero__grid">
       <div>
-        <h1>Press once. Know what was said.</h1>
-        <p class="lead">One cited card of what was said, on your desktop or glasses.</p>
-        <div class="actions"><a class="btn btn--primary" href="download.html#desktop">Download</a><a class="btn" href="room.html">Watch it work</a></div>
+        <p class="kicker">Meeting copilot · runs on your own computer</p>
+        <h1>Lost the thread? Press one key.</h1>
+        <p class="lead">ContextLens listens to your meeting. Press, and a card shows what was said, who said it, and what changed, quoted straight from the conversation.</p>
+        <div class="actions"><a class="btn btn--primary" href="room.html">Watch the 80-second demo</a><a class="btn" href="download.html">Download</a></div>
+        <p class="hero__fine">Desktop and smart glasses · Open source · Nothing leaves your machine</p>
       </div>
+      <figure class="hero__shot">
+        <img src="img/room-card.webp" width="2624" height="1090" alt="Four people in a call, shown as a bear, a robot, a fox and a cat. Next to them, a ContextLens card that appeared on its own says the beta now ships Monday, quotes Maya, and marks that Monday replaced the Friday date she gave first.">
+      </figure>
+    </div>
+  </section>
 
+  <section class="section section--tight" id="how" aria-labelledby="how-h">
+    <div class="container">
+      <h2 class="visually-hidden" id="how-h">How it works</h2>
+      <ol class="howto">
+        <li><span class="howto__n">1</span><div><h3>It listens</h3><p>Transcribes the meeting and labels who is speaking, all on your machine.</p></div></li>
+        <li><span class="howto__n">2</span><div><h3>You press</h3><p>One hotkey on desktop, a tap on glasses. When something changes, it speaks up on its own.</p></div></li>
+        <li><span class="howto__n">3</span><div><h3>You read one card</h3><p>Short, with quotes and who said them. If nobody said it, the card says so.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="ways" aria-labelledby="ways-h">
+    <div class="container">
+      <div class="head">
+        <h2 id="ways-h">Two ways to run it</h2>
+        <p>Built for people who find live conversation hard to track, including introverted and neurodivergent people.</p>
+      </div>
+      <div class="two">
+        <div class="panels way">
+          <div class="slotbox" data-slot="desktop-shot"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call: the beta moved from Friday to Monday, with the quotes and who said them." loading="lazy"></div>
+          <h3>Desktop</h3>
+          <p>Tray app, global hotkey, always-on-top card.</p>
+          <p class="more"><a href="desktop.html">See the desktop app</a></p>
+        </div>
+        <div class="panels way">
+          <div class="slotbox" data-slot="glasses-shot"><img src="img/glasses.webp" width="1600" height="1000" alt="The ContextLens card floating in a dim meeting room as the glasses show it: answered, the beta moved from Friday to Monday, with Maya’s quotes and times, and Press, Pause, Resume, Webcam and Delete buttons." loading="lazy"></div>
+          <h3>Smart glasses</h3>
+          <p>The Unity client. Tap to press.</p>
+          <p class="more"><a href="glasses.html">See the glasses client</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--band" id="card" aria-labelledby="card-h">
+    <div class="container split split--flip">
+      <div>
+        <h2 id="card-h">Try a card</h2>
+        <p class="sub">Pick a question. The card answers from the conversation and marks the lines it used.</p>
+        <dl class="points">
+          <div><dt>Who said what</dt><dd>The quote and the speaker.</dd></div>
+          <div><dt>What changed</dt><dd>Friday became Monday, and who moved it.</dd></div>
+          <div><dt>Not sure</dt><dd>It says &ldquo;not enough information&rdquo; instead of guessing.</dd></div>
+        </dl>
+      </div>
       <div class="panels" data-card>
         <div class="record__head">
           <div class="record__title">Planning sync, 4 minutes in</div>
@@ -55,65 +107,7 @@
     </div>
   </section>
 
-  <section class="section" id="card" aria-labelledby="card-h">
-    <div class="container split">
-      <figure class="shot">
-        <img src="img/room-card.webp" width="2624" height="1090" alt="Four people in a call, shown as a bear, a robot, a fox and a cat. Next to them, a card that appeared on its own says the beta now ships Monday, quotes Maya, and marks that Monday replaced the Friday date she gave first." loading="lazy">
-        <figcaption>A card from the meeting room demo. Try it yourself in <a href="room.html">Watch it work</a>.</figcaption>
-      </figure>
-      <div>
-        <h2 id="card-h">One card. Every line cited.</h2>
-        <dl class="points">
-          <div><dt>Who said what</dt><dd>The quote and the speaker.</dd></div>
-          <div><dt>What changed</dt><dd>Friday became Monday, and who moved it.</dd></div>
-          <div><dt>What was decided</dt><dd>With the turn it was decided in.</dd></div>
-          <div><dt>Not sure</dt><dd>It says “not enough information.”</dd></div>
-        </dl>
-      </div>
-    </div>
-  </section>
-
-  <section class="section section--band" id="ways" aria-labelledby="ways-h">
-    <div class="container">
-      <div class="head">
-        <h2 id="ways-h">Two ways to run it</h2>
-        <p>Built for people who find live conversation hard to track, including introverted and neurodivergent people.</p>
-      </div>
-      <div class="two">
-        <div class="panels way">
-          <div class="slotbox" data-slot="desktop-shot"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call: the beta moved from Friday to Monday, with the quotes and who said them." loading="lazy"></div>
-          <h3>Desktop</h3>
-          <p>Tray app, global hotkey, always-on-top card.</p>
-          <p class="more"><a href="desktop.html">See the desktop app</a></p>
-        </div>
-        <div class="panels way">
-          <div class="slotbox" data-slot="glasses-shot"><img src="img/glasses.webp" width="1600" height="1000" alt="The ContextLens card floating in a dim meeting room as the glasses show it: answered, the beta moved from Friday to Monday, with Maya’s quotes and times, and Press, Pause, Resume, Webcam and Delete buttons." loading="lazy"></div>
-          <h3>Smart glasses</h3>
-          <p>The Unity client. Tap to press.</p>
-          <p class="more"><a href="glasses.html">See the glasses client</a></p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="system" aria-labelledby="system-h">
-    <div class="container">
-      <div class="head"><h2 id="system-h">A system around a small model</h2></div>
-      <ul class="panels strip">
-        <li><h3>Streaming speech</h3><p>whisper.cpp, C++, gRPC.</p></li>
-        <li><h3>Speaker labels</h3><p>Who is talking.</p></li>
-        <li><h3>Memory</h3><p>Builds as the meeting goes.</p></li>
-        <li><h3>Contradiction check</h3><p>ModernBERT NLI and a fine-tuned DeBERTa, pair by pair, in code.</p></li>
-        <li><h3>Evidence first</h3><p>Code picks and cites the turns; the model only words the answer.</p></li>
-        <li><h3>Hybrid retrieval</h3><p>BM25, vectors, a bge cross-encoder reranker.</p></li>
-        <li><h3>Evidence guard</h3><p>Drops claims no earlier turn backs.</p></li>
-        <li><h3>Local model</h3><p>4B, through Ollama, on your machine.</p></li>
-      </ul>
-      <p class="more"><a href="specs.html">See how it’s built</a></p>
-    </div>
-  </section>
-
-  <section class="section section--band" id="results" aria-labelledby="results-h">
+  <section class="section" id="results" aria-labelledby="results-h">
     <div class="container">
       <div class="head">
         <h2 id="results-h">Tested on long real meetings</h2>
@@ -133,14 +127,28 @@
     </div>
   </section>
 
-  <section class="section" id="start" aria-labelledby="start-h">
+  <section class="section section--band" id="system" aria-labelledby="system-h">
     <div class="container">
-      <div class="head"><h2 id="start-h">Try it on a meeting</h2></div>
-      <ul class="panels strip strip--three">
-        <li><h3>Desktop</h3><p>Install the tray app.</p><p class="more"><a href="download.html#desktop">Download</a></p></li>
-        <li><h3>Glasses</h3><p>Run the Unity client.</p><p class="more"><a href="download.html#glasses">Run the client</a></p></li>
-        <li><h3>Browser</h3><p>Replay a real meeting.</p><p class="more"><a href="room.html">Watch it work</a></p></li>
+      <div class="head"><h2 id="system-h">Under the hood</h2><p>A small local model, and the system around it that keeps it honest.</p></div>
+      <ul class="panels strip">
+        <li><h3>Streaming speech</h3><p>whisper.cpp, C++, gRPC.</p></li>
+        <li><h3>Speaker labels</h3><p>Who is talking.</p></li>
+        <li><h3>Memory</h3><p>Builds as the meeting goes.</p></li>
+        <li><h3>Contradiction check</h3><p>ModernBERT NLI and a fine-tuned DeBERTa, pair by pair, in code.</p></li>
+        <li><h3>Evidence first</h3><p>Code picks and cites the turns; the model only words the answer.</p></li>
+        <li><h3>Hybrid retrieval</h3><p>BM25, vectors, a bge cross-encoder reranker.</p></li>
+        <li><h3>Evidence guard</h3><p>Drops claims no earlier turn backs.</p></li>
+        <li><h3>Local model</h3><p>4B, through Ollama, on your machine.</p></li>
       </ul>
+      <p class="more"><a href="specs.html">See how it’s built</a></p>
+    </div>
+  </section>
+
+  <section class="section" id="start" aria-labelledby="start-h">
+    <div class="container endcta">
+      <h2 id="start-h">See it in 80 seconds</h2>
+      <p>No install. A short meeting plays in your browser and the cards appear on their own.</p>
+      <div class="cta"><a class="btn btn--primary" href="room.html">Watch the demo</a><a class="btn" href="download.html">Download</a></div>
     </div>
   </section>
 </main>

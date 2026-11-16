@@ -15,10 +15,43 @@
   --color-accent: oklch(82% 0.15 80); --color-accent-ink: oklch(18% 0.04 75); --color-accent-soft: oklch(29% 0.05 80); --color-focus: oklch(82% 0.15 80);
   --color-cool: oklch(77% 0.12 245); --color-cool-soft: oklch(29% 0.05 245);
   --color-stage-glow: oklch(25% 0.03 250); --color-scrim: oklch(10% 0.005 250 / 0.82); --shadow-float: 0 10px 40px oklch(0% 0 0 / 0.45); --shadow-pop: 0 12px 32px oklch(0% 0 0 / 0.35);
+  --color-lens-top: oklch(30% 0.03 250); --color-lens-bottom: oklch(12% 0.01 250); --color-frame: oklch(8% 0.005 250);
   --color-ok: oklch(76% 0.15 150); --color-ok-soft: oklch(24.5% 0.03 150); --color-bad: oklch(70% 0.17 25); --color-bad-soft: oklch(24.5% 0.035 25);
   --font-display: "Host Grotesk", ui-sans-serif, system-ui, sans-serif; --font-body: var(--font-display);
   --font-outlier: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
   --radius-card: 10px; --radius-pill: 6px; --rule-hair: 1px;
   --shadow-card: none;
   --tracking-display: -0.03em; --display-weight: 500;
+}
+
+/* Themes, picked with the switcher in the corner (site.js) or ?theme=paper|ocean|dusk. Night is the default above. */
+:root[data-theme="paper"] {
+  color-scheme: light;
+  --color-paper: oklch(98% 0.006 85); --color-paper-2: oklch(95.5% 0.009 85); --color-paper-3: oklch(93% 0.012 85);
+  --color-ink: oklch(21% 0.012 250); --color-ink-2: oklch(34% 0.012 250); --color-muted: oklch(48% 0.012 250);
+  --color-rule: oklch(87% 0.01 85); --color-rule-2: oklch(77% 0.012 85);
+  --color-accent: oklch(70% 0.17 60); --color-accent-ink: oklch(20% 0.04 60); --color-accent-soft: oklch(93% 0.05 75); --color-focus: oklch(55% 0.17 55);
+  --color-cool: oklch(48% 0.15 255); --color-cool-soft: oklch(93% 0.03 250);
+  --color-ok: oklch(50% 0.13 150); --color-ok-soft: oklch(94% 0.04 150); --color-bad: oklch(52% 0.18 25); --color-bad-soft: oklch(94% 0.03 25);
+  --color-stage-glow: oklch(93% 0.02 250); --color-scrim: oklch(99% 0 0 / 0.92);
+  --shadow-float: 0 18px 50px oklch(30% 0.02 250 / 0.18); --shadow-pop: 0 12px 32px oklch(30% 0.02 250 / 0.14);
+  --color-lens-top: oklch(38% 0.03 250); --color-lens-bottom: oklch(16% 0.02 250); --color-frame: oklch(22% 0.01 60);
+}
+:root[data-theme="ocean"] {
+  --color-paper: oklch(19% 0.03 240); --color-paper-2: oklch(23.5% 0.035 240); --color-paper-3: oklch(15.5% 0.028 240);
+  --color-ink: oklch(96% 0.01 220); --color-ink-2: oklch(85% 0.02 220); --color-muted: oklch(72% 0.03 230);
+  --color-rule: oklch(33% 0.04 240); --color-rule-2: oklch(44% 0.05 240);
+  --color-accent: oklch(80% 0.13 185); --color-accent-ink: oklch(18% 0.04 200); --color-accent-soft: oklch(31% 0.06 190); --color-focus: oklch(80% 0.13 185);
+  --color-cool: oklch(78% 0.11 285); --color-cool-soft: oklch(31% 0.06 285);
+  --color-stage-glow: oklch(29% 0.07 230); --color-scrim: oklch(12% 0.03 240 / 0.85);
+  --color-lens-top: oklch(34% 0.07 220); --color-lens-bottom: oklch(13% 0.03 240); --color-frame: oklch(9% 0.02 240);
+}
+:root[data-theme="dusk"] {
+  --color-paper: oklch(18% 0.03 300); --color-paper-2: oklch(22.5% 0.035 300); --color-paper-3: oklch(14.5% 0.025 300);
+  --color-ink: oklch(96% 0.01 320); --color-ink-2: oklch(86% 0.02 320); --color-muted: oklch(73% 0.03 310);
+  --color-rule: oklch(32% 0.04 300); --color-rule-2: oklch(43% 0.05 300);
+  --color-accent: oklch(76% 0.15 350); --color-accent-ink: oklch(18% 0.05 350); --color-accent-soft: oklch(31% 0.07 350); --color-focus: oklch(76% 0.15 350);
+  --color-cool: oklch(80% 0.11 230); --color-cool-soft: oklch(31% 0.05 230);
+  --color-stage-glow: oklch(28% 0.07 310); --color-scrim: oklch(11% 0.03 300 / 0.85);
+  --color-lens-top: oklch(34% 0.08 320); --color-lens-bottom: oklch(12% 0.03 300); --color-frame: oklch(9% 0.02 300);
 }

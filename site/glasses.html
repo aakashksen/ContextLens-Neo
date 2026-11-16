@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Glasses, ContextLens Neo</title>
-<meta name="description" content="The Unity client puts the card in your field of view and talks to the same backend as the desktop app.">
+<meta name="description" content="A heads-up display for conversations: built for display glasses, simulated in Unity today, and buildable for headsets like Meta Quest.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,34 +21,71 @@
 </header>
 
 <main id="top">
-  <section class="hero hero--screen">
+  <section class="hero">
     <div class="container hero__grid">
       <div>
-        <h1>The card, in your field of view</h1>
-        <p class="lead">Tap on your glasses and a short cited card floats ahead.</p>
-        <div class="actions"><a class="btn btn--primary" href="#connect">How it connects</a><a class="btn" href="room.html">Watch it work</a></div>
+        <p class="kicker">Smart glasses</p>
+        <h1>A heads-up display for conversations</h1>
+        <p class="lead">Glasses with a display in the lens are arriving. ContextLens is built for them: tap, and one short cited card appears in your view.</p>
+        <div class="actions"><a class="btn btn--primary" href="download.html#glasses">Glasses setup</a><a class="btn" href="room.html">Watch the demo</a></div>
+        <p class="hero__fine">Simulated in Unity today · Builds for headsets like Meta Quest</p>
       </div>
-      <div class="slotbox" data-slot="glasses-shot-main"><img src="img/glasses.webp" width="1600" height="1000" alt="The ContextLens card floating in a dim meeting room as the glasses show it: answered, the beta moved from Friday to Monday, with Maya’s quotes and times, and Press, Pause, Resume, Webcam and Delete buttons."></div>
+      <div class="glasses-art">
+        <svg class="specs-art" viewBox="0 0 640 300" role="img" aria-labelledby="ga-t" xmlns="http://www.w3.org/2000/svg">
+          <title id="ga-t">Sunglasses with a small ContextLens card glowing in the right lens: Answered, Beta moved to Monday, Maya, 0:19.</title>
+          <defs>
+            <linearGradient id="ga-lens" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="ga-lens-top"/><stop offset="1" class="ga-lens-bottom"/></linearGradient>
+            <filter id="ga-glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>
+          </defs>
+          <path class="ga-temple" d="M44 84 L6 98"/><path class="ga-temple" d="M596 84 L634 98"/>
+          <path class="ga-lens" d="M58 92 Q58 70 84 68 L268 68 Q296 70 292 98 L280 188 Q274 232 228 234 L122 234 Q74 232 66 190 Z"/>
+          <path class="ga-lens" d="M582 92 Q582 70 556 68 L372 68 Q344 70 348 98 L360 188 Q366 232 412 234 L518 234 Q566 232 574 190 Z"/>
+          <path class="ga-shine" d="M90 84 L140 84 L96 150 Z"/><path class="ga-shine" d="M552 84 L520 84 L548 128 Z"/>
+          <path class="ga-frame" d="M40 78 Q320 52 600 78"/>
+          <path class="ga-bridge" d="M292 90 Q320 76 348 90"/>
+          <rect class="ga-halo" x="384" y="106" width="172" height="94" rx="10" filter="url(#ga-glow)"/>
+          <rect class="ga-card" x="384" y="106" width="172" height="94" rx="10"/>
+          <rect class="ga-bar" x="384" y="106" width="172" height="4" rx="2"/>
+          <text class="ga-ok" x="398" y="132">ANSWERED</text>
+          <text class="ga-main" x="398" y="158">Beta moved to Monday</text>
+          <text class="ga-sub" x="398" y="182">Maya, 0:19</text>
+        </svg>
+      </div>
     </div>
   </section>
 
-  <section class="section" id="view" aria-labelledby="view-h">
+  <section class="section section--tight" id="where" aria-labelledby="where-h">
     <div class="container">
-      <div class="head"><h2 id="view-h">Look up. Read one line.</h2></div>
-      <ul class="panels strip">
-        <li><h3>The card</h3><p>A panel in the world, in front of you.</p></li>
-        <li><h3>The press</h3><p>A tap, or the primary button on a controller.</p></li>
-        <li><h3>Recording</h3><p>A line that says whether it is listening.</p></li>
-        <li><h3>The answer</h3><p>Answered, partial, or not enough information.</p></li>
+      <h2 id="where-h" class="h-section">Where it runs</h2>
+      <ul class="where">
+        <li><span class="chip chip--ok">Today</span><h3>Unity simulation</h3><p>The client runs in Unity, which simulates the glasses view on your computer. The picture below is that render.</p></li>
+        <li><span class="chip chip--cool">Headsets</span><h3>VR and mixed reality</h3><p>Built on Unity&rsquo;s XR toolkit, so it builds for headsets like Meta Quest. The card floats in the room in front of you.</p></li>
+        <li><span class="chip">Next</span><h3>Display glasses</h3><p>Everyday glasses with a small display in the lens. The card is sized for that: one headline, one quote, one glance.</p></li>
       </ul>
     </div>
   </section>
 
-  <section class="section section--band" id="connect" aria-labelledby="connect-h">
+  <section class="section section--band" id="view" aria-labelledby="view-h">
+    <div class="container split split--media">
+      <div>
+        <h2 id="view-h">Made for a glance</h2>
+        <p class="sub">Everything you need in one look, nothing to scroll.</p>
+        <dl class="points">
+          <div><dt>One headline</dt><dd>Answered, partly answered, or not discussed yet.</dd></div>
+          <div><dt>Who said it</dt><dd>The quote, the speaker and when.</dd></div>
+          <div><dt>Hands free</dt><dd>A tap, or the button on a controller.</dd></div>
+          <div><dt>Private</dt><dd>Pause, resume and delete are always one tap away.</dd></div>
+        </dl>
+      </div>
+      <figure class="shot"><img src="img/glasses.webp" width="1600" height="1000" alt="The ContextLens card in a dim meeting room, as the Unity client renders it: answered, the beta moved from Friday to Monday, with Maya&rsquo;s quotes and times, and Press, Pause, Resume, Webcam and Delete buttons." loading="lazy"><figcaption>Rendered by the Unity client.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="section" id="connect" aria-labelledby="connect-h">
     <div class="container">
       <div class="head">
-        <h2 id="connect-h">Same backend as the desktop app</h2>
-        <p>The glasses show the card. Your computer does the work.</p>
+        <h2 id="connect-h">Same brain as the desktop app</h2>
+        <p>The glasses show the card. Your computer does the listening and thinking.</p>
       </div>
       <div class="diagram"><svg class="dg" viewBox="0 0 1040 290" role="img" aria-labelledby="dg-t dg-d" xmlns="http://www.w3.org/2000/svg">
 <title id="dg-t">Glasses and desktop share one backend</title><desc id="dg-d">The Unity client on the glasses sends press and audio over one WebSocket to the backend on your computer. The backend runs speech, memory, agents and the local model, and sends the card back over the same socket.</desc>
@@ -82,9 +119,10 @@
   </section>
 
   <section class="section section--band" id="get" aria-labelledby="get-h">
-    <div class="container">
-      <div class="head"><h2 id="get-h">Try it on your headset</h2><p>Open the Unity project, point it at your computer, and press Play.</p></div>
-      <div class="cta"><a class="btn btn--primary" href="download.html#glasses">Glasses setup</a><a class="btn" href="room.html">Watch it work</a></div>
+    <div class="container endcta">
+      <h2 id="get-h">Try it in Unity</h2>
+      <p>Open the project, point it at your computer, and press Play.</p>
+      <div class="cta"><a class="btn btn--primary" href="download.html#glasses">Glasses setup</a><a class="btn" href="desktop.html">See the desktop app</a></div>
     </div>
   </section>
 </main>

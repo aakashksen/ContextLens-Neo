@@ -391,3 +391,69 @@ ul.facts { margin: 0; padding: 0; }
 @media (max-width: 40rem) { .hero .turns li { grid-template-columns: 2.5rem 5.5rem minmax(0, 1fr); } }
 .slotbox:has(> img) { display: block; padding: 0; }
 .slotbox:has(> img) > img { position: static; inset: auto; }
+
+/* ---- clean product pages (home, desktop, glasses) ---- */
+.kicker { color: var(--color-accent); font-family: var(--font-outlier); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: var(--space-md); }
+.hero__fine { margin-top: var(--space-lg); color: var(--color-muted); font-size: var(--text-sm); }
+.hero--home { padding-block: var(--space-3xl) var(--space-2xl); }
+.hero--home h1 { font-size: clamp(2.5rem, 4.2vw + 0.75rem, 4.5rem); max-width: 12ch; }
+.hero--home .lead { max-width: 40ch; }
+@media (min-width: 60.01rem) { .hero--home .hero__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+.hero__shot { margin: 0; border-radius: 14px; overflow: hidden; border: var(--rule-hair) solid var(--color-rule); box-shadow: var(--shadow-float); }
+.hero__shot img { display: block; width: 100%; height: auto; }
+.hero--stack { padding-block: var(--space-3xl) var(--space-xl); }
+.hero--stack h1 { font-size: var(--text-display); max-width: 16ch; }
+.hero--stack .lead { max-width: 52ch; }
+.shot-wide { margin: var(--space-2xl) 0 0; border-radius: 14px; overflow: hidden; border: var(--rule-hair) solid var(--color-rule); box-shadow: var(--shadow-float); }
+.shot-wide img { display: block; width: 100%; height: auto; }
+.lead kbd, .howto kbd { font-size: 0.75em; padding: 1px 6px; vertical-align: 0.1em; }
+.section--tight { padding-block: var(--space-2xl); }
+.h-section { font-size: var(--text-title); margin-bottom: var(--space-lg); color: var(--color-ink-2); font-weight: 500; }
+.howto { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-columns); }
+.howto li { display: flex; gap: var(--space-md); align-items: start; }
+.howto__n { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-accent); color: var(--color-accent-ink); font-family: var(--font-outlier); font-weight: 500; }
+.howto h3 { font-size: var(--text-lg); line-height: 1.25; margin-bottom: var(--space-2xs); }
+.howto p { color: var(--color-ink-2); }
+@media (max-width: 60rem) { .howto { grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); } }
+.sub { color: var(--color-ink-2); max-width: 46ch; }
+.split--media { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+.split--media .shot img, .split .shot img { display: block; }
+@media (max-width: 60rem) { .split--media { grid-template-columns: minmax(0, 1fr); } }
+.endcta { display: grid; justify-items: center; text-align: center; gap: var(--space-sm); }
+.endcta h2 { font-size: var(--text-section); }
+.endcta p { color: var(--color-ink-2); }
+.endcta .cta { justify-content: center; margin-top: var(--space-md); }
+.where { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-columns); }
+.where li { display: grid; gap: var(--space-xs); align-content: start; justify-items: start; padding: var(--space-lg); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper-2); }
+.where h3 { font-size: var(--text-lg); margin-top: var(--space-2xs); }
+.where p { color: var(--color-ink-2); }
+@media (max-width: 60rem) { .where { grid-template-columns: minmax(0, 1fr); } }
+
+/* the sunglasses on the glasses page */
+.glasses-art { display: grid; place-items: center; }
+.specs-art { width: 100%; max-width: 640px; height: auto; overflow: visible; }
+.ga-lens-top { stop-color: var(--color-lens-top); }
+.ga-lens-bottom { stop-color: var(--color-lens-bottom); }
+.ga-lens { fill: url(#ga-lens); stroke: var(--color-frame); stroke-width: 10; stroke-linejoin: round; }
+.ga-frame, .ga-bridge, .ga-temple { fill: none; stroke: var(--color-frame); stroke-width: 12; stroke-linecap: round; }
+.ga-shine { fill: var(--color-ink); opacity: 0.06; }
+.ga-halo { fill: var(--color-accent); opacity: 0.35; }
+.ga-card { fill: var(--color-scrim); stroke: var(--color-accent); stroke-width: 1; stroke-opacity: 0.6; }
+.ga-bar { fill: var(--color-accent); }
+.ga-ok { fill: var(--color-ok); font: 500 11px var(--font-outlier); letter-spacing: 0.08em; }
+.ga-main { fill: var(--color-ink); font: 500 14.5px var(--font-display); }
+.ga-sub { fill: var(--color-muted); font: 400 13px var(--font-display); }
+@media (prefers-reduced-motion: no-preference) { .ga-halo { animation: ga-pulse 3.2s var(--ease-in-out) infinite; } }
+@keyframes ga-pulse { 50% { opacity: 0.15; } }
+
+/* theme picker (preview tool) */
+.themes { position: fixed; right: var(--space-md); bottom: var(--space-md); z-index: var(--z-toast); display: flex; gap: var(--space-2xs); align-items: center; padding: var(--space-2xs) var(--space-xs); border: var(--rule-hair) solid var(--color-rule-2); border-radius: 999px; background: var(--color-paper-2); box-shadow: var(--shadow-pop); font-size: var(--text-xs); color: var(--color-muted); }
+.themes button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.themes button[aria-pressed="true"] { border-color: var(--color-ink); }
+.themes .t-night { background: linear-gradient(135deg, oklch(17% 0.008 250) 50%, oklch(82% 0.15 80) 50%); }
+.themes .t-paper { background: linear-gradient(135deg, oklch(97.5% 0.008 85) 50%, oklch(62% 0.17 55) 50%); }
+.themes .t-ocean { background: linear-gradient(135deg, oklch(20% 0.035 240) 50%, oklch(80% 0.13 185) 50%); }
+.themes .t-dusk { background: linear-gradient(135deg, oklch(18% 0.03 300) 50%, oklch(76% 0.15 350) 50%); }
+kbd { display: inline-block; padding: 0 6px; border: var(--rule-hair) solid var(--color-rule-2); border-bottom-width: 2px; border-radius: 4px; background: var(--color-paper-2); color: var(--color-ink); font-family: var(--font-outlier); font-size: 0.8em; line-height: 1.5; }
+[data-card] .turns li { grid-template-columns: 2.5rem 6.5rem minmax(0, 1fr); }
+@media (max-width: 40rem) { .themes { right: var(--space-xs); bottom: var(--space-xs); } .themes button { width: 22px; height: 22px; } }
