@@ -215,17 +215,17 @@ def decide(pairs: list[PairScore], rule: Rule, statement: Turn | None = None) ->
 _MODELS: dict[Any, Any] = {}
 
 
-def load_models(checker_dir: str, nli_names: tuple[str, ...] = ()) -> tuple[Any, list[NLIModel]]:
-    """The trained checker and the named NLI models, loaded once per process."""
+def load_models(checker_dir: str, nli_names: tuple[str, ...] = (), device: str | None = None) -> tuple[Any, list[NLIModel]]:
+    """The trained checker and the named NLI models, loaded once per process (on `device`, default: the GPU if it fits)."""
     from pathlib import Path
 
     from contextlens.consistency.model import TrainedChecker
 
     if "trained" not in _MODELS:
-        _MODELS["trained"] = TrainedChecker.from_checkpoint(Path(checker_dir), strip_instructions=False)
+        _MODELS["trained"] = TrainedChecker.from_checkpoint(Path(checker_dir), device=device, strip_instructions=False)
     for n in nli_names:
         if ("nli", n) not in _MODELS:
-            _MODELS["nli", n] = NLIModel(n)
+            _MODELS["nli", n] = NLIModel(n, device)
     return _MODELS["trained"], [_MODELS["nli", n] for n in nli_names]
 
 

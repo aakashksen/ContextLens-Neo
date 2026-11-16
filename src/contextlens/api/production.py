@@ -167,6 +167,7 @@ def rag_scorer():
 
 
 NLI_MODEL = "tasksource/ModernBERT-base-nli"
+PAIRING_DEVICE = os.environ.get("CONTEXTLENS_PAIRING_DEVICE", "cpu")
 NLI_THRESHOLD = 0.7  # chosen on E10 dev (consistency/pairing_eval.py): recall 36/36, false alerts 0/23
 
 
@@ -180,7 +181,10 @@ def conflict_finder(tools: Tools):
             root = Path(__file__).resolve().parents[3]
             cfg = json.loads((root / "configs" / "cascade.json").read_text(encoding="utf-8"))
             path = os.environ.get("CONTEXTLENS_CHECKER_DIR") or str(root / cfg["trained_checkpoint"])
-            _TRAINED["pairing"] = pairing.load_models(path, (NLI_MODEL,))
+            # on CPU: with the 4B writer, the embedder, the reranker and the cascade checker on an 8 GB card, two more
+            # models on the GPU overflowed it and every stage slowed several-fold (E11 test run, 2026-11-16); the
+            # finder scores a few short pairs, which the CPU does in time
+            _TRAINED["pairing"] = pairing.load_models(path, (NLI_MODEL,), device=PAIRING_DEVICE)
         except Exception as exc:
             logging.getLogger(__name__).warning("conflict finder unavailable, using the cascade checker: %s", exc)
             _TRAINED["pairing"] = None
