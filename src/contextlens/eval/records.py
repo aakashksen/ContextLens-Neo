@@ -20,7 +20,7 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 RECORD_FILE = re.compile(
-    r"^\?\? results/runs/([^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)|\.[^/ ]+\.tmp)$"
+    r"^\?\? results/(runs|e10)/([^/ ]+-\d{8}T\d{12}Z(\.[A-Za-z0-9_-]+\.predictions\.jsonl|\.json)|\.[^/ ]+\.tmp)$"
     r"|^(\?\?| M) results/error-analysis-e2\.md$"  # E2 writes it before its cloud record, so it must not block that record
 )
 

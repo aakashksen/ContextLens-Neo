@@ -455,3 +455,10 @@ def test_check_run_accepts_older_records_without_label_source_and_rejects_a_wron
     assert check("E1", root=repo) == []
     _edit(path, label_source="publisher")
     assert any("label_source" in p for p in check("E1", root=repo))
+
+
+def test_new_e10_and_e11_records_do_not_make_the_tree_dirty():
+    from contextlens.eval.records import RECORD_FILE
+
+    assert RECORD_FILE.match("?? results/e10/E11-test-20261116T024453307577Z.json")
+    assert not RECORD_FILE.match("?? results/e10/notes.md") and not RECORD_FILE.match(" M results/e10/E11-test-20261116T024453307577Z.json")
