@@ -98,6 +98,15 @@ def serve_file(path: Path, request: Request, media_type: str) -> Response:
     return StreamingResponse(pieces(), status_code=206 if rng else 200, media_type=media_type, headers=headers)
 
 
+class _FreshStaticFiles(StaticFiles):
+    """The site, with browsers told to recheck every file (ETag makes that a cheap 304), so edits show on reload."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def add_room(app: FastAPI, raw: Path, *, rig: LiveRig | None = None, replay_assistant: Callable = ReplayAssistant,
              site: Path | None = None, poll_s: float = 1.0, pace=asyncio.sleep) -> None:
     meetings: dict[str, Meeting] = find_meetings(raw)
@@ -224,4 +233,4 @@ def add_room(app: FastAPI, raw: Path, *, rig: LiveRig | None = None, replay_assi
         return {"ok": True}
 
     if site is not None:
-        app.mount("/", StaticFiles(directory=str(site), html=True), name="site")
+        app.mount("/", _FreshStaticFiles(directory=str(site), html=True), name="site")

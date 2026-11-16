@@ -643,5 +643,5 @@ def test_room_page_rules():
     assert ":focus-visible" in (SITE / "base.css").read_text(encoding="utf-8")
     assert "innerHTML" not in js and "insertAdjacentHTML" not in js and "outerHTML" not in js
     assert "prefers-reduced-motion" in js and "CC BY" in (Path(S.__file__).parent / "meetings.py").read_text(encoding="utf-8")
-    assert 'href="room.css"' in html and 'src="room.js"' in html
+    assert 'href="room.css' in html and 'src="room.js' in html  # links may carry a ?v= cache-buster
     assert 'href="room.html"' in (SITE / "live.html").read_text(encoding="utf-8")

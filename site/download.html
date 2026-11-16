@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="site.css?v=3">
 </head>
 <body>
 <header class="nav">
@@ -118,7 +118,7 @@ npm run dist</pre><p>The installer lands in <span class="measured">clients/deskt
     </div>
   </div>
 </footer>
-<script src="site.js"></script>
+<script src="site.js?v=3"></script>
 <script>
 /* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */
 window.hallmarkSlots = (m) => { for (const [k, v] of Object.entries(m)) { const s = document.querySelector(`[data-slot="${k}"]`); if (!s) continue; const im = new Image(); im.src = typeof v === 'string' ? v : v.src; im.alt = (typeof v === 'object' && v.alt) || s.dataset.alt || ''; s.querySelectorAll(':scope > img').forEach((o) => o.remove()); s.prepend(im); } };
