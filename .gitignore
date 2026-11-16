@@ -24,3 +24,6 @@ results/study/
 results/local/
 results/.check-cache.json*
 results/logs/
+
+# local backups of removed worktrees and orchestration state
+local-archive/
