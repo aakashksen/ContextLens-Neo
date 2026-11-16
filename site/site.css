@@ -390,3 +390,4 @@ ul.facts { margin: 0; padding: 0; }
 .hero .turns li { grid-template-columns: 3rem 6.5rem minmax(0, 1fr); }
 @media (max-width: 40rem) { .hero .turns li { grid-template-columns: 2.5rem 5.5rem minmax(0, 1fr); } }
 .slotbox:has(> img) { display: block; padding: 0; }
+.slotbox:has(> img) > img { position: static; inset: auto; }
