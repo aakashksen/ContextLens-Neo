@@ -6,8 +6,8 @@
 /* Hallmark · waive 28b · video[data-video] hidden in the meeting room · it shows only when a meeting has video, so there is no frame to use as a poster */
 /* Hallmark · waive 26b · no :disabled styling · the pages have no control that can be disabled, a press before any turn answers in the card */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: S, the pages are text-led, so each block carries its real artifact: a turn, a card, a record id */
-@import url("./tokens.css?v=3");
-@import url("./base.css?v=3");
+@import url("./tokens.css?v=4");
+@import url("./base.css?v=4");
 
 .nav { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: var(--color-paper); border-bottom: var(--rule-hair) solid var(--color-rule); }
 .nav__in { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-lg); min-height: 64px; }

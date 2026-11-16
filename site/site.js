@@ -1,33 +1,9 @@
 (() => {
   document.documentElement.classList.add('js');
 
-  /* Theme preview: ?theme=night|paper|ocean|dusk or the switcher in the corner; remembered per browser. */
-  const THEMES = ['night', 'paper', 'ocean', 'dusk'];
-  const store = { get() { try { return localStorage.getItem('cl-theme'); } catch (e) { return null; } }, set(v) { try { localStorage.setItem('cl-theme', v); } catch (e) { /* private mode */ } } };
-  const applyTheme = (t) => { if (t === 'night' || !THEMES.includes(t)) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); };
+  /* Other palettes (Paper, Ocean, Dusk) stay in tokens.css; ?theme= previews one. Night is the site's theme. */
   const asked = new URLSearchParams(location.search).get('theme');
-  let theme = THEMES.includes(asked) ? asked : (THEMES.includes(store.get()) ? store.get() : 'night');
-  applyTheme(theme);
-  if (asked) store.set(theme);
-  const picker = document.createElement('div');
-  picker.className = 'themes';
-  picker.setAttribute('role', 'group');
-  picker.setAttribute('aria-label', 'Theme');
-  picker.append(document.createTextNode('Theme'));
-  THEMES.forEach((t) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 't-' + t;
-    b.title = t[0].toUpperCase() + t.slice(1);
-    b.setAttribute('aria-label', b.title + ' theme');
-    b.setAttribute('aria-pressed', String(t === theme));
-    b.addEventListener('click', () => {
-      theme = t; applyTheme(t); store.set(t);
-      picker.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    });
-    picker.append(b);
-  });
-  document.body.append(picker);
+  if (['paper', 'ocean', 'dusk'].includes(asked)) document.documentElement.setAttribute('data-theme', asked);
   /* Build DOM from data with textContent only, so nothing inserted by script is parsed as HTML. */
   const el = (tag, cls, text, kids) => {
     const n = document.createElement(tag);
