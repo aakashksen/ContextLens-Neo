@@ -190,8 +190,9 @@ def abstained_card(evidence: list[Evidence], why: str) -> Card:
 
 
 class RagTeam:
-    def __init__(self, llm: LLMClient, tools, scorer, deadline_s: float = 8.0, use_memory: bool = False) -> None:
+    def __init__(self, llm: LLMClient, tools, scorer, deadline_s: float = 8.0, use_memory: bool = False, finder=None) -> None:
         self.llm, self.tools, self.scorer, self.deadline_s = llm, tools, scorer, deadline_s
+        self.finder = finder  # the pairwise conflict finder; None keeps precheck's checker
         self.use_memory = use_memory  # topic questions also bring in the prebuilt memory notes (step 2)
 
     def _search(self, query: str, end: float, before_seq: int | None) -> list[Turn]:
@@ -213,7 +214,7 @@ class RagTeam:
         asked = bool((req.question or "").strip())
         question = req.question.strip() if asked else None
         latest = turns[-1]
-        prep = prepare(self.tools, req, turns, end)  # the checker's verdict, in code
+        prep = prepare(self.tools, req, turns, end, self.finder)  # the checker's verdict, in code
         ctx.stage_ms.update(prep.stage())
         notes, run = list(prep.notes), _Run()
         query = question or infer_query(turns)
@@ -259,6 +260,10 @@ class RagTeam:
                 notes.append(f"memory failed: {type(exc).__name__}")
         if flagged and not any(e.turn.id == latest.id for e in evid):
             evid.append(Evidence(len(evid) + 1, latest, 1.0, hit=False))
+        pinned = [t for t in by_seq.values() if prep.pinned and t.id in prep.earlier_ids] if flagged else []
+        for t in pinned:  # the earlier turn the conflict rests on is shown and cited
+            if not any(e.turn.id == t.id for e in evid):
+                evid.append(Evidence(len(evid) + 1, t, 1.0, hit=False))
         note = CONFLICT_NOTE.format(label=prep.label) if flagged else ""
         text, writer_ok = self._write(question, latest, evid, [t for t in turns[-RECENT_TURNS:] if t.id not in {e.turn.id for e in evid}], note, end, run, notes, ctx)
         is_refusal = refused(text)
@@ -271,7 +276,8 @@ class RagTeam:
         if not used:
             ctx.stage_ms["rag_uncited"] = 1
         best = next((e for e in evid if e.hit), evid[0])
-        for e in (best, next(x for x in evid if x.turn.id == latest.id) if flagged else None):
+        pins = [x for x in evid if x.turn.id in {t.id for t in pinned}]
+        for e in (*pins, best, next(x for x in evid if x.turn.id == latest.id) if flagged else None):
             if e is not None and e not in used:
                 used.append(e)  # the best turn is always cited; a conflict also cites the latest turn
         statement = statement_of(text) if text and not is_refusal else ""

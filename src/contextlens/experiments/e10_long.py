@@ -366,19 +366,24 @@ def run_case(sc: Scenario, arm: str, writer: LLMClient, embedder: Any, items: li
             pool.shutdown(wait=False)
 
 
-def warm_up(cfg: dict[str, Any], arms: list[str], sc: Scenario, writer: LLMClient, embedder: Any, say: Callable[[str], None]) -> None:
+def warm_up(cfg: dict[str, Any], arms: list[str], sc: Scenario | list[Scenario], writer: LLMClient, embedder: Any, say: Callable[[str], None]) -> None:
     """Before any timed press: point the cascade at the trained checker, then press every arm once on the first case and throw the
     cards away, so the models and the checker are loaded. Refuses to run an arm that needs the checker if it fell back to the
     prompted one (it costs an extra model call, so the timing would not be the product's)."""
     directory = Path(cfg["checker_dir"])
     os.environ.setdefault("CONTEXTLENS_CHECKER_DIR", str(directory))
+    cases = sc if isinstance(sc, list) else [sc]
     for arm in arms:
-        t0 = time.perf_counter()
-        run_case(sc, arm, writer, embedder, [], cfg["deadline_s"])
-        say(f"warm-up {arm}: {time.perf_counter() - t0:.1f} s (card discarded)")
+        for one in cases:  # two presses: a first press on a fresh model can still run past the deadline (E11 smoke, 2026-11-16)
+            t0 = time.perf_counter()
+            run_case(one, arm, writer, embedder, [], cfg["deadline_s"])
+            say(f"warm-up {arm} on {one.id}: {time.perf_counter() - t0:.1f} s (card discarded)")
     needs = [a for a in arms if a in ("team_routed", "single_plus")]
     if needs and production._TRAINED.get("first") is None:
         raise RuntimeError(f"{needs} need the trained checker and it did not load from {os.environ['CONTEXTLENS_CHECKER_DIR']}")
+    rag = [a for a in arms if a.startswith("team_rag")]
+    if rag and not production._TRAINED.get("pairing"):
+        raise RuntimeError(f"{rag} need the pairwise conflict finder and its models did not load")
 
 
 def pick_smoke(scs: list[Scenario], meta: dict[str, dict[str, Any]]) -> list[Scenario]:
@@ -428,7 +433,7 @@ def run(root: Path, split: str, arms: list[str], *, smoke: bool, limit: int | No
         print(text)
 
     try:
-        warm_up(cfg, arms, scs[0], writer, embedder, say)
+        warm_up(cfg, arms, scs[:2], writer, embedder, say)
         say(f"{rsplit}: {len(scs)} cases, arms {arms}, {sum(len(have.get(a, {})) for a in arms)} rows already saved")
         for i, sc in enumerate(scs, 1):
             todo = [a for a in arms if sc.id not in have.get(a, {})]

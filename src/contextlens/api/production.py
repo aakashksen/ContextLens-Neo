@@ -166,6 +166,32 @@ def rag_scorer():
     return _SCORER["scorer"]
 
 
+NLI_MODEL = "tasksource/ModernBERT-base-nli"
+NLI_THRESHOLD = 0.7  # chosen on E10 dev (consistency/pairing_eval.py): recall 36/36, false alerts 0/23
+
+
+def conflict_finder(tools: Tools):
+    """The pairwise conflict finder (consistency/pairing.py) for one press: the trained checker and the NLI model score
+    the latest turn against each likely earlier turn. None if the models do not load; precheck's checker is used then."""
+    from contextlens.consistency import pairing
+
+    if "pairing" not in _TRAINED:
+        try:
+            root = Path(__file__).resolve().parents[3]
+            cfg = json.loads((root / "configs" / "cascade.json").read_text(encoding="utf-8"))
+            path = os.environ.get("CONTEXTLENS_CHECKER_DIR") or str(root / cfg["trained_checkpoint"])
+            _TRAINED["pairing"] = pairing.load_models(path, (NLI_MODEL,))
+        except Exception as exc:
+            logging.getLogger(__name__).warning("conflict finder unavailable, using the cascade checker: %s", exc)
+            _TRAINED["pairing"] = None
+    models = _TRAINED["pairing"]
+    if models is None:
+        return None
+    trained, nlis = models
+    rule = pairing.Rule(nli_threshold=NLI_THRESHOLD)
+    return lambda statement, window: pairing.find_conflict(tools, statement, window, trained=trained, nlis=nlis, rule=rule)
+
+
 class _RagPerPress(TeamPerPress):
     """`team_rag`: see agents/rag.py. Topic questions also use the prebuilt memory notes."""
 
@@ -174,7 +200,8 @@ class _RagPerPress(TeamPerPress):
     def answer(self, req: ButtonRequest, ctx: Context) -> Card:
         tools = Tools(self.store, self.retriever, self.memory, ctx.as_of_seq, req.conversation_id,
                       cascade_checker(self.llms["consistency"]))
-        return RagTeam(self.llms["assistance"], tools, rag_scorer(), self.deadline_s, self.use_memory).answer(req, ctx)
+        return RagTeam(self.llms["assistance"], tools, rag_scorer(), self.deadline_s, self.use_memory,
+                       conflict_finder(tools)).answer(req, ctx)
 
 
 class _RagNoMemPerPress(_RagPerPress):

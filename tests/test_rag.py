@@ -216,3 +216,31 @@ def test_verdict_line_is_read_and_dropped_from_the_statement():
     assert statement_of("VERDICT: ANSWERED\nThe budget is five thousand dollars [1].") == "The budget is five thousand dollars."
     team, _, ctx = build(["VERDICT: NOT_IN_EVIDENCE"])
     assert team.answer(req(Q), ctx).status == "abstained"
+
+
+class Picky(Scorer):
+    """Scores only the lunch chatter, so the earlier budget turn is never among the best turns."""
+
+    def score(self, query, turns):
+        return [0.9 if "lunch" in t.text else 0.0 for t in turns]
+
+
+def test_a_finder_replaces_the_checker_and_its_earlier_turn_is_shown_and_cited():
+    earlier = TURNS[0]
+    team, llm, ctx = build(["The budget changed [1]."], checker=FakeChecker("consistent"), scorer=Picky())
+    team.finder = lambda statement, window: ("contradiction", 0.93, [earlier.id])
+    f = team.answer(req(None, as_of=9), ctx).findings[0]
+    ids = {e.turn_id for e in f.evidence}
+    assert f.label == "contradiction" and {earlier.id, TURNS[-2].id} <= ids
+    assert earlier.text.split(",")[0].strip().lower() in llm.calls[0][1]["content"].lower()
+    assert ctx.stage_ms.get("checker_contradiction") == 1
+
+
+def test_a_failing_finder_flags_nothing():
+    def broken(statement, window):
+        raise RuntimeError("model gone")
+
+    team, _, ctx = build(["Same figure [1]."], checker=FakeChecker("contradiction"))
+    team.finder = broken
+    card = team.answer(req(None, as_of=9), ctx)
+    assert card.findings[0].label is None and any("checker failed" in m for m in card.missing)

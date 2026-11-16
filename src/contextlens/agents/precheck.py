@@ -2,6 +2,7 @@
 question (or the latest turn), and the consistency checker on the latest turn against the candidate earlier turns."""
 
 import functools
+from collections.abc import Callable
 import time
 from dataclasses import dataclass, field
 
@@ -10,6 +11,8 @@ from contextlens.agents.tools import Tools
 from contextlens.llm.untrusted import escape
 from contextlens.prompts.registry import render_transcript_block
 from contextlens.schemas import ButtonRequest, ConsistencyLabel, Turn
+
+Finder = Callable[[Turn, list[Turn]], tuple[ConsistencyLabel, float, list[str]]]
 
 HITS_K = 8
 EARLIER_CAP = 12  # earlier turns the checker sees: every search hit first, then the newest window turns
@@ -29,6 +32,7 @@ class Prep:
     search_ms: int = 0
     hits: int = 0
     earlier_ids: list[str] = field(default_factory=list)  # the earlier turns the checker was shown
+    pinned: bool = False  # earlier_ids is the one turn a finder's conflict rests on, not every turn shown
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -45,8 +49,10 @@ class Prep:
         return out
 
 
-def prepare(tools: Tools, req: ButtonRequest, turns: list[Turn], end: float) -> Prep:
-    """Never raises: a search or checker that fails or runs out of time is noted and skipped."""
+def prepare(tools: Tools, req: ButtonRequest, turns: list[Turn], end: float, finder: Finder | None = None) -> Prep:
+    """Never raises: a search or checker that fails or runs out of time is noted and skipped.
+    `finder` (statement, earlier window) -> (label, confidence, earlier ids) replaces the checker call when given: the
+    pairwise conflict finder (consistency/pairing.py), whose ids are the one earlier turn a conflict rests on."""
     prep = Prep()
     if not turns:
         return prep
@@ -65,7 +71,15 @@ def prepare(tools: Tools, req: ButtonRequest, turns: list[Turn], end: float) -> 
     far = [t for t in hits if t.id not in shown]
     if far:
         prep.context += "\nEarlier turns found by searching the whole conversation:\n" + render_transcript_block(far)
-    if tools.checker is not None:
+    if finder is not None:
+        t0 = time.perf_counter()
+        try:
+            label, conf, ids = _bounded(functools.partial(finder, statement, window), max(end - t0, 0.1) + MARGIN_S)
+            prep.label, prep.confidence, prep.earlier_ids, prep.pinned = label, conf, list(ids), True
+        except Exception as exc:  # fail safe: no verdict, so nothing is flagged
+            prep.notes.append(f"checker failed: {type(exc).__name__}")
+        prep.checker_ms = int((time.perf_counter() - t0) * 1000)
+    elif tools.checker is not None:
         keep = {t.id: t for t in hits}
         for t in reversed(window):
             if len(keep) >= EARLIER_CAP:

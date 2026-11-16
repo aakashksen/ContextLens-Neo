@@ -47,8 +47,21 @@
  },
  "rag": {
   "search_k": 50,
-  "top_n": 5,
-  "writer_max_tokens": 110,
-  "note": "Tuned on dev only; see src/contextlens/agents/rag.py constants."
+  "top_n": 3,
+  "neighbours": [
+   1,
+   1
+  ],
+  "writer_max_tokens": 120,
+  "reranker": "BAAI/bge-reranker-v2-m3",
+  "conflict_finder": {
+   "nli_model": "tasksource/ModernBERT-base-nli",
+   "nli_threshold": 0.7,
+   "arms": [
+    "team_rag",
+    "team_rag_nomem"
+   ]
+  },
+  "note": "Tuned on dev only; the values are agents/rag.py and api/production.py constants, recorded here."
  }
 }
