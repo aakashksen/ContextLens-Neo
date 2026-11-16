@@ -239,17 +239,17 @@
     <div class="container">
       <div class="head">
         <h2 id="eval-h">Evaluation</h2>
-        <p>161 held-out cases from QMSum and AMI, with conflicts 20 to 60 turns apart. Team against a single agent.</p>
+        <p>161 held-out cases from QMSum and AMI, with conflicts 20 to 60 turns apart. The shipped system against the original single agent.</p>
       </div>
       <div class="panels diff">
         <table>
-          <thead><tr><th scope="col">Measure</th><th scope="col">Single agent</th><th scope="col">Agent team</th></tr></thead>
+          <thead><tr><th scope="col">Measure</th><th scope="col">Single agent</th><th scope="col">ContextLens Neo</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Conflict catch rate</th><td data-num="e10-conflict-catch-single">0%</td><td data-num="e10-conflict-catch-team">13%</td></tr>
-            <tr><th scope="row">Found evidence 10+ turns back</th><td data-num="e10-cite-single">0%</td><td data-num="e10-cite-team">40%</td></tr>
-            <tr><th scope="row">Answers graded correct</th><td data-num="e10-abstain-single">35%</td><td data-num="e10-abstain-team">57%</td></tr>
-            <tr><th scope="row">Tokens per card</th><td data-num="e10-tokens-single">711</td><td data-num="e10-tokens-team">1,363</td></tr>
-            <tr><th scope="row">Median latency, ms</th><td data-num="e10-latency-single">2,044</td><td data-num="e10-latency-team">2,645</td></tr>
+            <tr><th scope="row">Conflict catch rate</th><td data-num="e10-conflict-catch-single">0%</td><td data-num="e10-conflict-catch-team">87%</td></tr>
+            <tr><th scope="row">Found evidence 10+ turns back</th><td data-num="e10-cite-single">0%</td><td data-num="e10-cite-team">60%</td></tr>
+            <tr><th scope="row">Answers graded correct</th><td data-num="e10-abstain-single">35%</td><td data-num="e10-abstain-team">65%</td></tr>
+            <tr><th scope="row">Tokens per card</th><td data-num="e10-tokens-single">711</td><td data-num="e10-tokens-team">630</td></tr>
+            <tr><th scope="row">Median latency, ms</th><td data-num="e10-latency-single">2,044</td><td data-num="e10-latency-team">2,336</td></tr>
           </tbody>
         </table>
       </div>

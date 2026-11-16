@@ -85,7 +85,7 @@ def _cited(root: Path, claims: list[dict]) -> tuple[list[float], set[int], list[
 
 
 def _e10_values(root: Path) -> list[float]:
-    """E10 keeps its run and grade records in results/e10 (ids, booleans and numbers only): their numbers count too."""
+    """E10 and E11 keep their run and grade records in results/e10 (ids, booleans and numbers only): their numbers count too."""
     out: list[float] = []
 
     def walk(o: object) -> None:
@@ -101,7 +101,7 @@ def _e10_values(root: Path) -> list[float]:
             for x in o:
                 walk(x)
 
-    for path in sorted((root / "results" / "e10").glob("E10*.json")):
+    for path in sorted((root / "results" / "e10").glob("E1[01]*.json")):
         walk(json.loads(path.read_text(encoding="utf-8")))
     return out
 

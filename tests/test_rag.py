@@ -171,10 +171,10 @@ def test_consistent_verdict_leaves_no_label():
     assert team.answer(req(None, as_of=9), ctx).findings[0].label is None
 
 
-def test_registered_without_changing_the_default():
+def test_registered_and_the_default():
     from contextlens.api import production
 
-    assert "team_rag" in production.ASSISTANTS and production.DEFAULT_ASSISTANT == "team_routed"
+    assert {"team_rag", "team_routed"} <= set(production.ASSISTANTS) and production.DEFAULT_ASSISTANT == "team_rag"
 
 
 def _notes_team(use_memory):

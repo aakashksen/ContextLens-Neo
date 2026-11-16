@@ -47,7 +47,7 @@ TEAM_SETTINGS = {"prefetch_memory": False, "specialist_deadline_s": None}
 SHUTDOWN_FLUSH_S = 5.0
 EMBED_MODEL = "nomic-embed-text"
 ASSISTANTS = ("team", "single", "team_shipping_changed", "team_routed", "single_plus", "team_rag", "team_rag_nomem")
-DEFAULT_ASSISTANT = "team_routed"  # E10: best long-meeting results, the only arm that catches conflicts
+DEFAULT_ASSISTANT = "team_rag"  # E11: code finds and cites the evidence, the model words it; most graded correct, catches conflicts
 KEEP_ALIVE = "30m"  # Ollama's default of 5 minutes would unload the models between presses
 
 

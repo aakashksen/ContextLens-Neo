@@ -1,5 +1,5 @@
 export const DETAILS = ['brief', 'standard', 'detailed'];
-export const ASSISTANTS = ['team', 'single', 'team_shipping_changed', 'team_routed', 'single_plus'];
+export const ASSISTANTS = ['team', 'single', 'team_shipping_changed', 'team_routed', 'single_plus', 'team_rag', 'team_rag_nomem'];
 export const CORNERS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
 
 export const DEFAULTS = {
@@ -9,7 +9,7 @@ export const DEFAULTS = {
   askHotkey: 'Ctrl+Shift+Q',
   mic: true,
   loopback: false,
-  assistant: 'team_routed', // applied when the app starts the backend (CONTEXTLENS_ASSISTANT)
+  assistant: 'team_rag', // applied when the app starts the backend (CONTEXTLENS_ASSISTANT)
   detail: 'standard',
   autoHideSeconds: 12,
   corner: 'top-right',

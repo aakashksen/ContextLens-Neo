@@ -159,7 +159,7 @@ def test_single_plus_shows_the_model_the_verdict_and_the_hits_before_its_first_c
 
 
 def test_both_names_are_registered_and_built_by_the_shared_factory():
-    assert {"team_routed", "single_plus"} <= set(production.ASSISTANTS) and production.DEFAULT_ASSISTANT == "team_routed"
+    assert {"team_routed", "single_plus"} <= set(production.ASSISTANTS) and production.DEFAULT_ASSISTANT == "team_rag"
     store = InMemoryTranscriptStore()
     r = Retriever(store, NoEmbed())
     llm = FakeLLM([])

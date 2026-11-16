@@ -23,26 +23,31 @@ Press a button in the middle of a conversation and get one short card built from
 During a meeting, a class or a long discussion it is easy to lose track of what was said. ContextLens Neo answers one question at the press of a button: **what was actually said, and is there enough to say it?**
 
 1. **Press the button.** The conversation is frozen at that moment. Nothing said afterwards can reach the answer.
-2. **Specialist agents dig.** A memory agent finds what was said and who said it. A consistency agent separates a contradiction from a legitimate update ("make that Monday" after "Friday") and from too little evidence. An assistance agent writes the card.
+2. **Code finds the evidence.** Search and a reranker pick the turns that answer the question, and a contradiction checker compares the latest turn with what was said earlier, separating a contradiction from a legitimate update ("make that Monday" after "Friday"). A small local model then writes the answer from those turns.
 3. **A guard in code checks every claim.** A statement stays only if it cites a turn that exists, at or before the press, whose text contains the quoted words, and if every number in it appears in the quotes.
-4. **One short card comes back.** Recall ("Maya said it exceeded the budget"), clarify ("earlier: Monday, now: Wednesday") or respond (a suggested reply, labelled as a suggestion). If nothing survives the guard, the card says there is not enough information.
+4. **One short card comes back.** Recall ("Maya said it exceeded the budget"), clarify ("earlier: Monday, now: Wednesday") or respond (a suggested reply, labelled as a suggestion). If nothing in the meeting answers, the card says "Not discussed yet" and shows the closest related point.
 
 The design rules behind it: a wrong answer is worse than none, a suggestion must never look like something a person said, and a conflict is shown with its evidence and never as an accusation. The project was also built to be measured, so the same repository holds the experiments that compare a team of agents with one agent, prompting with fine-tuning, and a streaming speech stack, with every reported number traced to a run record.
 
 ## Results
 
-**On long real meetings, the routed agent team is the best version.** 161 held-out cases built from QMSum and AMI meetings, with answers and conflicts 10 to 60 turns back; answers graded blind by Sonnet (record `E10-test-20261115T122222764794Z`, grades `E10G-test-20261115T122424089581Z`).
+**On long real meetings, code finds the evidence and the model only words it.** 161 held-out cases built from QMSum and AMI meetings, with answers and conflicts 10 to 60 turns back. Both versions ran on the same cases under the same conditions; answers graded blind by Sonnet on 68 of them (records `E11-test-20261116T035600246259Z`, grades `E11G-test-20261116T040043299775Z`).
 
-| Measure | Original single agent | Original team | Routed team (shipped) |
-|---|---|---|---|
-| answers graded correct | 35% | 33% | **57%** |
-| correct or partly correct | 45% | 47% | **76%** |
-| found evidence 10+ turns back | 0% | 0% | **40%** |
-| caught a contradiction or update | 0% | 0% | **13%** |
-| mean latency | 2.4 s | 3.2 s | **3.0 s** |
-| cards cut at the 8 s deadline | 0.6% | 1.9% | **0%** |
+| Measure | Routed team (before) | Evidence-first team (shipped) |
+|---|---|---|
+| answers graded correct | 57% | **65%** |
+| correct or partly correct | 75% | **90%** |
+| answers graded wrong | 25% | **10%** |
+| caught a contradiction or update | 13% | **87%** |
+| false conflict alerts | 6.7% | **0%** |
+| cited evidence 10+ turns back | 40% | **60%** |
+| mean latency | 3.5 s | **2.6 s** |
+| tokens per card | 1,337 | **630** |
+| cards cut at the 8 s deadline | 1.2% | **0%** |
 
-What made the difference is the system around the model: transcript search before the first model call, the contradiction checker run in code on every press, code routing to one specialist (the consistency specialist goes first when the checker flags a conflict), and the evidence guard.
+The original single agent got 35% of these answers right (E10, `E10-test-20261115T122222764794Z`).
+
+How a press works now: hybrid search pulls 50 turns, a cross-encoder reranker (bge-reranker-v2-m3) keeps the best 3 with their neighbours, and the 4B model writes a short answer citing them; code fills each quote from the real turn, so a citation is always real. Contradictions are found pair by pair: a ModernBERT NLI model and the fine-tuned checker score the latest turn against the earlier turns about the same thing. When nothing in the meeting answers, the card says "Not discussed yet" and shows the closest related point.
 
 | Question | Result |
 |---|---|
@@ -275,7 +280,7 @@ Tests that need a GPU, Ollama or a network are marked `real` and are skipped by 
    ```
    It starts Postgres with pgvector, the whisper.cpp speech service, the backend and the web client, and stops them on Ctrl-C ([docs/run-everything.md](docs/run-everything.md)). Open the same client address, allow the microphone, speak for a minute or two, and press "What was said?".
 3. **What to look for.** Ask about something nobody said: the card should abstain. Say "make that Monday" after "Friday": the card should show both turns and call it an update, not a contradiction. A suggested reply is labelled as a suggestion.
-4. **Switch the system behind the button** with `CONTEXTLENS_ASSISTANT` set to `team` (the default), `single` or `team_shipping_changed` before starting the backend. [docs/REPORT.md](docs/REPORT.md) says which of these was measured on the held-out test and which is the product default.
+4. **Switch the system behind the button** with `CONTEXTLENS_ASSISTANT` set to `team_rag` (the default), `team_routed`, `team`, `single` or `team_shipping_changed` before starting the backend. [docs/REPORT.md](docs/REPORT.md) says which of these was measured on the held-out test and which is the product default.
 
 ## Reproduce a result
 

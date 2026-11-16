@@ -39,7 +39,7 @@ def _press(prod):
 
 def test_the_default_is_the_routed_team(monkeypatch):
     monkeypatch.delenv("CONTEXTLENS_ASSISTANT", raising=False)
-    assert production.assistant_kind() == "team_routed" == production.DEFAULT_ASSISTANT
+    assert production.assistant_kind() == "team_rag" == production.DEFAULT_ASSISTANT
 
 
 def test_the_team_answers_with_a_consistency_checker(monkeypatch):
@@ -116,7 +116,7 @@ def test_team_shipping_changed_builds_the_arm_the_experiment_measured_and_the_de
     from contextlens.experiments import team_attempt as ta
     from test_e3 import NoEmbed as E3NoEmbed, scenario, turn
 
-    assert production.DEFAULT_ASSISTANT == "team_routed" and "team_shipping_changed" in production.ASSISTANTS
+    assert production.DEFAULT_ASSISTANT == "team_rag" and "team_shipping_changed" in production.ASSISTANTS
     monkeypatch.setenv("CONTEXTLENS_ASSISTANT", "team_shipping_changed")
     assert production.assistant_kind() == "team_shipping_changed"
 

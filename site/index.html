@@ -103,9 +103,9 @@
         <li><h3>Streaming speech</h3><p>whisper.cpp, C++, gRPC.</p></li>
         <li><h3>Speaker labels</h3><p>Who is talking.</p></li>
         <li><h3>Memory</h3><p>Builds as the meeting goes.</p></li>
-        <li><h3>Contradiction check</h3><p>DeBERTa plus a prompted cascade, in code.</p><span class="measured">45 ms</span></li>
-        <li><h3>Agent team</h3><p>Routed by code, only when needed.</p></li>
-        <li><h3>Hybrid retrieval</h3><p>BM25, vectors, reranker.</p></li>
+        <li><h3>Contradiction check</h3><p>ModernBERT NLI and a fine-tuned DeBERTa, pair by pair, in code.</p></li>
+        <li><h3>Evidence first</h3><p>Code picks and cites the turns; the model only words the answer.</p></li>
+        <li><h3>Hybrid retrieval</h3><p>BM25, vectors, a bge cross-encoder reranker.</p></li>
         <li><h3>Evidence guard</h3><p>Drops claims no earlier turn backs.</p></li>
         <li><h3>Local model</h3><p>4B, through Ollama, on your machine.</p></li>
       </ul>
@@ -120,9 +120,9 @@
         <p>161 held-out cases from QMSum and AMI, with conflicts 20 to 60 turns apart.</p>
       </div>
       <dl class="panels results">
-        <div><dt>Conflicts caught</dt><dd><span class="big" data-num="e10-conflict-catch-team">13%</span><span class="vs">Single agent <span data-num="e10-conflict-catch-single">0%</span></span></dd></div>
-        <div><dt>Found evidence 10+ turns back</dt><dd><span class="big" data-num="e10-cite-team">40%</span><span class="vs">Single agent <span data-num="e10-cite-single">0%</span></span></dd></div>
-        <div><dt>Answers graded correct</dt><dd><span class="big" data-num="e10-abstain-team">57%</span><span class="vs">Single agent <span data-num="e10-abstain-single">35%</span></span></dd></div>
+        <div><dt>Conflicts caught</dt><dd><span class="big" data-num="e10-conflict-catch-team">87%</span><span class="vs">Single agent <span data-num="e10-conflict-catch-single">0%</span></span></dd></div>
+        <div><dt>Found evidence 10+ turns back</dt><dd><span class="big" data-num="e10-cite-team">60%</span><span class="vs">Single agent <span data-num="e10-cite-single">0%</span></span></dd></div>
+        <div><dt>Answers graded correct</dt><dd><span class="big" data-num="e10-abstain-team">65%</span><span class="vs">Single agent <span data-num="e10-abstain-single">35%</span></span></dd></div>
       </dl>
       <dl class="panels runs">
         <div><dt>Contradiction F1 on DECODE</dt><dd class="big">0.913</dd><dd class="vs">Baseline 0.753, on 1,000 pairs</dd></div>
