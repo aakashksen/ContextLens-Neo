@@ -16,88 +16,54 @@
 <header class="nav">
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
-    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html" aria-current="page">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html" aria-current="page">Watch it work</a><a href="specs.html">How it’s built</a></nav>
     <a class="btn btn--primary nav__end" href="download.html">Download</a>
   </div>
 </header>
 
 <main id="top">
-  <section class="room container" data-room>
+  <section class="room container" data-demo>
     <div class="room__head">
-      <div>
-        <h1>Watch it work</h1>
-        <p class="lead" data-lead>A short meeting plays. Whenever you lose track, press. A card answers with who said it and where.</p>
-      </div>
-      <p class="chip room__mode" data-mode>Scripted replay</p>
+      <h1>Watch it work</h1>
+      <p class="lead">A short team meeting. ContextLens listens along, and when something changes or gets decided, a card appears on its own. Press <kbd>Space</kbd> any time to ask what matters right now.</p>
     </div>
 
-    <ol class="steps" data-steps aria-label="How to use this page">
-      <li data-step="1"><span class="steps__n">1</span><span><b>Play</b> the meeting</span></li>
-      <li data-step="2"><span class="steps__n">2</span><span><b>Press</b> <kbd>Space</kbd> when you lose track</span></li>
-      <li data-step="3"><span class="steps__n">3</span><span><b>Read</b> the card. Its sources light up in the transcript</span></li>
-    </ol>
+    <div class="stage stage--demo" data-stage>
+      <ul class="stage__tiles" data-tiles aria-label="People in the meeting"></ul>
+      <p class="stage__cc" data-cc aria-hidden="true"></p>
+      <div class="stage__cards" data-cards aria-live="polite"></div>
+      <button class="stage__play" type="button" data-bigplay><span class="stage__tri" aria-hidden="true"></span><span>Play the demo</span></button>
+    </div>
 
-    <div class="room__grid">
-      <div class="room__main">
-        <div class="stage" data-stage>
-          <video class="stage__video" data-video muted playsinline hidden></video>
-          <ul class="stage__tiles" data-tiles aria-label="People in the meeting"></ul>
-          <button class="stage__play" type="button" data-bigplay><span class="stage__tri" aria-hidden="true"></span>Play the meeting</button>
-          <button class="stage__nudge" type="button" data-nudge hidden>Something just changed. <b>Press to see it</b></button>
-          <p class="stage__cc" data-cc aria-hidden="true"></p>
-          <div class="stage__cards" data-cards aria-live="polite"></div>
+    <div class="panels controls">
+      <div class="controls__row">
+        <button class="btn controls__play" type="button" data-play aria-pressed="false">Play</button>
+        <div class="track">
+          <input class="track__seek" type="range" min="0" max="82" step="1" value="0" aria-label="Position in the meeting" data-seek>
+          <div class="track__marks" data-marks aria-hidden="true"></div>
         </div>
-
-        <div class="panels controls">
-          <div class="controls__row">
-            <button class="btn controls__play" type="button" data-play aria-pressed="false">Play</button>
-            <div class="track">
-              <input class="track__seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the meeting" data-seek>
-              <div class="track__marks" data-marks aria-hidden="true"></div>
-            </div>
-            <span class="measured controls__time" data-time>0:00 / 0:00</span>
-            <button class="btn btn--primary controls__press" type="button" data-press>Press <kbd>Space</kbd></button>
-          </div>
-          <div class="controls__row controls__row--ask">
-            <span class="room__label" id="ask-label">Ask about</span>
-            <div class="asks" role="group" aria-labelledby="ask-label" data-presets></div>
-            <input class="field room__q" id="question" type="text" maxlength="300" placeholder="Type a question, or leave empty for what matters now" aria-label="Question" data-question>
-          </div>
-          <div class="controls__row controls__row--opts">
-            <label class="room__label" for="meeting" data-meeting-label>Meeting</label>
-            <select class="field" id="meeting" data-meeting></select>
-            <span class="room__label" id="assistant-label">Answer with</span>
-            <div class="asks" role="group" aria-labelledby="assistant-label" data-assistants>
-              <button class="ask" type="button" data-assistant="team" aria-pressed="true">Agent team</button>
-              <button class="ask" type="button" data-assistant="single" aria-pressed="false">Single agent</button>
-              <button class="ask" type="button" data-assistant="both" aria-pressed="false">Compare both</button>
-            </div>
-          </div>
-          <p class="controls__status" role="status" data-status>Ready.</p>
-        </div>
-
-        <div class="panels">
-          <div class="demo__cap">Transcript <span data-captions-note></span></div>
-          <ol class="chat" data-turns tabindex="0" aria-label="Transcript with speakers"></ol>
-        </div>
-
-        <details class="hood" data-trace-wrap hidden>
-          <summary>Under the hood: how the card was made</summary>
-          <div class="room__traces" data-traces></div>
-        </details>
+        <span class="measured controls__time" data-time>0:00 / 1:22</span>
+        <button class="btn controls__speed" type="button" data-speed aria-pressed="false">1× speed</button>
+        <button class="btn btn--primary controls__press" type="button" data-press>Press <kbd>Space</kbd></button>
       </div>
+    </div>
 
-      <aside class="room__side" aria-label="What the system has built so far">
-        <div class="panels">
-          <div class="demo__cap">What it remembers <span data-memory-note></span></div>
-          <ul class="room__list" data-memory></ul>
-        </div>
-        <div class="panels">
-          <div class="demo__cap">What changed <span data-flags-note></span></div>
-          <ul class="room__list" data-flags></ul>
-        </div>
-        <p class="room__credit" data-credit>Scripted meeting, invented. Nothing here ran a model.</p>
-      </aside>
+    <div class="moments">
+      <div class="moments__head">
+        <h2 class="room__h2">Jump to a moment</h2>
+        <p class="moments__key"><span class="dot dot--auto"></span>Appears on its own <span class="dot dot--press"></span>What a press shows</p>
+      </div>
+      <ol class="moments__list" data-rail></ol>
+    </div>
+
+    <div class="panels">
+      <div class="demo__cap">Transcript</div>
+      <ol class="chat" data-turns tabindex="0" aria-label="Transcript"></ol>
+    </div>
+
+    <div class="room__foot">
+      <p class="room__credit" data-credit></p>
+      <p class="room__more">Curious what happens inside a press? <a href="tour.html">Follow one press, step by step</a>.</p>
     </div>
   </section>
 </main>
@@ -111,7 +77,6 @@
       <a href="specs.html">How it’s built</a>
       <a href="tour.html">Walkthrough</a>
       <a href="download.html">Download</a>
-      <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>
     <div class="footer__links">

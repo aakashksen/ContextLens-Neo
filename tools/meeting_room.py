@@ -4,7 +4,7 @@ Replay (no model, no speech service; the AMI transcript with its own timings sta
     .venv/Scripts/python tools/meeting_room.py
 Live (real speech service + diarizer + stream API + local models; needs Ollama, the speech container, HF_TOKEN):
     .venv/Scripts/python tools/meeting_room.py --live
-Then open http://127.0.0.1:8790/room.html
+Then open http://127.0.0.1:8790/lab.html (the public room.html is the short scripted demo)
 
 Listens on 127.0.0.1 only. AMI Meeting Corpus, CC BY 4.0, https://groups.inf.ed.ac.uk/ami/corpus/ .
 """

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting room lab, ContextLens Neo</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="A real meeting plays. Captions, memory and contradiction flags build as it goes. Press, and see the card, the turns it cites and how it was made.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="room.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a></nav>
+    <a class="btn btn--primary nav__end" href="download.html">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="room container" data-room>
+    <div class="room__head">
+      <div>
+        <h1>Meeting room lab</h1>
+        <p class="lead" data-lead>A short meeting plays. Whenever you lose track, press. A card answers with who said it and where.</p>
+      </div>
+      <p class="chip room__mode" data-mode>Scripted replay</p>
+    </div>
+
+    <ol class="steps" data-steps aria-label="How to use this page">
+      <li data-step="1"><span class="steps__n">1</span><span><b>Play</b> the meeting</span></li>
+      <li data-step="2"><span class="steps__n">2</span><span><b>Press</b> <kbd>Space</kbd> when you lose track</span></li>
+      <li data-step="3"><span class="steps__n">3</span><span><b>Read</b> the card. Its sources light up in the transcript</span></li>
+    </ol>
+
+    <div class="room__grid">
+      <div class="room__main">
+        <div class="stage" data-stage>
+          <video class="stage__video" data-video muted playsinline hidden></video>
+          <ul class="stage__tiles" data-tiles aria-label="People in the meeting"></ul>
+          <button class="stage__play" type="button" data-bigplay><span class="stage__tri" aria-hidden="true"></span>Play the meeting</button>
+          <button class="stage__nudge" type="button" data-nudge hidden>Something just changed. <b>Press to see it</b></button>
+          <p class="stage__cc" data-cc aria-hidden="true"></p>
+          <div class="stage__cards" data-cards aria-live="polite"></div>
+        </div>
+
+        <div class="panels controls">
+          <div class="controls__row">
+            <button class="btn controls__play" type="button" data-play aria-pressed="false">Play</button>
+            <div class="track">
+              <input class="track__seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the meeting" data-seek>
+              <div class="track__marks" data-marks aria-hidden="true"></div>
+            </div>
+            <span class="measured controls__time" data-time>0:00 / 0:00</span>
+            <button class="btn btn--primary controls__press" type="button" data-press>Press <kbd>Space</kbd></button>
+          </div>
+          <div class="controls__row controls__row--ask">
+            <span class="room__label" id="ask-label">Ask about</span>
+            <div class="asks" role="group" aria-labelledby="ask-label" data-presets></div>
+            <input class="field room__q" id="question" type="text" maxlength="300" placeholder="Type a question, or leave empty for what matters now" aria-label="Question" data-question>
+          </div>
+          <div class="controls__row controls__row--opts">
+            <label class="room__label" for="meeting" data-meeting-label>Meeting</label>
+            <select class="field" id="meeting" data-meeting></select>
+            <span class="room__label" id="assistant-label">Answer with</span>
+            <div class="asks" role="group" aria-labelledby="assistant-label" data-assistants>
+              <button class="ask" type="button" data-assistant="team" aria-pressed="true">Agent team</button>
+              <button class="ask" type="button" data-assistant="single" aria-pressed="false">Single agent</button>
+              <button class="ask" type="button" data-assistant="both" aria-pressed="false">Compare both</button>
+            </div>
+          </div>
+          <p class="controls__status" role="status" data-status>Ready.</p>
+        </div>
+
+        <div class="panels">
+          <div class="demo__cap">Transcript <span data-captions-note></span></div>
+          <ol class="chat" data-turns tabindex="0" aria-label="Transcript with speakers"></ol>
+        </div>
+
+        <details class="hood" data-trace-wrap hidden>
+          <summary>Under the hood: how the card was made</summary>
+          <div class="room__traces" data-traces></div>
+        </details>
+      </div>
+
+      <aside class="room__side" aria-label="What the system has built so far">
+        <div class="panels">
+          <div class="demo__cap">What it remembers <span data-memory-note></span></div>
+          <ul class="room__list" data-memory></ul>
+        </div>
+        <div class="panels">
+          <div class="demo__cap">What changed <span data-flags-note></span></div>
+          <ul class="room__list" data-flags></ul>
+        </div>
+        <p class="room__credit" data-credit>Scripted meeting, invented. Nothing here ran a model.</p>
+      </aside>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="download.html">Download</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script src="avatars.js"></script>
+<script src="lab.js"></script>
+</body>
+</html>
