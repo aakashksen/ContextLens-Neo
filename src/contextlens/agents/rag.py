@@ -28,6 +28,9 @@ NEIGHBOURS = (1, 1)  # turns shown before and after each best turn (a spoken ans
 MAX_CITED = 3 + 1  # the writer's citations, plus the best turn
 RECENT_TURNS = 3  # recent window, after the evidence
 WRITER_TOKENS = 120
+TOPIC_TOKENS = 200  # "what did they discuss / think": reference answers make several points, so room for each
+TOPIC_HINT = ("\nThis question asks what was discussed or what someone thought: give each distinct point the evidence makes, "
+              "up to four short sentences, each with its turn number.")
 WRITER_BUDGET_S = 6.5  # the writer's call is cut here; the answer then falls back to the quote
 CLIP_CHARS = 900  # characters of a best turn in the prompt
 CLIP_NEIGHBOUR = 320
@@ -302,8 +305,12 @@ class RagTeam:
             notes.append("writer: deadline reached")
             return None, False
         messages = build_messages(question, latest, evid, recent, note)
+        topic = bool(question and TOPIC_QUESTION.search(question))
+        if topic:
+            messages = [{**messages[0], "content": messages[0]["content"] + TOPIC_HINT}, *messages[1:]]
         t0 = time.perf_counter()
-        call = functools.partial(self.llm.complete, messages, schema=None, max_tokens=WRITER_TOKENS, timeout_s=remaining)
+        call = functools.partial(self.llm.complete, messages, schema=None, max_tokens=TOPIC_TOKENS if topic else WRITER_TOKENS,
+                                 timeout_s=remaining)
         try:
             res = _call_llm(call, remaining + MARGIN_S)
         except _Abandoned:

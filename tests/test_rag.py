@@ -259,3 +259,12 @@ def test_an_asked_question_keeps_a_conflict_about_it():
     team.finder = lambda statement, window: ("update", 0.95, [TURNS[0].id])  # the budget turns are the evidence
     card = team.answer(req("What is the launch budget now?", as_of=9), ctx)
     assert card.findings[0].label == "update" and "rag_conflict_off_topic" not in ctx.stage_ms
+
+
+def test_a_topic_question_gets_more_room_and_asks_for_each_point():
+    team, llm, ctx = build(["Ravi said five thousand [1]."])
+    team.answer(req("What did Ravi say about the launch budget?"), ctx)
+    assert rag.TOPIC_HINT.strip() in llm.calls[0][0]["content"]
+    team, llm, ctx = build(["Five thousand [1]."])
+    team.answer(req(Q), ctx)
+    assert rag.TOPIC_HINT.strip() not in llm.calls[0][0]["content"]
