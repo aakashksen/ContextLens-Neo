@@ -34,7 +34,7 @@ Standard library only. It checks the message types only, not the client logic.
    prompts to enable the new input backend and restart: accept, then set Project Settings > Player >
    Active Input Handling to "Both" (the card's buttons use the legacy event system). Neither package
    has been resolved in the Editor yet; note any Package Manager error.
-4. Expected on Play: top line "REC: server says recording" (red), shown only once the server has said
+4. Expected on Play: top line "● REC  listening" (red), shown only once the server has said
    so. Before that it reads "Not recording (connecting)"; if the server is not running, "Not recording
    (not connected ...)".
 5. Click "Test audio": a transcript line appears. Click "Press" three times: cards come back as

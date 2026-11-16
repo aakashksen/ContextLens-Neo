@@ -11,6 +11,8 @@ namespace ContextLens
     {
         public string serverUrl = "ws://127.0.0.1:8000/ws/";
         public string conversationId = "demo";
+        // "Test audio" sends a canned clip to check the setup (docs/unity-setup.md). Off for a clean wearer view.
+        public bool showDevControls = true;
 
         ContextLensSocket socket;
         readonly List<Turn> turns = new List<Turn>();
@@ -22,6 +24,7 @@ namespace ContextLens
         string connectionDetail = "";
         WebCamTexture webcam;
         Text cardText, stateText, webcamText, transcriptText;
+        Text cardHead;
         RawImage webcamPreview;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -205,23 +208,36 @@ namespace ContextLens
                 webcamPreview.gameObject.SetActive(true);
             }
             bool on = webcam != null && webcam.isPlaying;
-            webcamText.text = on ? "WEBCAM ON (local only, not sent)" : "Webcam off";
+            webcamText.text = on ? "WEBCAM ON (local only, not sent)" : "";
             webcamText.color = on ? Color.red : Color.gray;
         }
 
         void ShowCard(Card c)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("[" + c.status + " / " + c.mode + "]");
+            cardHead.text = StatusLabel(c.status);
+            cardHead.color = c.status == "answered" ? Ok : c.status == "partial" ? Accent : Color.gray;
             foreach (var f in c.findings)
             {
-                sb.AppendLine("- " + f.statement);
+                sb.AppendLine("\u2022 " + f.statement);
                 foreach (var e in f.evidence)
-                    sb.AppendLine("    " + e.speaker + " @" + e.start_ms + "ms: \"" + e.quote + "\"");
+                    sb.AppendLine("     " + e.speaker + ", " + Clock(e.start_ms) + ":  \u201c" + e.quote + "\u201d");
             }
-            if (!string.IsNullOrEmpty(c.suggestion)) sb.AppendLine("Suggestion: " + c.suggestion);
-            if (c.missing != null && c.missing.Count > 0) sb.AppendLine("Missing: " + string.Join("; ", c.missing));
+            if (!string.IsNullOrEmpty(c.suggestion)) sb.AppendLine("\nNext: " + c.suggestion);
+            if (c.missing != null && c.missing.Count > 0) sb.AppendLine("Not said yet: " + string.Join("; ", c.missing));
             cardText.text = sb.ToString();
+        }
+
+        static readonly Color Accent = new Color(0.98f, 0.75f, 0.25f);
+        static readonly Color Ok = new Color(0.45f, 0.85f, 0.55f);
+
+        static string StatusLabel(string status) =>
+            status == "answered" ? "Answered" : status == "partial" ? "Partly answered" : status == "abstained" ? "Not discussed yet" : status;
+
+        static string Clock(long ms)
+        {
+            long s = Math.Max(0, ms / 1000);
+            return (s / 60) + ":" + (s % 60).ToString("00");
         }
 
         void RefreshTranscript()
@@ -238,7 +254,7 @@ namespace ContextLens
             // Pause or Delete since. Resume stays "paused" until the server answers.
             bool rec = connection == "recording";
             string label = connection == "closed" ? "not connected" + (connectionDetail != "" ? " (" + connectionDetail + ")" : "") : connection;
-            stateText.text = rec ? "REC: server says recording" : "Not recording (" + label + ")";
+            stateText.text = rec ? "\u25cf REC  listening" : "Not recording (" + label + ")";
             stateText.color = rec ? Color.red : Color.gray;
         }
 
@@ -252,16 +268,25 @@ namespace ContextLens
             rt.localScale = Vector3.one * 0.0015f;
             var bg = new GameObject("Bg", typeof(Image)).GetComponent<Image>();
             bg.transform.SetParent(rt, false);
-            bg.color = new Color(0.1f, 0.1f, 0.15f, 0.9f);
+            bg.color = new Color(0.07f, 0.08f, 0.11f, 0.92f);
             bg.rectTransform.sizeDelta = rt.sizeDelta;
 
-            stateText = MakeText(rt, new Vector2(0, 270), new Vector2(760, 40), 28);
-            webcamText = MakeText(rt, new Vector2(0, 230), new Vector2(760, 40), 24);
-            webcamText.text = "Webcam off";
+            var bar = new GameObject("Accent", typeof(Image)).GetComponent<Image>();
+            bar.transform.SetParent(rt, false);
+            bar.color = Accent;
+            bar.rectTransform.sizeDelta = new Vector2(rt.sizeDelta.x, 6);
+            bar.rectTransform.anchoredPosition = new Vector2(0, rt.sizeDelta.y / 2 - 3);
+
+            stateText = MakeText(rt, new Vector2(0, 268), new Vector2(760, 36), 24);
+            webcamText = MakeText(rt, new Vector2(0, 268), new Vector2(760, 36), 24);
+            webcamText.alignment = TextAnchor.UpperRight;
             webcamText.color = Color.gray;
-            transcriptText = MakeText(rt, new Vector2(0, 130), new Vector2(760, 150), 24);
-            cardText = MakeText(rt, new Vector2(0, -50), new Vector2(760, 250), 26);
-            cardText.text = "Press the button to ask for a card.";
+            transcriptText = MakeText(rt, new Vector2(0, 160), new Vector2(760, 130), 22);
+            transcriptText.color = new Color(0.7f, 0.72f, 0.78f);
+            cardHead = MakeText(rt, new Vector2(0, 70), new Vector2(760, 44), 32);
+            cardHead.fontStyle = FontStyle.Bold;
+            cardText = MakeText(rt, new Vector2(0, -75), new Vector2(760, 245), 26);
+            cardText.text = "Press to ask what was said.";
 
             webcamPreview = new GameObject("WebcamPreview", typeof(RawImage)).GetComponent<RawImage>();
             webcamPreview.transform.SetParent(rt, false);
@@ -269,12 +294,13 @@ namespace ContextLens
             webcamPreview.rectTransform.anchoredPosition = new Vector2(300, 190);
             webcamPreview.gameObject.SetActive(false);
 
-            MakeButton(rt, "Press", -300, -230, Press);
-            MakeButton(rt, "Test audio", -150, -230, SendTestAudio);
-            MakeButton(rt, "Pause", 0, -230, Pause);
-            MakeButton(rt, "Resume", 150, -230, Resume);
-            MakeButton(rt, "Webcam", 300, -230, ToggleWebcam);
-            MakeButton(rt, "Delete", 300, -290, DeleteTranscript);
+            // Press leads; Pause, Resume and Delete stay one tap away (privacy controls).
+            MakeButton(rt, "Press", -290, -250, Press, 160, Accent, new Color(0.12f, 0.1f, 0.05f));
+            MakeButton(rt, "Pause", -130, -250, Pause);
+            MakeButton(rt, "Resume", 10, -250, Resume);
+            MakeButton(rt, "Webcam", 150, -250, ToggleWebcam);
+            MakeButton(rt, "Delete", 290, -250, DeleteTranscript);
+            if (showDevControls) MakeButton(rt, "Test audio", 300, 105, SendTestAudio);
 
             if (FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
                 new GameObject("EventSystem", typeof(UnityEngine.EventSystems.EventSystem),
@@ -300,17 +326,18 @@ namespace ContextLens
         }
 
         static void MakeButton(Transform parent, string label, float x, float y,
-            UnityEngine.Events.UnityAction onClick)
+            UnityEngine.Events.UnityAction onClick, float width = 130, Color? fill = null, Color? ink = null)
         {
             var go = new GameObject(label + "Button", typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = new Color(0.25f, 0.35f, 0.6f);
+            go.GetComponent<Image>().color = fill ?? new Color(0.2f, 0.23f, 0.3f);
             var rt = go.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(130, 50);
+            rt.sizeDelta = new Vector2(width, 50);
             rt.anchoredPosition = new Vector2(x, y);
             go.GetComponent<Button>().onClick.AddListener(onClick);
-            var t = MakeText(rt, Vector2.zero, new Vector2(130, 50), 22);
+            var t = MakeText(rt, Vector2.zero, new Vector2(width, 50), 22);
             t.alignment = TextAnchor.MiddleCenter;
+            t.color = ink ?? Color.white;
             t.text = label;
         }
 
