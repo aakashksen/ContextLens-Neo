@@ -20,6 +20,17 @@
     });
   });
 
+  /* a friendly face next to each speaker name in the sample transcripts */
+  if (window.CLAvatar) {
+    const cast = window.CLAvatar.cast();
+    document.querySelectorAll('.turns .who').forEach((w) => {
+      if (w.querySelector('.av')) return;
+      const name = w.textContent.trim();
+      w.classList.add('face-in');
+      w.prepend(window.CLAvatar.make(cast.key(name)));
+    });
+  }
+
   const card = document.querySelector('[data-card]');
   if (!card) return;
   const states = {

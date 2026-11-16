@@ -16,7 +16,7 @@
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
     <nav class="nav__links" aria-label="Main"><a href="desktop.html" aria-current="page">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
-    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
+    <a class="btn btn--primary nav__end" href="download.html">Download</a>
   </div>
 </header>
 
@@ -26,10 +26,9 @@
       <div>
         <h1>A copilot in your tray</h1>
         <p class="lead">Press a hotkey in any call. The card appears on top.</p>
-        <div class="actions"><a class="btn btn--primary" href="#install">Install it</a><a class="btn" href="room.html">Watch it work</a></div>
-        <span class="chip status">In development on feat/desktop</span>
+        <div class="actions"><a class="btn btn--primary" href="download.html#desktop">Download</a><a class="btn" href="room.html">Watch it work</a></div>
       </div>
-      <div class="slotbox" data-slot="desktop-shot-main" data-alt="The heads-up card on top of a video call"><strong>Desktop app</strong><span>Screenshot goes here</span></div>
+      <div class="slotbox" data-slot="desktop-shot-main"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call: the beta moved from Friday to Monday, with the quotes and who said them."></div>
     </div>
   </section>
 
@@ -60,31 +59,10 @@
     </div>
   </section>
 
-  <section class="section" id="install" aria-labelledby="install-h">
+  <section class="section section--band" id="get" aria-labelledby="get-h">
     <div class="container">
-      <div class="head"><h2 id="install-h">Install</h2></div>
-      <ol class="install">
-        <li><div><h3>Get the code</h3><pre class="code">git clone https://github.com/aakashksen/ContextLens-Neo</pre></div></li>
-        <li><div><h3>Pull the models</h3><pre class="code">ollama pull qwen3.5:4b-q4_K_M
-ollama pull nomic-embed-text</pre></div></li>
-        <li><div><h3>Start speech, memory and the backend</h3><pre class="code">py -3.12 tools/run_everything.py</pre></div></li>
-        <li><div><h3>Build the app</h3><pre class="code">cd clients/desktop
-npm install
-npm run dist</pre></div></li>
-      </ol>
-    </div>
-  </section>
-
-  <section class="section section--band" id="requirements" aria-labelledby="req-h">
-    <div class="container">
-      <div class="head"><h2 id="req-h">Requirements</h2></div>
-      <dl class="stack">
-        <div><dt>Ollama</dt><dd>Serves the language model and the embeddings.</dd><dd class="measured path">qwen3.5:4b-q4_K_M</dd></div>
-        <div><dt>Docker</dt><dd>Runs the speech service and PostgreSQL.</dd><dd class="measured path">docker compose</dd></div>
-        <div><dt>A GPU</dt><dd>8 GB of video memory for the local model.</dd><dd class="measured path">8 GB</dd></div>
-        <div><dt>Node.js</dt><dd>Builds the desktop app.</dd><dd class="measured path">npm run dist</dd></div>
-      </dl>
-      <div class="cta"><a class="btn btn--primary" href="room.html">Watch it work</a><a class="btn" href="specs.html">How it’s built</a></div>
+      <div class="head"><h2 id="get-h">Ready to try it?</h2><p>Setup takes about 15 minutes, most of it downloading models.</p></div>
+      <div class="cta"><a class="btn btn--primary" href="download.html#desktop">Desktop setup</a><a class="btn" href="room.html">Watch it work</a></div>
     </div>
   </section>
 </main>
@@ -97,6 +75,7 @@ npm run dist</pre></div></li>
       <a href="room.html">Watch it work</a>
       <a href="specs.html">How it’s built</a>
       <a href="tour.html">Walkthrough</a>
+      <a href="download.html">Download</a>
       <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>

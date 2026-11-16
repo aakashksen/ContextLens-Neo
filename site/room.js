@@ -22,21 +22,31 @@
     if (!s || s === 'unknown') return 'Unattributed';
     return /^[A-Z]$/.test(s) ? 'Speaker ' + s : s;
   };
-  const NAMES = { single_plus: 'Single plus', team_routed: 'Team routed' };
+  const NAMES = { single_plus: 'Single agent', team_routed: 'Agent team', team_rag: 'Agent team' };
+  const STATUS = { answered: 'Answered', partial: 'Partly answered', abstained: 'Not discussed yet' };
+  const LABELS = { update: 'Changed', contradiction: 'Contradiction' };
   const PRESETS = ['What was decided?', 'Who owns what?', 'What changed?'];
+  const faces = window.CLAvatar ? window.CLAvatar.cast() : { key: () => 'someone', reset() {} };
+  const face = (speaker, cls) => {
+    const w = el('span', 'face' + (cls ? ' ' + cls : ''));
+    if (window.CLAvatar) w.append(window.CLAvatar.make(faces.key(speaker)));
+    return w;
+  };
 
   const ui = {
-    mode: $('[data-mode]'), lead: $('[data-lead]'), meeting: $('[data-meeting]'), assistants: $('[data-assistants]'),
+    mode: $('[data-mode]'), lead: $('[data-lead]'), meeting: $('[data-meeting]'), meetingLabel: $('[data-meeting-label]'), assistants: $('[data-assistants]'),
     question: $('[data-question]'), presets: $('[data-presets]'), press: $('[data-press]'), stage: $('[data-stage]'),
     video: $('[data-video]'), tiles: $('[data-tiles]'), cards: $('[data-cards]'), play: $('[data-play]'), seek: $('[data-seek]'),
     time: $('[data-time]'), status: $('[data-status]'), turns: $('[data-turns]'), memory: $('[data-memory]'), flags: $('[data-flags]'),
     traceWrap: $('[data-trace-wrap]'), traces: $('[data-traces]'), credit: $('[data-credit]'),
-    capNote: $('[data-captions-note]'), memNote: $('[data-memory-note]'), flagNote: $('[data-flags-note]')
+    capNote: $('[data-captions-note]'), memNote: $('[data-memory-note]'), flagNote: $('[data-flags-note]'),
+    bigplay: $('[data-bigplay]'), nudge: $('[data-nudge]'), cc: $('[data-cc]'), marks: $('[data-marks]'), steps: $('[data-steps]')
   };
 
   const st = {
-    mode: 'static', turns: [], memory: [], flags: [], duration: 0, meeting: null, assistant: 'both', cited: new Set(),
-    session: null, since: 0, lag: null, scripted: null, busy: false, last: null, pollTimer: null
+    mode: 'static', turns: [], memory: [], flags: [], duration: 0, meeting: null, assistant: 'team', cited: new Set(),
+    session: null, since: 0, lag: null, scripted: null, busy: false, last: null, pollTimer: null,
+    started: false, carded: false, seenFlags: 0, nudgeTimer: null, arms: ['single_plus', 'team_routed']
   };
   const live = () => st.mode === 'live';
   const turnById = () => new Map(st.turns.map((t) => [t.id, t]));
@@ -59,6 +69,7 @@
   const say = (text) => { ui.status.textContent = text; };
 
   function play() {
+    st.started = true;
     if (clock.virtual) {
       if (clock.base >= st.duration) clock.base = 0;
       clock.wall = performance.now();
@@ -88,9 +99,16 @@
 
   function turnRow(t) {
     const li = el('li', st.cited.has(t.id) ? 'is-cited' : '', null, [
-      el('span', 'measured id', '#' + t.seq), el('span', 'who' + (t.speaker === 'unknown' ? ' who--unknown' : ''), who(t.speaker)), el('span', null, t.text)
+      face(t.speaker),
+      el('div', 'chat__body', null, [
+        el('div', 'chat__meta', null, [
+          el('span', 'chat__who' + (t.speaker === 'unknown' ? ' who--unknown' : ''), who(t.speaker)),
+          el('span', 'measured chat__at', '#' + t.seq + ' · ' + fmt(t.start_ms)),
+          el('span', 'chat__tag', 'cited')
+        ]),
+        el('p', 'chat__text', t.text)
+      ])
     ]);
-    li.title = fmt(t.start_ms);
     rows.set(t.id, li);
     return li;
   }
@@ -110,26 +128,73 @@
   function refreshRow(t) {
     const li = rows.get(t.id);
     if (!li) return;
-    li.children[1].textContent = who(t.speaker);
-    li.children[1].className = 'who' + (t.speaker === 'unknown' ? ' who--unknown' : '');
-    li.children[2].textContent = t.text;
+    li.children[0].replaceWith(face(t.speaker));
+    const w = li.querySelector('.chat__who');
+    w.textContent = who(t.speaker);
+    w.className = 'chat__who' + (t.speaker === 'unknown' ? ' who--unknown' : '');
+    li.querySelector('.chat__text').textContent = t.text;
   }
 
+  /* everyone in the meeting has a seat from the start (static and replay know the cast); live adds people as they speak */
   function renderTiles(vis) {
-    const names = [...new Set(vis.map((t) => t.speaker))].slice(0, 8);
+    const pool = live() ? vis : st.turns;
+    const names = [...new Set(pool.map((t) => t.speaker))].slice(0, 8);
     const now = pos();
-    const talking = vis.find((t) => t.start_ms <= now && now <= t.end_ms + 300);
+    const talking = isPlaying() || live() ? st.turns.find((t) => t.start_ms <= now && now <= t.end_ms + 300 && visible(t.start_ms)) : null;
     const have = [...ui.tiles.children].map((n) => n.dataset.who);
     if (have.join('|') !== names.join('|')) {
-      ui.tiles.replaceChildren(...names.map((n) => { const li = el('li', 'tile', who(n)); li.dataset.who = n; return li; }));
+      ui.tiles.replaceChildren(...names.map((n) => {
+        const bars = el('span', 'tile__bars', null, [el('span'), el('span'), el('span')]);
+        const li = el('li', 'tile', null, [face(n, 'tile__face'), el('span', 'tile__name', null, [el('span', null, who(n)), bars])]);
+        li.dataset.who = n;
+        return li;
+      }));
     }
     [...ui.tiles.children].forEach((n) => n.classList.toggle('is-talking', !!talking && talking.speaker === n.dataset.who));
+    const line = talking || (live() ? vis[vis.length - 1] : null);
+    const ccKey = line ? line.id + '|' + line.text : '';
+    if (ui.cc.dataset.k !== ccKey) {
+      ui.cc.dataset.k = ccKey;
+      ui.cc.replaceChildren(...(line ? [el('b', null, who(line.speaker) + ' '), document.createTextNode(line.text)] : []));
+    }
+  }
+
+  /* a tick on the timeline wherever the checker flagged a change, so there is something to aim for */
+  function renderMarks() {
+    const sig = st.duration + ':' + st.flags.map((f) => f.at_ms).join(',');
+    if (ui.marks.dataset.sig === sig) return;
+    ui.marks.dataset.sig = sig;
+    ui.marks.replaceChildren(...(st.duration ? st.flags.map((f) => {
+      const m = el('span', 'track__mark track__mark--' + (f.label === 'contradiction' ? 'bad' : 'warn'));
+      m.style.left = Math.min(100, (f.at_ms / st.duration) * 100) + '%';
+      return m;
+    }) : []));
+  }
+
+  function nudge(show) {
+    clearTimeout(st.nudgeTimer);
+    ui.nudge.hidden = !show;
+    if (show) st.nudgeTimer = setTimeout(() => { ui.nudge.hidden = true; }, 7000);
+  }
+
+  function renderSteps() {
+    const step = st.carded ? 3 : st.started ? 2 : 1;
+    ui.steps.querySelectorAll('[data-step]').forEach((n) => {
+      const k = Number(n.dataset.step);
+      n.classList.toggle('is-done', k < step);
+      if (k === step) n.setAttribute('aria-current', 'step'); else n.removeAttribute('aria-current');
+    });
+    ui.bigplay.hidden = st.started || isPlaying();
+    const card = ui.cards.childElementCount > 0;
+    ui.stage.classList.toggle('has-card', card);
+    const n = ui.tiles.childElementCount;
+    ui.tiles.style.setProperty('--cols', String(n <= 2 ? Math.max(n, 1) : n <= 4 || card ? 2 : 3));
   }
 
   function citeButton(id) {
-    const b = el('button', 'cite', label(id));
+    const b = el('button', 'cite', 'turn ' + label(id));
     b.type = 'button';
-    b.title = 'Show this turn in the captions';
+    b.title = 'Show this turn in the transcript';
     b.addEventListener('click', () => cite([id]));
     return b;
   }
@@ -156,19 +221,21 @@
       b.type = 'button';
       b.title = 'Show the turns this came from';
       b.addEventListener('click', () => cite(m.source_turn_ids));
-      return el('li', null, null, [el('div', 'room__item', null, [kind, el('span', 'chip chip--person', who(m.speaker)), b]), text]);
+      return el('li', null, null, [el('div', 'room__item', null, [face(m.speaker, 'face--sm'), el('span', 'room__who', who(m.speaker)), kind, b]), text]);
     }));
   }
   function renderFlags() {
     const items = st.flags.filter((f) => visible(f.at_ms));
     const sig = items.map((f) => f.turn_id + f.label).join('|');
     ui.flagNote.textContent = items.length ? items.length + ' so far' : '';
+    if (items.length > st.seenFlags && isPlaying() && !ui.cards.childElementCount) nudge(true);
+    st.seenFlags = items.length;
     if (sig === flagSig) return;
     flagSig = sig;
     if (!items.length) { ui.flags.replaceChildren(el('li', 'is-empty', 'Nothing has contradicted or replaced an earlier statement.')); return; }
     const byId = turnById();
     ui.flags.replaceChildren(...items.slice().reverse().map((f) => {
-      const chip = el('span', 'chip ' + (f.label === 'contradiction' ? 'chip--bad' : 'chip--warn'), f.label);
+      const chip = el('span', 'chip ' + (f.label === 'contradiction' ? 'chip--bad' : 'chip--warn'), LABELS[f.label] || f.label);
       const ids = [f.turn_id, ...(f.earlier_ids || [])];
       const b = el('button', 'cite', ids.map(label).join(' '));
       b.type = 'button';
@@ -176,8 +243,9 @@
       b.addEventListener('click', () => cite(ids));
       const t = byId.get(f.turn_id);
       return el('li', null, null, [
-        el('div', 'room__item', null, [chip, el('span', 'measured', Number(f.confidence).toFixed(2)), b]),
-        el('span', null, t ? who(t.speaker) + ': ' + t.text : label(f.turn_id))
+        el('div', 'room__item', null, [...(t ? [face(t.speaker, 'face--sm'), el('span', 'room__who', who(t.speaker))] : []), chip, b]),
+        el('span', null, t ? '“' + t.text + '”' : label(f.turn_id)),
+        el('span', 'room__conf', 'Checker confidence ' + Number(f.confidence).toFixed(2))
       ]);
     }));
   }
@@ -195,6 +263,8 @@
     }
     const vis = renderTurns();
     renderTiles(vis);
+    renderMarks();
+    renderSteps();
     renderMemory();
     renderFlags();
     if (live() && st.lag != null) ui.capNote.textContent = 'about ' + (st.lag / 1000).toFixed(1) + ' s behind the audio';
@@ -205,20 +275,21 @@
   /* ---- cards and traces ---- */
   function cardEl(res, asof) {
     const c = res.card;
-    const chip = el('span', 'chip ' + (c.status === 'answered' ? 'chip--ok' : c.status === 'partial' ? 'chip--warn' : 'chip--mute'), c.status);
-    const kids = [el('div', 'rcard__top', null, [el('span', 'rcard__name', NAMES[res.assistant] || res.assistant), chip])];
-    kids.push(el('span', 'rcard__asof', asof));
+    const chip = el('span', 'chip ' + (c.status === 'answered' ? 'chip--ok' : c.status === 'partial' ? 'chip--warn' : 'chip--mute'), STATUS[c.status] || c.status);
+    const kids = [el('div', 'rcard__top', null, [el('span', 'rcard__brand', null, [el('span', 'rcard__dot'), el('span', 'rcard__name', NAMES[res.assistant] || res.assistant)]), chip])];
     if (c.findings.length) {
       kids.push(el('ul', null, null, c.findings.map((f) => {
-        const lab = f.label && f.label !== 'consistent' ? [el('span', 'chip ' + (f.label === 'contradiction' ? 'chip--bad' : 'chip--warn'), f.label)] : [];
+        const lab = f.label && f.label !== 'consistent' ? [el('span', 'chip ' + (f.label === 'contradiction' ? 'chip--bad' : 'chip--warn'), LABELS[f.label] || f.label)] : [];
         const cites = el('div', 'rcard__cites', null, f.evidence.map((e) => citeButton(e.turn_id)));
-        const q = f.evidence[0] ? el('span', 'rcard__q', who(f.evidence[0].speaker) + ': “' + f.evidence[0].quote + '”') : null;
-        return el('li', null, null, [...lab, el('span', null, f.statement), ...(q ? [q] : []), cites]);
+        const e0 = f.evidence[0];
+        const q = e0 ? el('div', 'rcard__q', null, [face(e0.speaker, 'face--sm'), el('span', null, null, [el('b', null, who(e0.speaker) + ' '), document.createTextNode('“' + e0.quote + '”')])]) : null;
+        return el('li', null, null, [el('div', 'rcard__stmt', null, [...lab, el('span', null, f.statement)]), ...(q ? [q] : []), cites]);
       })));
     }
-    if (c.status === 'abstained') kids.push(el('p', 'rcard__why', 'Not enough said so far: ' + (c.missing.join('; ') || 'no verified finding') + '.'));
+    if (c.status === 'abstained') kids.push(el('p', 'rcard__why', 'Nobody has said this yet: ' + (c.missing.join('; ') || 'no backed answer') + '.'));
     else if (c.missing.length) kids.push(el('p', 'rcard__why', 'Missing: ' + c.missing.join('; ') + '.'));
     if (c.suggestion) kids.push(el('p', 'rcard__suggest', null, [el('b', null, 'Suggestion '), document.createTextNode(c.suggestion)]));
+    kids.push(el('span', 'rcard__asof', asof));
     return el('article', 'rcard', null, kids);
   }
 
@@ -268,8 +339,10 @@
       ui.traceWrap.hidden = true;
       return;
     }
+    nudge(false);
+    st.carded = true;
     r.results.forEach((x) => { ui.cards.append(cardEl(x, asof)); ui.traces.append(traceEl(x)); });
-    const x = el('button', 'btn rcard__x', 'Dismiss card');
+    const x = el('button', 'btn rcard__x', 'Close card (Esc)');
     x.type = 'button';
     x.addEventListener('click', dismiss);
     ui.cards.append(x);
@@ -277,10 +350,15 @@
     const first = r.results[0].card.findings[0];
     if (first) cite(r.results.flatMap((y) => y.card.findings.flatMap((f) => f.evidence.map((e) => e.turn_id))));
   }
-  function dismiss() { ui.cards.replaceChildren(); cite([]); }
+  function dismiss() { ui.cards.replaceChildren(); cite([]); renderSteps(); }
 
   /* ---- press ---- */
-  function chosen() { return st.assistant === 'both' ? ['single_plus', 'team_routed'] : [st.assistant]; }
+  /* the team is whichever team arm the source offers (the scripted page has team_routed; a newer server may offer team_rag) */
+  function chosen() {
+    const team = st.arms.find((a) => a.startsWith('team')) || 'team_routed';
+    const single = st.arms.find((a) => a.startsWith('single')) || 'single_plus';
+    return st.assistant === 'both' ? [team, single] : [st.assistant === 'team' ? team : single];
+  }
 
   function pressStatic(question) {
     const now = pos();
@@ -288,7 +366,7 @@
     const pool = st.scripted.presses.filter((p) => p.after_ms <= now && (!key || p.key === key.key));
     const best = pool.sort((a, b) => b.after_ms - a.after_ms)[0] ||
       { results: ['single_plus', 'team_routed'].map((n) => st.scripted.abstain[n]) };
-    const results = best.results.filter((r) => chosen().includes(r.assistant));
+    const results = chosen().map((a) => best.results.find((r) => r.assistant === a)).filter(Boolean);
     return Promise.resolve({ results, position_ms: now });
   }
 
@@ -298,18 +376,23 @@
     const now = pos();
     st.busy = true;
     ui.press.classList.add('is-busy');
-    ui.cards.replaceChildren(el('article', 'rcard', null, [el('p', 'rcard__why', 'Reading what has been said so far' + (live() || st.mode === 'replay' ? '. A real model can take several seconds.' : '.'))]));
+    nudge(false);
+    ui.cards.replaceChildren(el('article', 'rcard rcard--wait', null, [el('p', 'rcard__why', 'Reading what has been said so far' + (live() || st.mode === 'replay' ? '. A real model can take several seconds.' : '…'))]));
+    renderSteps();
+    const arms = chosen();
     const req = st.mode === 'static'
       ? pressStatic(question)
-      : post('api/room/press', { meeting: st.meeting, assistant: st.assistant, question: question || null, position_ms: now, session: st.session });
+      : post('api/room/press', { meeting: st.meeting, assistant: arms.length > 1 ? 'both' : arms[0], question: question || null, position_ms: now, session: st.session });
     req.then((r) => {
       showResults(r, 'Uses only what was said before ' + fmt(r.position_ms != null ? r.position_ms : now) + (r.as_of_seq != null && r.as_of_seq >= 0 ? ' (turns up to #' + r.as_of_seq + ')' : ''));
-      say('Card ready. The turns it cites are marked in the captions.');
+      say('Card ready. The lines it cites are highlighted in the transcript.');
     }).catch((e) => {
       ui.cards.replaceChildren(el('article', 'rcard', null, [el('p', 'rcard__why', 'The press failed: ' + e.message)]));
     }).finally(() => { st.busy = false; ui.press.classList.remove('is-busy'); });
   }
   ui.press.addEventListener('click', doPress);
+  ui.nudge.addEventListener('click', doPress);
+  ui.bigplay.addEventListener('click', () => { play(); ui.play.focus(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { dismiss(); return; }
     if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -356,6 +439,8 @@
   function resetState() {
     st.turns = []; st.memory = []; st.flags = []; st.cited = new Set(); st.lag = null; st.last = null;
     rendered = { n: 0, last: null }; rows.clear(); memSig = flagSig = '';
+    st.started = false; st.carded = false; st.seenFlags = 0; faces.reset(); nudge(false);
+    ui.tiles.replaceChildren(); ui.cc.replaceChildren(); ui.cc.dataset.k = '';
     ui.turns.replaceChildren(); ui.cards.replaceChildren(); ui.traces.replaceChildren(); ui.traceWrap.hidden = true;
     ui.capNote.textContent = '';
   }
@@ -372,9 +457,11 @@
     resetState();
     st.turns = data.turns; st.memory = data.memory; st.flags = data.flags;
     setDuration(data.duration_ms);
-    ui.mode.textContent = 'Scripted replay in your browser. Invented meeting, scripted cards, illustrative timings.';
-    ui.lead.textContent = 'Play the meeting, press when you need it. Run the local server to use a real AMI meeting and the real pipeline.';
+    ui.mode.textContent = 'Scripted demo: an invented meeting with prepared cards';
+    ui.lead.textContent = 'A short planning meeting plays. Whenever you lose track, press. A card answers with who said it and where.';
     ui.meeting.replaceChildren(new Option(data.title, data.id));
+    ui.meeting.hidden = ui.meetingLabel.hidden = true;
+    st.arms = ['single_plus', 'team_routed'];
     ui.question.hidden = true;
     ui.question.value = '';
     ui.presets.replaceChildren();
@@ -386,7 +473,7 @@
       ui.presets.append(b);
     });
     ui.credit.textContent = data.note;
-    say('Ready. Press Play, then press when you need a card.');
+    say('Ready. Press Play, then press whenever you want a card. Ticks on the timeline mark where something changes.');
     sync();
   }
 
@@ -446,10 +533,11 @@
   function startServer(health) {
     st.mode = health.mode;
     ui.mode.textContent = health.mode === 'live'
-      ? 'Live: real speech service, diarizer, stream API and local models.'
-      : 'Replay: AMI transcript with its own timings. No model runs; cards are a word-overlap stand-in.';
+      ? 'Live: real speech, speaker labels and local models'
+      : 'Replay: a real AMI meeting; cards here are a simple word-overlap stand-in';
     ui.mode.classList.add(health.mode === 'live' ? 'is-live' : 'is-replay');
-    ui.lead.textContent = 'A real AMI meeting plays. Captions, memory and flags build as it goes. Press, and see how the card was made.';
+    ui.lead.textContent = 'A real recorded meeting plays. Whenever you lose track, press. A card answers with who said it and where.';
+    if (health.assistants) st.arms = health.assistants;
     return fetch('api/room/meetings').then((r) => r.json()).then((d) => {
       if (!d.meetings.length) throw new Error('no meeting audio found');
       ui.meeting.replaceChildren(...d.meetings.map((m) => new Option(m.id + ' (' + fmt(m.duration_ms) + ')', m.id)));

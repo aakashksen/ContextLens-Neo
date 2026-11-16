@@ -16,7 +16,7 @@
   <div class="container nav__in">
     <a class="wordmark" href="index.html">ContextLens Neo</a>
     <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
-    <a class="btn btn--primary nav__end" href="desktop.html#install">Download</a>
+    <a class="btn btn--primary nav__end" href="download.html">Download</a>
   </div>
 </header>
 
@@ -26,7 +26,7 @@
       <div>
         <h1>Press once. Know what was said.</h1>
         <p class="lead">One cited card of what was said, on your desktop or glasses.</p>
-        <div class="actions"><a class="btn btn--primary" href="desktop.html#install">Download</a><a class="btn" href="room.html">Watch it work</a></div>
+        <div class="actions"><a class="btn btn--primary" href="download.html#desktop">Download</a><a class="btn" href="room.html">Watch it work</a></div>
       </div>
 
       <div class="panels" data-card>
@@ -58,8 +58,8 @@
   <section class="section" id="card" aria-labelledby="card-h">
     <div class="container split">
       <figure class="shot">
-        <img src="img/room-card.png" width="1289" height="725" alt="Two cards over a meeting, each answering with a quote from the turn it came from and the turn numbers it cites." loading="lazy">
-        <figcaption>A card over a real AMI meeting, captured from the meeting room.</figcaption>
+        <img src="img/room-card.webp" width="1718" height="968" alt="Four people in a call, shown as a bear, a robot, a fox and a cat. Next to them, a card says the beta now ships Monday, quotes Maya, and marks that Monday replaced the Friday date she gave first." loading="lazy">
+        <figcaption>A card from the meeting room demo. Try it yourself in <a href="room.html">Watch it work</a>.</figcaption>
       </figure>
       <div>
         <h2 id="card-h">One card. Every line cited.</h2>
@@ -81,7 +81,7 @@
       </div>
       <div class="two">
         <div class="panels way">
-          <div class="slotbox" data-slot="desktop-shot" data-alt="The heads-up card over a video call on the desktop"><strong>Desktop app</strong><span>Screenshot goes here</span></div>
+          <div class="slotbox" data-slot="desktop-shot"><img src="img/desktop.webp" width="1600" height="1000" alt="The ContextLens card floating over a video call: the beta moved from Friday to Monday, with the quotes and who said them." loading="lazy"></div>
           <h3>Desktop</h3>
           <p>Tray app, global hotkey, always-on-top card.</p>
           <p class="more"><a href="desktop.html">See the desktop app</a></p>
@@ -137,8 +137,8 @@
     <div class="container">
       <div class="head"><h2 id="start-h">Try it on a meeting</h2></div>
       <ul class="panels strip strip--three">
-        <li><h3>Desktop</h3><p>Install the tray app.</p><p class="more"><a href="desktop.html#install">Download</a></p></li>
-        <li><h3>Glasses</h3><p>Run the Unity client.</p><p class="more"><a href="glasses.html#run">Run the client</a></p></li>
+        <li><h3>Desktop</h3><p>Install the tray app.</p><p class="more"><a href="download.html#desktop">Download</a></p></li>
+        <li><h3>Glasses</h3><p>Run the Unity client.</p><p class="more"><a href="download.html#glasses">Run the client</a></p></li>
         <li><h3>Browser</h3><p>Replay a real meeting.</p><p class="more"><a href="room.html">Watch it work</a></p></li>
       </ul>
     </div>
@@ -153,6 +153,7 @@
       <a href="room.html">Watch it work</a>
       <a href="specs.html">How it’s built</a>
       <a href="tour.html">Walkthrough</a>
+      <a href="download.html">Download</a>
       <a href="live.html">Scripted demo</a>
       <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
     </div>
@@ -164,6 +165,7 @@
     </div>
   </div>
 </footer>
+<script src="avatars.js"></script>
 <script src="site.js"></script>
 <script>
 /* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */

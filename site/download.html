@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download, ContextLens Neo</title>
+<meta name="description" content="Get ContextLens Neo for your Windows desktop or your smart glasses. Both run on your own computer.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="index.html">ContextLens Neo</a>
+    <nav class="nav__links" aria-label="Main"><a href="desktop.html">Desktop</a><a href="glasses.html">Glasses</a><a href="room.html">Watch it work</a><a href="specs.html">How it’s built</a><a href="tour.html">Walkthrough</a></nav>
+    <a class="btn btn--primary nav__end" href="download.html" aria-current="page">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--dl">
+    <div class="container">
+      <h1>Get ContextLens Neo</h1>
+      <p class="lead">Two ways to use it. Both run on your own computer, so nothing you say leaves it.</p>
+      <div class="dl-pick">
+        <a class="dl-card" href="#desktop">
+          <span class="dl-card__kicker">Windows</span>
+          <span class="dl-card__title">Desktop app</span>
+          <span class="dl-card__body">A tray app with one hotkey. The card floats over any call.</span>
+          <span class="btn btn--primary">Desktop setup</span>
+        </a>
+        <a class="dl-card" href="#glasses">
+          <span class="dl-card__kicker">Unity, XR</span>
+          <span class="dl-card__title">Smart glasses</span>
+          <span class="dl-card__body">The card appears in front of you. Tap to ask.</span>
+          <span class="btn">Glasses setup</span>
+        </a>
+      </div>
+      <p class="dl-note">Want to see it first? <a href="room.html">Watch it work in your browser</a>. Nothing to install.</p>
+    </div>
+  </section>
+
+  <section class="section section--band" id="desktop" aria-labelledby="desktop-h">
+    <div class="container dl-split">
+      <div>
+        <p class="dl-kicker">Desktop app &middot; Windows</p>
+        <h2 id="desktop-h">Set up the desktop app</h2>
+        <p class="dl-sub">About 15 minutes the first time, most of it spent downloading models.</p>
+        <ol class="install">
+          <li><div><h3>Get the code</h3><pre class="code">git clone https://github.com/aakashksen/ContextLens-Neo
+cd ContextLens-Neo</pre></div></li>
+          <li><div><h3>Pull the models</h3><pre class="code">ollama pull qwen3.5:4b-q4_K_M
+ollama pull nomic-embed-text</pre></div></li>
+          <li><div><h3>Start speech, memory and the backend</h3><pre class="code">py -3.12 tools/run_everything.py</pre></div></li>
+          <li><div><h3>Build and install the app</h3><pre class="code">cd clients/desktop
+npm install
+npm run dist</pre><p>The installer lands in <span class="measured">clients/desktop/dist</span>. Run it, then press the hotkey in any call.</p></div></li>
+        </ol>
+      </div>
+      <aside class="dl-side">
+        <figure class="shot"><img src="img/desktop-main.webp" width="1560" height="760" alt="The ContextLens desktop window: listening, all four backend services ready, and the live transcript." loading="lazy"></figure>
+        <h3>You need</h3>
+        <dl class="stack">
+          <div><dt>Windows 10 or 11</dt><dd>The app is a tray app with a global hotkey.</dd></div>
+          <div><dt>Ollama</dt><dd>Runs the 4B model and embeddings.</dd></div>
+          <div><dt>Docker</dt><dd>Runs speech and PostgreSQL.</dd></div>
+          <div><dt>Node.js and Python 3.12</dt><dd>Build the app and run the backend.</dd></div>
+          <div><dt>A GPU with 8 GB</dt><dd>For the local model.</dd></div>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section" id="glasses" aria-labelledby="glasses-h">
+    <div class="container dl-split">
+      <div>
+        <p class="dl-kicker">Smart glasses &middot; Unity</p>
+        <h2 id="glasses-h">Set up the glasses client</h2>
+        <p class="dl-sub">The glasses show the card. Your computer does the work, with the same backend as the desktop app.</p>
+        <ol class="install">
+          <li><div><h3>Start the backend</h3><p>Follow steps 1 to 3 of the desktop setup. To try the client on its own, the sample server answers with ready-made cards:</p><pre class="code">python tools/fake_server.py</pre></div></li>
+          <li><div><h3>Open the project</h3><p>In Unity Hub, open <span class="measured">clients/unity</span> with Unity 6000.3.3f1.</p></div></li>
+          <li><div><h3>Play or build</h3><p>Press Play to try it in the editor. For a headset, add its XR plug-in, set the client&rsquo;s server address to your computer, and build.</p></div></li>
+          <li><div><h3>Ask</h3><p>Tap, or press the primary controller button. The card appears in front of you.</p></div></li>
+        </ol>
+      </div>
+      <aside class="dl-side">
+        <h3>You need</h3>
+        <dl class="stack">
+          <div><dt>Unity 6000.3.3f1</dt><dd>The project brings the XR Interaction Toolkit with it.</dd></div>
+          <div><dt>A headset or glasses</dt><dd>Any XR device Unity supports. The editor works without one.</dd></div>
+          <div><dt>The same network</dt><dd>The client talks to your computer over one WebSocket.</dd></div>
+        </dl>
+      </aside>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="container footer__grid">
+    <p class="footer__mark">ContextLens Neo</p>
+    <div class="footer__links">
+      <a href="desktop.html">Desktop</a>
+      <a href="glasses.html">Glasses</a>
+      <a href="room.html">Watch it work</a>
+      <a href="specs.html">How it’s built</a>
+      <a href="tour.html">Walkthrough</a>
+      <a href="download.html">Download</a>
+      <a href="live.html">Scripted demo</a>
+      <a href="https://github.com/aakashksen/ContextLens-Neo">Repository</a>
+    </div>
+    <div class="footer__links">
+      <span>Built by Aakash Senthilnathan</span>
+      <a href="https://github.com/aakashksen">GitHub</a>
+      <a href="https://www.linkedin.com/in/aakashsenthilnathan/">LinkedIn</a>
+      <a href="mailto:aakash.senthilnathan@gmail.com">aakash.senthilnathan@gmail.com</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script>
+/* Picture slots: hallmarkSlots({ 'desktop-shot': 'img/desktop.png' }) drops a picture into a data-slot box. */
+window.hallmarkSlots = (m) => { for (const [k, v] of Object.entries(m)) { const s = document.querySelector(`[data-slot="${k}"]`); if (!s) continue; const im = new Image(); im.src = typeof v === 'string' ? v : v.src; im.alt = (typeof v === 'object' && v.alt) || s.dataset.alt || ''; s.querySelectorAll(':scope > img').forEach((o) => o.remove()); s.prepend(im); } };
+document.querySelectorAll('[data-slot] img').forEach((i) => { if (i.complete && !i.naturalWidth) i.remove(); else i.addEventListener('error', () => i.remove(), { once: true }); });
+</script>
+</body>
+</html>
