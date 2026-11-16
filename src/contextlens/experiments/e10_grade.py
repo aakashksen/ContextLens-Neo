@@ -82,8 +82,8 @@ def sample_cases(scs: list[Scenario], meta: dict[str, dict[str, Any]], n_cases: 
 
 
 def export(root: Path, split: str, out_dir: Path, *, n_cards: int = 200, batch_size: int = 25, seed: int = 13,
-           commit: str | None = None) -> dict[str, Any]:
-    cfg = run.load_config(root)
+           commit: str | None = None, config: Path | None = None) -> dict[str, Any]:
+    cfg = run.load_config(root, config)
     arms = cfg["arms"]
     scs, meta, digest = e10_cases.load_cases(split, root)
     rows = run.saved_rows(root, run.run_key(root, cfg, commit), split)
@@ -173,8 +173,9 @@ def fold_in(root: Path, split: str, dir_: Path) -> Path:
     key = {i: {**v, "group": cases[v["case"]]["meeting"]} for i, v in meta_file["key"].items()}
     graded = read_graded(dir_, key)
     now = datetime.now(timezone.utc)
-    run_id = f"E10G-{split}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
-    record = {"run_id": run_id, "experiment": "E10", "kind": "sonnet-grades", "split": split, "grader": "sonnet",
+    exp = meta_file.get("experiment", "E10")
+    run_id = f"{exp}G-{split}-{now.strftime('%Y%m%dT%H%M%S%fZ')}"
+    record = {"run_id": run_id, "experiment": exp, "kind": "sonnet-grades", "split": split, "grader": "sonnet",
               "cases_hash": meta_file["cases_hash"], "rows_key": meta_file["rows_key"], "rubric": RUBRIC_REL,
               "arm_blind": True, "labels_reviewed": False, **summarize_grades(key, graded), "finished_at": now.isoformat()}
     (root / run.LOCAL_DIR).mkdir(parents=True, exist_ok=True)
@@ -194,9 +195,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cards", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=25)
     ap.add_argument("--commit", help="export: the commit whose saved rows to sample (default: HEAD)")
+    ap.add_argument("--config", type=Path, help="export: config under the repo root; default configs/e10.json (E11 is configs/e11.json)")
     args = ap.parse_args(argv)
     if args.command == "export":
-        print(json.dumps(export(ROOT, args.split, args.dir, n_cards=args.cards, batch_size=args.batch_size, commit=args.commit)))
+        print(json.dumps(export(ROOT, args.split, args.dir, n_cards=args.cards, batch_size=args.batch_size, commit=args.commit,
+                                config=args.config)))
     else:
         print(fold_in(ROOT, args.split, args.dir))
     return 0
