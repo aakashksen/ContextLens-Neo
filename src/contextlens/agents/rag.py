@@ -245,6 +245,11 @@ class RagTeam:
         ctx.stage_ms["rag_top_milli"] = int(max(top, 0.0) * 1000)
 
         flagged = prep.flagged
+        if flagged and asked and not ({latest.id, *prep.earlier_ids} & {e.turn.id for e in ranked}):
+            # a conflict about the latest turn that has nothing to do with the question is not part of the answer
+            # (E11 test: "I gave it a three" vs "I gave it a one" was labeled onto a budget answer)
+            flagged = False
+            ctx.stage_ms["rag_conflict_off_topic"] = 1
         if not flagged and scores is not None and top < (GATE_ASKED if asked else GATE_UNASKED):
             ctx.stage_ms["rag_gate_abstain"] = 1
             return self._done(abstained_card(ranked, "nothing relevant in the transcript"), ctx, req, start, run, end, notes)

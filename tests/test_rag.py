@@ -244,3 +244,18 @@ def test_a_failing_finder_flags_nothing():
     team.finder = broken
     card = team.answer(req(None, as_of=9), ctx)
     assert card.findings[0].label is None and any("checker failed" in m for m in card.missing)
+
+
+def test_an_asked_question_does_not_carry_a_conflict_unrelated_to_it():
+    team, llm, ctx = build(["Five thousand dollars [1]."], checker=FakeChecker("consistent"), scorer=Scorer())
+    team.finder = lambda statement, window: ("contradiction", 0.95, [TURNS[3].id])  # lunch chatter vs "Okay thanks"
+    card = team.answer(req(Q), ctx)
+    assert all(f.label is None for f in card.findings) and ctx.stage_ms.get("rag_conflict_off_topic") == 1
+    assert TURNS[3].id not in {e.turn_id for f in card.findings for e in f.evidence}
+
+
+def test_an_asked_question_keeps_a_conflict_about_it():
+    team, _, ctx = build(["The budget is now eight thousand dollars [1]."], scorer=Scorer())
+    team.finder = lambda statement, window: ("update", 0.95, [TURNS[0].id])  # the budget turns are the evidence
+    card = team.answer(req("What is the launch budget now?", as_of=9), ctx)
+    assert card.findings[0].label == "update" and "rag_conflict_off_topic" not in ctx.stage_ms

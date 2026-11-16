@@ -106,7 +106,7 @@ def export(root: Path, split: str, out_dir: Path, *, n_cards: int = 200, batch_s
     batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
     for i, b in enumerate(batches, 1):
         write_atomic(out_dir / f"batch-{i:03d}.json", json.dumps({"batch": i, "rubric": RUBRIC_REL, "items": b}, indent=1) + "\n")
-    write_atomic(out_dir / "key.json", json.dumps({"split": split, "cases_hash": digest, "rows_key": run.run_key(root, cfg, commit), "key": key}, indent=1) + "\n")
+    write_atomic(out_dir / "key.json", json.dumps({"split": split, "experiment": cfg.get("experiment", "E10"), "cases_hash": digest, "rows_key": run.run_key(root, cfg, commit), "key": key}, indent=1) + "\n")
     return {"cases": len(chosen), "cards": len(items), "batches": len(batches), "dir": str(out_dir)}
 
 
